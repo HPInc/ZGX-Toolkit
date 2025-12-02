@@ -1,0 +1,102 @@
+# VS Code files
+.vscode/**
+.vscode-test/**
+
+# Source files (bundled into out/extension.js)
+src/**
+
+# Configuration files
+.gitignore
+.eslintrc.js
+jest.config.js
+tsconfig.json
+tsconfig.test.json
+
+# TypeScript and source maps
+**/*.ts
+**/*.map
+
+# Test files and coverage
+.nyc_output
+coverage/**
+npm-debug.log*
+**/*.test.ts
+**/*.test.js
+**/__tests__/**
+**/__mocks__/**
+test-results/**
+
+# Documentation and scripts (keep README.md, LICENSE)
+docs/**
+scripts/**
+*.md
+!README.md
+!CHANGELOG.md
+!SUPPORT.md
+
+# CI/CD files
+.github/**
+codeway-sq.yaml
+.gitlab-ci.yml
+azure-pipelines.yml
+
+# Build artifacts
+out/test/**
+out/**/*.map
+
+# Package manager
+package-lock.json
+yarn.lock
+pnpm-lock.yaml
+
+# IDE files
+.idea/**
+*.swp
+*.swo
+*~
+.DS_Store
+Thumbs.db
+
+# Misc
+.env
+.env.*
+*.log
+*.backup
+
+# Exclude devDependencies from node_modules
+node_modules/@types/**
+node_modules/@typescript-eslint/**
+node_modules/@vscode/test-electron/**
+node_modules/@vscode/vsce/**
+node_modules/eslint/**
+node_modules/jest/**
+node_modules/mocha/**
+node_modules/ts-jest/**
+node_modules/typescript/**
+
+# Exclude unnecessary files from included dependencies
+node_modules/**/test/**
+node_modules/**/tests/**
+node_modules/**/__tests__/**
+node_modules/**/*.test.js
+node_modules/**/*.spec.js
+node_modules/**/.travis.yml
+node_modules/**/appveyor.yml
+node_modules/**/.github/**
+node_modules/**/coverage/**
+node_modules/**/.nyc_output/**
+node_modules/**/tsconfig.json
+node_modules/**/LICENSE
+node_modules/**/README.md
+node_modules/**/CHANGELOG.md
+node_modules/**/*.d.ts
+node_modules/**/*.md
+node_modules/**/docs/**
+node_modules/**/examples/**
+node_modules/**/demo/**
+node_modules/**/samples/**
+
+# Exclude native crypto bindings from ssh2
+node_modules/ssh2/lib/protocol/crypto/build/**
+node_modules/ssh2/lib/protocol/crypto/src/**
+node_modules/ssh2/lib/protocol/crypto/binding.gyp

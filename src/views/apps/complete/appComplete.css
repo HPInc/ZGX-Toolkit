@@ -1,0 +1,78 @@
+/*
+ * Copyright ©2025 HP Development Company, L.P.
+ * Licensed under the X11 License. See LICENSE file in the project root for details.
+ */
+
+/* App Complete specific styles */
+
+.completion-icon {
+    font-size: 4em;
+    margin: 20px 0;
+}
+
+.summary {
+    background-color: var(--vscode-list-inactiveSelectionBackground);
+    border: 1px solid var(--vscode-panel-border);
+    border-radius: 8px;
+    padding: 30px;
+    margin-bottom: 30px;
+}
+
+.installed-apps {
+    text-align: left;
+    margin: 20px 0;
+}
+
+.app-item {
+    display: flex;
+    align-items: center;
+    padding: 8px 0;
+    border-bottom: 1px solid var(--vscode-panel-border);
+}
+
+.app-item:last-child {
+    border-bottom: none;
+}
+
+.app-icon {
+    font-size: 1.5em;
+    margin-right: 10px;
+}
+
+.app-name {
+    flex: 1;
+    font-weight: 500;
+}
+
+.success-indicator {
+    color: var(--vscode-charts-green);
+    font-weight: 500;
+}
+
+.failure-indicator {
+    color: var(--vscode-errorForeground);
+    font-weight: 500;
+}
+
+.section-title {
+    margin: 20px 0 10px 0;
+    font-size: 1.1em;
+    font-weight: 600;
+}
+
+.password-error-message {
+    background-color: var(--vscode-inputValidation-warningBackground);
+    border: 1px solid var(--vscode-inputValidation-warningBorder);
+    color: var(--vscode-inputValidation-warningForeground);
+    padding: 15px;
+    border-radius: 4px;
+    margin: 20px 0;
+}
+
+.password-error-message h3 {
+    margin-top: 0;
+}
+
+.no-installs {
+    margin: 20px 0;
+}

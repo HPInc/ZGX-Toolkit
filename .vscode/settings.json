@@ -1,0 +1,76 @@
+{
+  // PSI Header Configuration for Automatic License Headers
+  // Install extension: psioniq.psi-header
+  // This will automatically add license headers to new files
+  
+  "psi-header.config": {
+    "forceToTop": true,
+    "blankLinesAfter": 1,
+    "license": "X11",
+    "company": "HP Inc.",
+    "copyrightHolder": "HP Development Company L.C."
+  },
+
+  "psi-header.variables": [
+     ["projectCreationYear", "2025"]
+  ],
+  
+  "psi-header.changes-tracking": {
+    "isActive": false,
+    "modAuthor": "Modified By: ",
+    "modDate": "Last Modified: ",
+    "modDateFormat": "date",
+    "include": [],
+    "exclude": [
+      "markdown",
+      "json",
+      "jsonc"
+    ],
+    "autoHeader": "manualSave"
+  },
+  
+  "psi-header.templates": [
+    {
+      "language": "*",
+      "template": [
+        "Copyright ©<<year>> HP Development Company, L.P.",
+        "Licensed under the X11 License. See LICENSE file in the project root for details.",
+      ]
+    }
+  ],
+  
+  "psi-header.lang-config": [
+    {
+      "language": "typescript",
+      "begin": "/*",
+      "end": " */",
+      "prefix": " * "
+    },
+    {
+      "language": "javascript",
+      "begin": "/*",
+      "end": " */",
+      "prefix": " * "
+    },
+    {
+      "language": "html",
+      "begin": "<!--",
+      "end": "-->",
+      "prefix": "  "
+    },
+    {
+      "language": "css",
+      "begin": "/*",
+      "end": " */",
+      "prefix": " * "
+    }
+  ],
+  
+  // Files to automatically add header on creation (when extension is installed)
+  "files.associations": {
+    "*.ts": "typescript",
+    "*.js": "javascript",
+    "*.html": "html",
+    "*.css": "css"
+  }
+}

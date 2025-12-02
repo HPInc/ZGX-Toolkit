@@ -1,0 +1,179 @@
+/*
+ * Copyright ©2025 HP Development Company, L.P.
+ * Licensed under the X11 License. See LICENSE file in the project root for details.
+ */
+
+/* Quick start templates specific styles */
+
+:root {
+    --template-card-width: 240px;
+    --template-card-gap: 24px;
+    --template-icon-size: 64px;
+}
+
+.templates-root {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    padding: 32px 48px 48px 48px;
+    box-sizing: border-box;
+    color: var(--vscode-foreground);
+    font-size: 13px;
+    overflow-y: auto;
+}
+
+.templates-content {
+    max-width: calc(3 * var(--template-card-width) + 2 * var(--template-card-gap));
+    width: 100%;
+    margin: 0 auto;
+    padding-left: 0;
+    box-sizing: border-box;
+}
+
+.templates-content > * {
+    text-align: left;
+}
+
+.templates-header {
+    margin: 0 0 4px 0;
+    font-size: 22px;
+    font-weight: 600;
+    letter-spacing: .25px;
+}
+
+.templates-subtitle {
+    margin: 0 0 32px 0;
+    color: var(--vscode-descriptionForeground);
+    font-size: 13px;
+    line-height: 18px;
+}
+
+.templates-section-title {
+    font-size: 15px;
+    font-weight: 600;
+    color: var(--hp-cyan-blue);
+    margin: 0 0 4px 0;
+}
+
+.templates-section-desc {
+    margin: 0 0 16px 0;
+    font-size: 12px;
+    color: var(--vscode-descriptionForeground);
+    line-height: 16px;
+}
+
+.templates-separator {
+    width: 100%;
+    margin: 0 0 24px 0;
+}
+
+.templates-grid {
+    display: grid;
+    grid-template-columns: repeat(3, var(--template-card-width));
+    gap: var(--template-card-gap) var(--template-card-gap);
+    width: 100%;
+    margin: 0;
+    justify-content: flex-start;
+}
+
+.template-item {
+    display: flex;
+    flex-direction: column;
+    width: var(--template-card-width);
+}
+
+.template-card {
+    width: 100%;
+    height: 140px;
+    background: var(--vscode-list-inactiveSelectionBackground);
+    border-radius: var(--border-radius, 8px);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    box-sizing: border-box;
+    margin-bottom: 12px;
+    border: 2px solid transparent;
+    transition: background .12s ease, border-color .12s ease;
+}
+
+.template-card:hover {
+    background: var(--vscode-list-hoverBackground);
+    border-color: var(--hp-cyan-blue);
+}
+
+.template-card:active {
+    background: var(--vscode-list-activeSelectionBackground);
+    border-color: var(--hp-cyan-blue);
+}
+
+.template-card:focus-visible {
+    outline: 2px solid var(--vscode-focusBorder);
+    outline-offset: 2px;
+}
+
+.template-card-icon {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: var(--template-icon-size);
+    height: var(--template-icon-size);
+    line-height: var(--template-icon-size);
+    color: var(--vscode-descriptionForeground);
+}
+
+.template-card-icon.codicon {
+    font-size: var(--template-icon-size) !important;
+}
+
+.template-card-text {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    user-select: text;
+}
+
+.template-card-title {
+    font-size: 16px;
+    font-weight: 600;
+    margin: 0;
+    line-height: 18px;
+}
+
+.template-card-desc {
+    font-size: 12px;
+    color: var(--vscode-descriptionForeground);
+    margin: 0;
+    line-height: 16px;
+}
+
+.template-card-installs {
+    font-size: 11px;
+    color: var(--vscode-descriptionForeground);
+    margin: 0;
+    opacity: .85;
+}
+
+@media (max-width: 820px) {
+    .templates-content {
+        max-width: calc(2 * var(--template-card-width) + var(--template-card-gap));
+    }
+    .templates-grid {
+        grid-template-columns: repeat(2, var(--template-card-width));
+    }
+    .templates-separator {
+        width: 100%;
+    }
+}
+
+@media (max-width: 540px) {
+    .templates-content {
+        max-width: var(--template-card-width);
+    }
+    .templates-grid {
+        grid-template-columns: repeat(1, var(--template-card-width));
+    }
+    .templates-separator {
+        width: 100%;
+    }
+}

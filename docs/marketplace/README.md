@@ -15,7 +15,7 @@ Second, the toolkit includes lightweight IP discovery functionality that automat
 ## Quick Start 
 
 1. Install the HP ZGX Toolkit extension from the VS Code Marketplace 
-2. Go the Device Manager and run the ZGX discovery command to locate your device on the network 
+2. Go to the Device Manager and run the ZGX discovery command to locate your device on the network 
 3. Connect to your ZGX via the extension's SSH integration and have the Toolkit create SSH keys for you. 
 4. Select and install desired components from the curated AI stack (Python packages, Ollama, curl, nvtop, Gradio, Streamlit, MiniForge, MLFlow Server and more.) 
 

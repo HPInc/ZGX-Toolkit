@@ -1,0 +1,38 @@
+{
+    "version": "2.0.0",
+    "tasks": [
+        {
+            "type": "npm",
+            "script": "compile",
+            "group": "build",
+            "presentation": {
+                "panel": "shared",
+                "reveal": "silent"
+            },
+            "problemMatcher": "$tsc"
+        },
+        {
+            "type": "npm",
+            "script": "watch",
+            "group": "build",
+            "presentation": {
+                "panel": "shared",
+                "reveal": "never"
+            },
+            "isBackground": true,
+            "problemMatcher": "$tsc-watch"
+        },
+        {
+            "label": "compile-and-copy-resources",
+            "type": "npm",
+            "script": "copy-resources",
+            "group": "build",
+            "presentation": {
+                "panel": "shared",
+                "reveal": "silent"
+            },
+            "dependsOn": ["npm: compile"],
+            "problemMatcher": []
+        }
+    ]
+}

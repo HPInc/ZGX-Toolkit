@@ -1,0 +1,102 @@
+/*
+ * Copyright ©2025 HP Development Company, L.P.
+ * Licensed under the X11 License. See LICENSE file in the project root for details.
+ */
+
+/* Setup Options specific styles */
+
+.options-grid {
+    display: grid;
+    gap: var(--spacing-lg);
+    margin-bottom: var(--spacing-xl);
+}
+
+.option-widget {
+    background-color: var(--vscode-list-inactiveSelectionBackground);
+    border: 2px solid var(--vscode-panel-border);
+    border-radius: var(--border-radius-lg);
+    padding: var(--spacing-lg);
+    cursor: pointer;
+    transition: all 0.2s ease;
+    position: relative;
+}
+
+.option-widget:hover {
+    border-color: var(--vscode-focusBorder);
+    background-color: var(--vscode-list-hoverBackground);
+}
+
+.option-widget.selected {
+    border-color: var(--vscode-activityBarBadge-background);
+    background-color: var(--vscode-list-activeSelectionBackground);
+}
+
+.option-title {
+    font-size: 18px;
+    font-weight: bold;
+    margin: 0 0 var(--spacing-sm) 0;
+    color: var(--vscode-foreground);
+}
+
+.option-description {
+    color: var(--vscode-descriptionForeground);
+    margin: 0 0 var(--spacing-md) 0;
+    line-height: 1.5;
+}
+
+.option-features {
+    list-style: none;
+    padding: 0;
+    margin: 0 0 var(--spacing-lg) 0;
+}
+
+.option-features li {
+    color: var(--vscode-descriptionForeground);
+    margin: var(--spacing-xs) 0;
+    padding-left: var(--spacing-lg);
+    position: relative;
+}
+
+.option-features li:before {
+    content: "✓";
+    position: absolute;
+    left: 0;
+    color: var(--vscode-activityBarBadge-background);
+    font-weight: bold;
+}
+
+.next-button {
+    background-color: var(--vscode-button-background);
+    color: var(--vscode-button-foreground);
+    border: none;
+    padding: var(--spacing-sm) var(--spacing-lg);
+    border-radius: var(--border-radius);
+    cursor: pointer;
+    font-size: 14px;
+    position: absolute;
+    bottom: var(--spacing-lg);
+    right: var(--spacing-lg);
+}
+
+.next-button:hover {
+    background-color: var(--vscode-button-hoverBackground);
+}
+
+.cancel-button {
+    background-color: var(--vscode-button-secondaryBackground);
+    color: var(--vscode-button-secondaryForeground);
+    border: none;
+    padding: 12px 24px;
+    border-radius: var(--border-radius);
+    cursor: pointer;
+    font-size: 14px;
+}
+
+.cancel-button:hover {
+    background-color: var(--vscode-button-secondaryHoverBackground);
+}
+
+.actions {
+    text-align: center;
+    margin-top: var(--spacing-xl);
+}

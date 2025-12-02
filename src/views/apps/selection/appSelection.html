@@ -1,0 +1,67 @@
+<!--
+  Copyright ©2025 HP Development Company, L.P.
+  Licensed under the X11 License. See LICENSE file in the project root for details.
+-->
+
+<div class="container">
+    <div class="header">
+        <h1>Application Install</h1>
+        <p>Select development tools and applications for <strong>{{deviceName}}</strong></p>
+        <button class="btn btn-secondary refresh-btn" id="refresh-btn">
+            <span class="refresh-icon">↻</span>
+            <span class="refresh-text">Refresh</span>
+        </button>
+    </div>
+
+    {{#each categories}}
+    <div class="category">
+        <div class="category-header">
+            <h2 class="category-title">{{name}}</h2>
+            <p class="category-description">{{description}}</p>
+        </div>
+        <div class="app-grid">
+            {{#each apps}}
+            <div class="app-widget {{#if installed}}app-installed{{/if}} {{#if selected}}app-selected{{/if}} {{#if isBaseSystemInstalled}}base-system-installed{{/if}}" 
+                 data-app-id="{{id}}" 
+                 {{#if installed}}data-installed="true"{{/if}}>
+                {{#if selected}}
+                <div class="checkmark">✓</div>
+                {{/if}}
+                {{#if installed}}
+                <div class="installed-badge">Installed</div>
+                {{/if}}
+                <div class="app-icon">{{icon}}</div>
+                <div class="app-title">{{name}}</div>
+                <div class="app-description">{{description}}</div>
+                <div class="app-features">
+                    {{#each features}}
+                    <div class="feature">• {{this}}</div>
+                    {{/each}}
+                </div>
+            </div>
+            {{/each}}
+        </div>
+    </div>
+    {{/each}}
+
+    <div class="selection-info">
+        <p id="selection-status">
+            No applications selected. Click on application cards to select them for installation.
+        </p>
+        <p style="font-size: 0.85em; color: var(--vscode-descriptionForeground); margin-top: 8px;">
+            <strong>Note:</strong> Base System is always required. Dependencies will be automatically selected when needed.
+        </p>
+    </div>
+
+    <div class="footer-button-group">
+        <button class="btn" id="install-btn" disabled>Install Selected</button>
+        <button class="btn" id="uninstall-btn" disabled>Uninstall Selected</button>
+        <button class="btn btn-secondary" id="continue-inference-btn" disabled title="Checking installation...">
+            <span class="spinner"></span>
+            <span class="button-text">Continue to Inference</span>
+        </button>
+        <button class="btn btn-secondary" id="close-btn">Close</button>
+        <button class="btn btn-danger" id="uninstall-all-btn" disabled 
+                title="Uninstall all applications except Base System">Uninstall All</button>
+    </div>
+</div>

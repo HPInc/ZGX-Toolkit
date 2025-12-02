@@ -1,0 +1,82 @@
+<!--
+  Copyright ©2025 HP Development Company, L.P.
+  Licensed under the X11 License. See LICENSE file in the project root for details.
+-->
+
+<div class="container">
+    <div class="header">
+        <h1>📋 Manual SSH Key Setup</h1>
+        <p>Follow these steps to set up SSH key authentication for <strong>{{deviceName}}</strong></p>
+    </div>
+
+    <div class="step {{#if hasSSHKey}}step-disabled{{/if}}">
+        <h3>Step 1: Generate ED25519 SSH Key</h3>
+        <p>Choose your platform and run the command in your terminal:</p>
+        
+        <div class="platform-tabs">
+            <button class="platform-tab active" data-platform="windows">Windows</button>
+            <button class="platform-tab" data-platform="linux">Linux (or WSL)</button>
+            <button class="platform-tab" data-platform="mac">Mac</button>
+        </div>
+
+        <div class="platform-content active" data-platform="windows" data-step="keygen">
+            <div class="code-block"><pre class="cmd-text">{{windowsKeyGen}}</pre><button class="copy-button" data-copy="{{windowsKeyGen}}">Copy</button></div>
+        </div>
+
+        <div class="platform-content" data-platform="linux" data-step="keygen">
+            <div class="code-block"><pre class="cmd-text">{{linuxKeyGen}}</pre><button class="copy-button" data-copy="{{linuxKeyGen}}">Copy</button></div>
+        </div>
+
+        <div class="platform-content" data-platform="mac" data-step="keygen">
+            <div class="code-block"><pre class="cmd-text">{{macKeyGen}}</pre><button class="copy-button" data-copy="{{macKeyGen}}">Copy</button></div>
+        </div>
+
+        <p><small>This will create a new SSH key pair in your .ssh directory. Press Enter when prompted to use the default location and for no passphrase (Some automations within the toolkit won't work with a passphrase).</small></p>
+
+        
+        {{#if hasSSHKey}}
+        <div class="step-disabled-message">
+            <span class="codicon codicon-check"></span> SSH key already exists, you can skip this step.
+        </div>
+        {{/if}}
+    </div>
+
+    <div class="step">
+        <h3>Step 2: Copy the Public Key to Remote device</h3>
+        <p>Choose your platform to copy the SSH key:</p>
+        
+        <div class="platform-tabs">
+            <button class="platform-tab active" data-platform="windows">Windows</button>
+            <button class="platform-tab" data-platform="linux">Linux (or WSL)</button>
+            <button class="platform-tab" data-platform="mac">Mac</button>
+        </div>
+
+        <div class="platform-content active" data-platform="windows" data-step="copy">
+            <div class="code-block"><pre class="cmd-text">{{windowsCopy}}</pre><button class="copy-button" data-copy="{{windowsCopy}}">Copy</button></div>
+        </div>
+
+        <div class="platform-content" data-platform="linux" data-step="copy">
+            <div class="code-block"><pre class="cmd-text">{{linuxCopy}}</pre><button class="copy-button" data-copy="{{linuxCopy}}">Copy</button></div>
+        </div>
+
+        <div class="platform-content" data-platform="mac" data-step="copy">
+            <div class="code-block"><pre class="cmd-text">{{macCopy}}</pre><button class="copy-button" data-copy="{{macCopy}}">Copy</button></div>
+        </div>
+
+        <p><small>Enter your password when prompted. The public key will be added to the authorized_keys file on the remote device.</small></p>
+    </div>
+
+    <div class="step">
+        <h3>Step 3: Test the Connection</h3>
+        <p>Test that SSH key authentication is working:</p>
+        <div class="code-block"><pre class="cmd-text">{{testCommand}}</pre><button class="copy-button" data-copy="{{testCommand}}">Copy</button></div>
+        <p>If successful, you should connect without being prompted for a password.</p>
+    </div>
+
+    <div id="errorMessage" class="error-message hidden"></div>
+    
+    <div class="footer-button-group">
+        <button class="btn" id="completeBtn">Test Connection</button>
+        <button class="btn btn-secondary" data-action="goBack">Back</button>
+    </div>
+</div>

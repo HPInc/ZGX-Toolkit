@@ -1,0 +1,80 @@
+<!--
+  Copyright ©2025 HP Development Company, L.P.
+  Licensed under the X11 License. See LICENSE file in the project root for details.
+-->
+
+<div class="container fill-vertical">
+    <div class="header-buttons">
+        <button class="btn btn-block mb-2" id="add-device-btn" aria-label="Add a new device">Add Device</button>
+        <button class="btn btn-secondary btn-block mb-2" id="open-editor-btn" aria-label="Open the ZGX Device Manager in a new editor">Open ZGX Device Manager</button>
+    </div>
+    
+    <div class="content-area">
+        {{#if devices}}
+        <ul class="list device-list" id="deviceList" role="list" aria-label="List of devices">
+            {{#each devices}}
+            <li class="device-item" data-id="{{id}}" role="listitem">
+                <div class="device-item-icons">
+                    <button class="device-item-icon edit-icon" data-action="edit" data-id="{{id}}" title="Edit device" aria-label="Edit device {{name}}">
+                        <i class="codicon codicon-edit" aria-hidden="true"></i>
+                    </button>
+                    <button class="device-item-icon remove-icon" data-action="delete" data-id="{{id}}" title="Remove device" aria-label="Remove device {{name}}">
+                        <i class="codicon codicon-trash" aria-hidden="true"></i>
+                    </button>
+                </div>
+                <div class="device-name">{{name}}</div>
+                <div class="device-host">{{username}}@{{host}}:{{port}}</div>                
+                {{#if isSetup}}
+                {{#unless useKeyAuth}}
+                <div class="alert">
+                    <span class="codicon codicon-info"></span> You must setup this device again and use SSH key authentication.
+                </div>
+                {{/unless}}
+                {{/if}}
+                <div class="device-actions">
+                    {{#if isSetup}}
+                    {{#if useKeyAuth}}
+                    <div class="split-button" role="group" aria-label="Connection options for {{name}}">
+                        <button class="split-button-main" data-action="connect-default" data-id="{{id}}" aria-label="Connect to {{name}} using default method">Connect</button>
+                        <button class="split-button-dropdown" data-action="toggle-dropdown" data-id="{{id}}" aria-label="Show connection options" aria-haspopup="true" aria-expanded="false"></button>
+                        <div class="dropdown-content" id="dropdown-{{id}}" role="menu" aria-label="Connection options">
+                            <button class="dropdown-item" data-action="connect-current" data-id="{{id}}" role="menuitem">Current Window</button>
+                            <button class="dropdown-item" data-action="connect-new" data-id="{{id}}" role="menuitem">New Window</button>
+                        </div>
+                    </div>
+                    <button class="btn btn-secondary manage-apps-button" data-action="manage-apps" data-id="{{id}}" title="Manage applications" aria-label="Manage applications for {{name}}">
+                        Manage Apps
+                    </button>
+                    {{else}}
+                    <button class="btn" data-action="setup" data-id="{{id}}" aria-label="Set up device {{name}}">Setup</button>
+                    {{/if}}            
+                    {{else}}
+                    <button class="btn" data-action="setup" data-id="{{id}}" aria-label="Set up device {{name}}">Setup</button>
+                    {{/if}}
+                </div>
+            </li>
+            {{/each}}
+        </ul>
+        {{/if}}
+        
+        {{#if noDevices}}
+        <div class="empty-state" role="status">
+            <p>No devices added yet</p>
+        </div>
+        {{/if}}
+    </div>
+
+    <div class="quick-links-root">
+        <h2 class="quick-links-header">Quick Links</h2>
+        <ul class="quick-links-list">
+            <li class="quick-links-item" data-link="templates">
+                <span class="codicon codicon-rocket quick-links-icon" aria-hidden="true"></span>
+                <span class="quick-links-text">Quick Start Templates</span>
+            </li>
+            <li class="quick-links-item" data-link="docs">
+                <span class="codicon codicon-link-external quick-links-icon" aria-hidden="true"></span>
+                <span class="quick-links-text">ZGX Documentation</span>
+            </li>
+        </ul>
+    </div>
+</div>

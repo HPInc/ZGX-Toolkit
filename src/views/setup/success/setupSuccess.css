@@ -1,0 +1,21 @@
+/*
+ * Copyright ©2025 HP Development Company, L.P.
+ * Licensed under the X11 License. See LICENSE file in the project root for details.
+ */
+
+/* Setup Success specific styles */
+
+.icon {
+    font-size: 64px;
+    margin-bottom: 20px;
+}
+
+.content h1 {
+    margin: 0 0 15px 0;
+    color: var(--vscode-foreground);
+}
+
+.content p {
+    margin: 10px 0;
+    color: var(--vscode-descriptionForeground);
+}

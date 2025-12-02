@@ -1,0 +1,122 @@
+<!--
+  Copyright ©2025 HP Development Company, L.P.
+  Licensed under the X11 License. See LICENSE file in the project root for details.
+-->
+
+<div class="container">
+    <div class="header">
+        <h1>ZGX Device Manager</h1>
+        <p>Manage your SSH connections to remote HP ZGX devices</p>
+    </div>
+
+    <div class="add-device-section">
+        <button class="show-form-btn {{#if hiddenFormButton}}hidden{{/if}}" id="showFormBtn">Add New Device</button>
+        
+        <div class="add-device-form {{#if hiddenForm}}hidden{{/if}}" id="addDeviceForm" data-editing-id="{{editingDeviceId}}">
+            <h2 id="formTitle">{{formTitle}}</h2>
+            <div id="formError" class="form-error hidden"></div>
+            <form id="deviceForm">
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="deviceName">Device Name</label>
+                        <input type="text" id="deviceName" placeholder="My Device" value="{{deviceName}}" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="deviceHost">Host/IP Address</label>
+                        <div class="host-input-container">
+                            <div class="host-input-wrapper">
+                                <input 
+                                    type="text" 
+                                    id="deviceHost" 
+                                    class="host-combobox"
+                                    placeholder="Hostname or IP (e.g., 192.168.1.100)" 
+                                    value="{{deviceHost}}"
+                                    required
+                                    autocomplete="off">
+                                <div class="combobox-dropdown-icon"></div>
+                                <div id="devicesDropdown" class="devices-dropdown"></div>
+                            </div>
+                            <button type="button" id="discoverBtn" class="btn btn-secondary discover-btn">
+                                <span id="discoverBtnText">Discover Devices</span>
+                                <span id="discoverSpinner" class="spinner hidden"></span>
+                            </button>
+                        </div>
+                        <div id="discoveryStatus" class="discovery-status hidden"></div>
+                    </div>
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="deviceUsername">Username</label>
+                        <input type="text" id="deviceUsername" placeholder="root" value="{{deviceUsername}}" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="devicePort">SSH Port</label>
+                        <input type="number" id="devicePort" value="{{devicePort}}" min="1" max="65535" required>
+                    </div>
+                </div>
+                <div class="form-actions">
+                    <button type="button" class="btn btn-secondary" id="cancelBtn">Cancel</button>
+                    <button type="submit" class="btn" id="submitBtn">{{submitButtonText}}</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <div class="devices-section">
+        <h2>Your Devices</h2>
+        <div class="device-grid" id="deviceGrid">
+            {{#if devices}}
+            {{#each devices}}
+            <div class="device-card" data-id="{{id}}" data-name="{{name}}" data-host="{{host}}" data-username="{{username}}" data-port="{{port}}">
+                <div class="device-card-icons">
+                    <button class="device-card-icon edit-icon" data-id="{{id}}" title="Edit">
+                        <i class="codicon codicon-edit"></i>
+                    </button>
+                    <button class="device-card-icon remove-icon" data-id="{{id}}" title="Delete">
+                        <i class="codicon codicon-trash"></i>
+                    </button>
+                </div>
+                <h3>{{name}}</h3>
+                <div class="device-details">
+                    <div><strong>Host:</strong> {{host}}:{{port}}</div>
+                    <div><strong>Username:</strong> {{username}}</div>
+                    <div><strong>Status:</strong> {{#if isSetup}}Ready{{else}}Not Setup{{/if}}</div>
+                    {{#if isSetup}}
+                    {{#unless useKeyAuth}}
+                    <div class="alert">
+                        <span class="codicon codicon-info"></span> You must setup this device again and use SSH key authentication.
+                    </div>
+                    {{/unless}}
+                    {{/if}}
+                </div>
+                <div class="device-actions">
+                    {{#if isSetup}}
+                    {{#if useKeyAuth}}
+                    <div class="split-button">
+                        <button class="split-button-main connect-btn" data-id="{{id}}">Connect</button>
+                        <button class="split-button-dropdown" data-id="{{id}}"></button>
+                        <div class="dropdown-content">
+                            <button class="dropdown-item" data-action="current" data-id="{{id}}">Current Window</button>
+                            <button class="dropdown-item" data-action="new" data-id="{{id}}">New Window</button>
+                        </div>
+                    </div>
+                    <button class="btn btn-secondary manage-apps-button" data-id="{{id}}">Manage Apps</button>
+                    {{else}}
+                    <button class="btn setup-btn" data-action="setup" data-id="{{id}}">Setup</button>
+                    {{/if}}
+                    {{else}}
+                    <button class="btn setup-btn" data-action="setup" data-id="{{id}}">Setup</button>
+                    {{/if}}
+                </div>
+            </div>
+            {{/each}}
+            {{/if}}
+            
+            {{#if noDevices}}
+            <div class="empty-state">
+                <p>No devices configured yet. Add your first device above.</p>
+            </div>
+            {{/if}}
+        </div>
+    </div>
+</div>

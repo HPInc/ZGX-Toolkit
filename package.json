@@ -1,0 +1,165 @@
+{
+  "name": "zgx-toolkit",
+  "displayName": "ZGX Toolkit",
+  "description": "Manage your SSH connections to remote HP ZGX devices",
+  "version": "0.0.0",
+  "publisher": "HPInc",
+  "icon": "resources/logo-marketplace.png",
+  "galleryBanner": {
+    "color": "#1F49D1",
+    "theme": "dark"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/HPInc/ZGX-Toolkit"
+  },
+  "bugs": {
+    "url": "https://github.com/HPInc/ZGX-Toolkit/issues"
+  },
+  "homepage": "https://github.com/HPInc/ZGX-Toolkit#readme",
+  "license": "SEE LICENSE IN LICENSE",
+  "engines": {
+    "vscode": "^1.74.0"
+  },
+  "categories": [
+    "Other"
+  ],
+  "keywords": [
+    "ssh",
+    "remote",
+    "zgx",
+    "hp",
+    "device-management",
+    "remote-ssh",
+    "connection-manager",
+    "remote-development",
+    "device-discovery",
+    "hp-zgx"
+  ],
+  "qna": "marketplace",
+  "activationEvents": [],
+  "extensionDependencies": [
+    "ms-vscode-remote.remote-ssh"
+  ],
+  "enabledApiProposals": [
+    "telemetry"
+  ],
+  "main": "./out/extension.js",
+  "contributes": {
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "zgx-toolkit",
+          "title": "ZGX Toolkit",
+          "icon": "resources/activitybar-icon.svg"
+        }
+      ]
+    },
+    "views": {
+      "zgx-toolkit": [
+        {
+          "id": "remoteDevicesList",
+          "name": "Devices",
+          "type": "webview",
+          "icon": "resources/activitybar-icon.svg"
+        }
+      ]
+    },
+    "commands": [
+      {
+        "command": "zgxToolkit.testDiscovery",
+        "title": "ZGX Toolkit: Test Device Discovery"
+      },
+      {
+        "command": "zgxToolkit.openLog",
+        "title": "ZGX Toolkit: Open Log File",
+        "icon": "$(file-text)"
+      },
+      {
+        "command": "zgxToolkit.showLogLocation",
+        "title": "ZGX Toolkit: Show Log File Location",
+        "icon": "$(info)"
+      },
+      {
+        "command": "zgxToolkit.setLogLevel",
+        "title": "ZGX Toolkit: Set Log Level"
+      },
+      {
+        "command": "zgxToolkit.toggleTelemetry",
+        "title": "ZGX Toolkit: Toggle Telemetry"
+      },
+      {
+        "command": "zgxToolkit.showTelemetryStatus",
+        "title": "ZGX Toolkit: Show Telemetry Status"
+      }
+    ],
+    "configuration": {
+      "title": "ZGX Toolkit",
+      "properties": {
+        "zgxToolkit.logLevel": {
+          "type": "string",
+          "enum": [
+            "Error",
+            "Warn",
+            "Info",
+            "Debug",
+            "Trace"
+          ],
+          "default": "Info",
+          "description": "Set the logging level for the ZGX Toolkit extension. Higher levels include all lower level messages."
+        },
+        "zgxToolkit.telemetry.enabled": {
+          "type": "boolean",
+          "default": false,
+          "description": "Enable telemetry for the ZGX Toolkit extension. Telemetry data helps to improve the extension by providing insights into usage patterns and potential issues. No personal or sensitive data is collected."
+        }
+      }
+    }
+  },
+  "scripts": {
+    "vscode:prepublish": "npm run compile && npm run copy-resources",
+    "compile": "tsc -p ./",
+    "watch": "npm run copy-resources && tsc -watch -p ./",
+    "pretest": "npm run compile && npm run lint",
+    "lint": "eslint src --ext ts",
+    "test:unit": "jest --detectOpenHandles",
+    "test:unit:watch": "jest --watch",
+    "test:unit:coverage": "jest --coverage",
+    "test:integration": "npm run compile && npm run copy-resources && node ./out/__tests__/runIntegrationTest.js",
+    "copy-resources": "node scripts/copy-resources.js",
+    "prepackage": "node scripts/pre-package.js",
+    "package": "vsce package",
+    "postpackage": "node scripts/post-package.js"
+  },
+  "devDependencies": {
+    "@types/dnssd": "^0.4.5",
+    "@types/jest": "^29.5.5",
+    "@types/mocha": "^10.0.10",
+    "@types/node": "16.x",
+    "@types/ssh2": "^1.15.5",
+    "@types/vscode": "^1.74.0",
+    "@typescript-eslint/eslint-plugin": "^6.7.3",
+    "@typescript-eslint/parser": "^6.7.3",
+    "@vscode/test-electron": "^2.5.2",
+    "@vscode/vsce": "^3.1.0",
+    "esbuild": "^0.19.5",
+    "eslint": "^8.50.0",
+    "jest": "^29.7.0",
+    "mocha": "^11.7.2",
+    "ts-jest": "^29.1.1",
+    "typescript": "^4.9.4"
+  },
+  "dependencies": {
+    "@vscode/codicons": "^0.0.40",
+    "@vscode/extension-telemetry": "^1.2.0",
+    "dnssd": "^0.4.1",
+    "handlebars": "^4.7.8",
+    "ssh-config": "^5.0.3",
+    "ssh2": "^1.17.0"
+  },
+  "overrides": {
+    "ssh2": {
+      "cpu-features": "npm:empty-npm-package@^1.0.0"
+    }
+  }
+}

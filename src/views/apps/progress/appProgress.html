@@ -1,0 +1,44 @@
+<!--
+  Copyright ©2025 HP Development Company, L.P.
+  Licensed under the X11 License. See LICENSE file in the project root for details.
+-->
+
+<div class="container">
+    <div class="header">
+        <h1>Application {{operationLabel}}</h1>
+        <p>{{operationVerb}} selected applications on <strong>{{deviceName}}</strong></p>
+    </div>
+
+    <div class="password-section hidden" id="password-section">
+        <div class="password-prompt">
+            <p><strong>Sudo Password Required</strong></p>
+            <p>Some applications require administrator privileges. Please enter your password for <strong>{{deviceName}}</strong>.</p>
+            <div class="password-input-container">
+                <input type="password" id="password-input" class="password-input" placeholder="Enter password" />
+                <button id="password-submit-btn" class="btn btn-primary">Verify Password</button>
+            </div>
+            <div class="password-feedback" id="password-feedback"></div>
+        </div>
+    </div>
+
+    <div class="progress-container">
+        <div class="progress-text" id="progress-text">Preparing {{operationPastTense}}...</div>
+        <div class="progress-bar">
+            <div class="progress-fill" id="progress-fill"></div>
+        </div>
+        <div class="current-app" id="current-app"></div>
+    </div>
+
+    {{#unless fullUninstall}}
+    <div class="app-list">
+        <h3>{{operationLabel}} Queue</h3>
+        {{#each apps}}
+        <div class="app-item" id="app-{{id}}">
+            <div class="app-icon">{{icon}}</div>
+            <div class="app-name">{{name}}</div>
+            <div class="app-status status-pending" id="status-{{id}}">Pending</div>
+        </div>
+        {{/each}}
+    </div>
+    {{/unless}}
+</div>

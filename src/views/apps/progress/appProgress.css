@@ -1,0 +1,163 @@
+/*
+ * Copyright ©2025 HP Development Company, L.P.
+ * Licensed under the X11 License. See LICENSE file in the project root for details.
+ */
+
+/* App Install specific styles */
+
+.password-section {
+    background-color: var(--vscode-inputValidation-infoBorder);
+    background-color: var(--vscode-list-inactiveSelectionBackground);
+    border: 1px solid var(--vscode-panel-border);
+    border-radius: 8px;
+    padding: 20px;
+    margin-bottom: 20px;
+}
+
+.password-prompt {
+    text-align: left;
+}
+
+.password-prompt p {
+    margin: 5px 0;
+}
+
+.password-input-container {
+    display: flex;
+    gap: 10px;
+    margin: 15px 0 10px 0;
+    align-items: center;
+}
+
+.password-input {
+    flex: 1;
+    padding: 8px 12px;
+    background-color: var(--vscode-input-background);
+    color: var(--vscode-input-foreground);
+    border: 1px solid var(--vscode-input-border);
+    border-radius: 4px;
+    font-family: var(--vscode-font-family);
+    font-size: var(--vscode-font-size);
+}
+
+.password-input:focus {
+    outline: 1px solid var(--vscode-focusBorder);
+    border-color: var(--vscode-focusBorder);
+}
+
+.password-input::placeholder {
+    color: var(--vscode-input-placeholderForeground);
+}
+
+.password-feedback {
+    min-height: 20px;
+    margin-top: 5px;
+    font-size: 0.9em;
+}
+
+.password-feedback.error {
+    color: var(--vscode-errorForeground);
+}
+
+.password-feedback.success {
+    color: var(--vscode-charts-green);
+}
+
+.password-feedback.validating {
+    color: var(--vscode-descriptionForeground);
+}
+
+.progress-container {
+    background-color: var(--vscode-list-inactiveSelectionBackground);
+    border: 1px solid var(--vscode-panel-border);
+    border-radius: 8px;
+    padding: 30px;
+    margin-bottom: 30px;
+}
+
+.progress-bar {
+    width: 100%;
+    height: 20px;
+    background-color: var(--vscode-editor-background);
+    border: 1px solid var(--vscode-panel-border);
+    border-radius: 10px;
+    margin: 20px 0;
+    overflow: hidden;
+}
+
+.progress-fill {
+    height: 100%;
+    background-color: var(--vscode-activityBarBadge-background);
+    transition: width 0.3s ease;
+    width: 0%;
+}
+
+.progress-text {
+    margin: 10px 0;
+    font-weight: bold;
+}
+
+.current-app {
+    font-size: 1.1em;
+    margin: 15px 0;
+    color: var(--vscode-activityBarBadge-background);
+}
+
+.app-list {
+    text-align: left;
+    margin: 20px 0;
+}
+
+.app-item {
+    display: flex;
+    align-items: center;
+    padding: 8px 0;
+    border-bottom: 1px solid var(--vscode-panel-border);
+}
+
+.app-icon {
+    font-size: 1.2em;
+    margin-right: 10px;
+    width: 30px;
+}
+
+.app-name {
+    flex-grow: 1;
+}
+
+.app-status {
+    font-size: 0.9em;
+    color: var(--vscode-descriptionForeground);
+}
+
+.status-pending {
+    color: var(--vscode-descriptionForeground);
+}
+
+.status-installing {
+    color: var(--vscode-activityBarBadge-background);
+    font-weight: bold;
+}
+
+.status-completed {
+    color: var(--vscode-charts-green);
+    font-weight: bold;
+}
+
+.status-failed {
+    color: var(--vscode-errorForeground);
+    font-weight: bold;
+}
+
+.terminal-info {
+    background-color: var(--vscode-textPreformat-background);
+    border-left: 4px solid var(--vscode-activityBarBadge-background);
+    padding: 15px;
+    margin: 20px 0;
+    border-radius: 0 4px 4px 0;
+    text-align: left;
+}
+
+.terminal-info h4 {
+    margin-top: 0;
+}

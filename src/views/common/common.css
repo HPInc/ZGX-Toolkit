@@ -1,0 +1,949 @@
+/*
+ * Copyright ©2025 HP Development Company, L.P.
+ * Licensed under the X11 License. See LICENSE file in the project root for details.
+ */
+
+/*
+ * Common styles for all views in the ZGX Toolkit extension.
+ * Provides consistent theming using VS Code's CSS variables.
+ */
+
+:root {
+  /* VSCode theme variables */
+  --vscode-font-family: var(--vscode-font-family);
+  --vscode-font-size: var(--vscode-font-size);
+
+  /* Spacing system */
+  --spacing-xs: 4px;
+  --spacing-sm: 8px;
+  --spacing-md: 16px;
+  --spacing-lg: 24px;
+  --spacing-xl: 32px;
+  --spacing-xxl: 40px;
+
+  /* Border radius */
+  --border-radius: 4px;
+  --border-radius-sm: 2px;
+  --border-radius-lg: 6px;
+
+  /* Transitions */
+  --transition-fast: 150ms ease;
+  --transition-normal: 250ms ease;
+  --transition-slow: 350ms ease;
+
+  /* Shadows */
+  --shadow-sm: 0 1px 2px var(--vscode-widget-shadow);
+  --shadow-md: 0 2px 8px var(--vscode-widget-shadow);
+  --shadow-lg: 0 4px 16px var(--vscode-widget-shadow);
+
+  /* HP Colors */
+  --hp-electric-blue: #024AD8;
+  --hp-cyan-blue: #3BB7F6;
+  --hp-power-storm: #568393;
+  --hp-orange-bloom: #FF5050;
+}
+
+/* Reset and base styles */
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  font-family: var(--vscode-font-family);
+  font-size: var(--vscode-font-size);
+  color: var(--vscode-foreground);
+  background: var(--vscode-editor-background);
+  margin: 0;
+  line-height: 1.5;
+}
+
+.container {
+  max-width: 800px;
+  margin: 0 auto;
+  text-align: left;
+}
+
+.header {
+  margin: var(--spacing-xl) 0;
+  text-align: center;
+}
+
+.header h1 {
+  margin: 0 0 var(--spacing-sm) 0;
+}
+
+.header p {
+  color: var(--vscode-descriptionForeground);
+  margin: 0;
+}
+
+/* Typography */
+h1,
+h2,
+h3,
+h4,
+h5,
+h6 {
+  font-weight: 600;
+  line-height: 1.25;
+  margin-bottom: var(--spacing-md);
+  color: var(--vscode-foreground);
+}
+
+h1 {
+  font-size: 2em;
+}
+
+h2 {
+  font-size: 1.5em;
+}
+
+h3 {
+  font-size: 1.25em;
+}
+
+h4 {
+  font-size: 1.1em;
+}
+
+p {
+  margin-bottom: var(--spacing-sm);
+}
+
+/* Buttons */
+.btn {
+  padding: var(--spacing-sm) var(--spacing-md);
+  background: var(--vscode-button-background);
+  color: var(--vscode-button-foreground);
+  border: none;
+  border-radius: var(--border-radius);
+  cursor: pointer;
+  font-size: inherit;
+  font-family: inherit;
+  transition: background var(--transition-fast);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--spacing-xs);
+  /* Accessibility improvements */
+  min-height: 28px;
+  min-width: 28px;
+}
+
+.btn:hover:not(:disabled):not(.btn-secondary):not(.btn-danger) {
+  background: var(--vscode-button-hoverBackground);
+}
+
+.btn:focus {
+  outline: 2px solid var(--vscode-focusBorder);
+  outline-offset: 2px;
+}
+
+.btn:focus:not(:focus-visible) {
+  outline: none;
+}
+
+.btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.btn-secondary {
+  background: var(--vscode-button-secondaryBackground);
+  color: var(--vscode-button-secondaryForeground);
+}
+
+.btn-secondary:hover {
+  background: var(--vscode-button-secondaryHoverBackground);
+}
+
+.btn-danger {
+  background: var(--vscode-inputValidation-errorBackground);
+  color: var(--vscode-inputValidation-errorForeground);
+}
+
+.btn-danger:hover {
+  background: color-mix(in srgb, var(--vscode-inputValidation-errorBackground) 80%, black 20%);
+  color: var(--vscode-inputValidation-errorForeground);
+}
+
+.btn-sm {
+  padding: 4px 8px;
+  font-size: 0.9em;
+}
+
+.btn-lg {
+  padding: 12px 24px;
+  font-size: 1.1em;
+}
+
+.btn-block {
+  width: 100%;
+}
+
+.button-group {
+  display: flex;
+  gap: var(--spacing-md);
+  justify-content: left;
+  margin: var(--spacing-sm) 0;
+}
+
+.footer-button-group {
+  position: sticky;
+  bottom: 0;
+  display: flex;
+  gap: var(--spacing-md);
+  justify-content: center;
+  margin: var(--spacing-sm) 0 0 0;
+  padding: var(--spacing-sm) var(--spacing-sm);
+  background: var(--vscode-editor-background);
+  border-top: 1px solid var(--vscode-panel-border);
+  border-radius: 0;
+  box-shadow: 0 -2px var(--vscode-widget-shadow);
+  z-index: 100;
+  flex-wrap: wrap;
+  max-height: 30vh;
+  overflow-y: auto;
+}
+
+.footer-button-group.vertical {
+  flex-direction: column;
+}
+
+/* Split-Button */
+
+.split-button {
+  position: relative;
+  display: inline-flex;
+  align-items: stretch;
+}
+
+.split-button-main {
+  background-color: var(--vscode-button-background);
+  color: var(--vscode-button-foreground);
+  border: none;
+  padding: 4px 8px;
+  cursor: pointer;
+  border-radius: var(--border-radius-sm) 0 0 var(--border-radius-sm);
+  font-size: 0.8em;
+  box-sizing: border-box;
+  border-right: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.split-button-main:hover {
+  background-color: var(--vscode-button-hoverBackground);
+}
+
+.split-button-dropdown {
+  background-color: var(--vscode-button-background);
+  color: var(--vscode-button-foreground);
+  border: none;
+  padding: 6px 8px;
+  cursor: pointer;
+  border-radius: 0 var(--border-radius) var(--border-radius) 0;
+  font-size: 0.9em;
+  box-sizing: border-box;
+  position: relative;
+  min-width: 20px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.split-button-dropdown:hover {
+  background-color: var(--vscode-button-hoverBackground);
+}
+
+.split-button-dropdown::after {
+  content: '';
+  width: 0;
+  height: 0;
+  border-left: 4px solid transparent;
+  border-right: 4px solid transparent;
+  border-top: 4px solid currentColor;
+}
+
+.dropdown-content {
+  display: none;
+  position: absolute;
+  top: 100%;
+  left: 0;
+  background-color: var(--vscode-menu-background);
+  border: 1px solid var(--vscode-menu-border);
+  border-radius: var(--border-radius);
+  box-shadow: 0 2px 8px var(--vscode-widget-shadow);
+  z-index: 1000;
+  min-width: 200px;
+  margin-top: 2px;
+}
+
+.dropdown-content.show {
+  display: block;
+}
+
+.dropdown-item {
+  background: none;
+  border: none;
+  color: var(--vscode-menu-foreground);
+  padding: 12px 16px;
+  width: 100%;
+  text-align: left;
+  cursor: pointer;
+  border-radius: 0;
+}
+
+.dropdown-item:hover {
+  background-color: var(--vscode-menu-selectionBackground);
+  color: var(--vscode-menu-selectionForeground);
+}
+
+.dropdown-item:first-child {
+  border-radius: var(--border-radius) var(--border-radius) 0 0;
+}
+
+.dropdown-item:last-child {
+  border-radius: 0 0 var(--border-radius) var(--border-radius);
+}
+
+/* Links */
+a {
+  color: var(--vscode-textLink-foreground);
+  text-decoration: none;
+  transition: color var(--transition-fast);
+}
+
+a:hover {
+  color: var(--vscode-textLink-activeForeground);
+  text-decoration: underline;
+}
+
+/* Forms */
+.form-group {
+  margin-bottom: var(--spacing-md);
+}
+
+.form-group label {
+  display: block;
+  margin-bottom: var(--spacing-xs);
+  font-weight: 600;
+  color: var(--vscode-foreground);
+}
+
+.form-group input,
+.form-group select,
+.form-group textarea {
+  width: 100%;
+  background: var(--vscode-input-background);
+  color: var(--vscode-input-foreground);
+  border: 1px solid var(--vscode-input-border);
+  padding: var(--spacing-sm);
+  border-radius: var(--border-radius);
+  font-size: inherit;
+  font-family: inherit;
+  transition: border-color var(--transition-fast);
+  /* Accessibility: Ensure sufficient height for touch targets */
+  min-height: 28px;
+}
+
+.form-group input:focus,
+.form-group select:focus,
+.form-group textarea:focus {
+  outline: none;
+  border-color: var(--vscode-focusBorder);
+  box-shadow: 0 0 0 2px var(--vscode-focusBorder);
+}
+
+.form-group input::placeholder {
+  color: var(--vscode-input-placeholderForeground);
+}
+
+.form-group input:invalid,
+.form-group select:invalid,
+.form-group textarea:invalid {
+  border-color: var(--vscode-inputValidation-errorBorder);
+}
+
+.form-group .error-message {
+  color: var(--vscode-inputValidation-errorForeground);
+  font-size: 0.9em;
+  margin-top: var(--spacing-xs);
+}
+
+.form-row {
+  display: flex;
+  gap: var(--spacing-md);
+  margin-bottom: var(--spacing-md);
+}
+
+.form-row .form-group {
+  flex: 1;
+  margin-bottom: 0;
+}
+
+.form-actions {
+  display: flex;
+  gap: var(--spacing-sm);
+  justify-content: flex-end;
+  margin-top: var(--spacing-md);
+}
+
+.container-fluid {
+  padding: var(--spacing-md);
+  width: 100%;
+}
+
+.container-narrow {
+  max-width: 600px;
+  margin: 0 auto;
+  padding: var(--spacing-md);
+}
+
+.container-wide {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: var(--spacing-md);
+}
+
+/* Flexbox utilities */
+.flex-row {
+  display: flex;
+  flex-direction: row;
+  gap: var(--spacing-sm);
+}
+
+.flex-col {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-sm);
+}
+
+.flex-center {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.flex-between {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.flex-wrap {
+  flex-wrap: wrap;
+}
+
+.flex-1 {
+  flex: 1;
+}
+
+/* Lists */
+.list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.list-item {
+  padding: var(--spacing-sm);
+  border-bottom: 1px solid var(--vscode-panel-border);
+  cursor: pointer;
+  transition: background var(--transition-fast);
+  /* Accessibility: Ensure items are keyboard navigable */
+  position: relative;
+}
+
+.list-item:hover {
+  background: var(--vscode-list-hoverBackground);
+}
+
+.list-item:active {
+  background: var(--vscode-list-activeSelectionBackground);
+  color: var(--vscode-list-activeSelectionForeground);
+}
+
+.list-item:focus-within {
+  outline: 2px solid var(--vscode-focusBorder);
+  outline-offset: -2px;
+  z-index: 1;
+}
+
+.list-item.selected {
+  background: var(--vscode-list-activeSelectionBackground);
+  color: var(--vscode-list-activeSelectionForeground);
+}
+
+.list-item:last-child {
+  border-bottom: none;
+}
+
+/* Cards */
+.card {
+  background: var(--vscode-list-inactiveSelectionBackground);
+  border: 1px solid var(--vscode-panel-border);
+  border-radius: var(--border-radius);
+  padding: var(--spacing-md);
+  margin-bottom: var(--spacing-md);
+}
+
+.card-header {
+  margin-bottom: var(--spacing-md);
+  padding-bottom: var(--spacing-sm);
+  border-bottom: 1px solid var(--vscode-panel-border);
+}
+
+.card-body {
+  padding: var(--spacing-sm) 0;
+}
+
+.card-footer {
+  margin-top: var(--spacing-md);
+  padding-top: var(--spacing-sm);
+  border-top: 1px solid var(--vscode-panel-border);
+}
+
+/* Grid */
+.grid {
+  display: grid;
+  gap: var(--spacing-md);
+}
+
+.grid-2 {
+  grid-template-columns: repeat(2, 1fr);
+}
+
+.grid-3 {
+  grid-template-columns: repeat(3, 1fr);
+}
+
+.grid-auto {
+  grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+}
+
+/* Empty states */
+.empty-state {
+  text-align: center;
+  padding: var(--spacing-xl);
+  color: var(--vscode-descriptionForeground);
+}
+
+.empty-state-icon {
+  font-size: 48px;
+  margin-bottom: var(--spacing-md);
+  opacity: 0.5;
+}
+
+.empty-state-title {
+  font-size: 1.25em;
+  font-weight: 600;
+  margin-bottom: var(--spacing-sm);
+}
+
+.empty-state-message {
+  margin-bottom: var(--spacing-md);
+}
+
+/* Loading states */
+.spinner {
+  display: inline-block;
+  width: 16px;
+  height: 16px;
+  border: 2px solid var(--vscode-descriptionForeground);
+  border-radius: 50%;
+  border-top-color: transparent;
+  animation: spin 1s ease-in-out infinite;
+}
+
+.spinner-lg {
+  width: 32px;
+  height: 32px;
+  border-width: 3px;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* Alerts */
+.alert {
+  padding: var(--spacing-md);
+  border-radius: var(--border-radius);
+  margin-bottom: var(--spacing-md);
+  display: flex;
+  align-items: flex-start;
+  gap: var(--spacing-sm);
+}
+
+.alert-info {
+  background: var(--vscode-statusBarItem-prominentBackground);
+  color: var(--vscode-statusBarItem-prominentForeground);
+}
+
+.alert-success {
+  background: var(--vscode-testing-iconPassed);
+  color: var(--vscode-button-foreground);
+}
+
+.alert-warning {
+  background: var(--vscode-editorWarning-foreground);
+  color: var(--vscode-button-foreground);
+}
+
+.alert-error {
+  background: var(--vscode-errorForeground);
+  color: var(--vscode-button-foreground);
+}
+
+/* Badges */
+.badge {
+  display: inline-block;
+  padding: 2px 6px;
+  border-radius: var(--border-radius-sm);
+  font-size: 0.85em;
+  font-weight: 600;
+  line-height: 1;
+}
+
+.badge-primary {
+  background: var(--vscode-button-background);
+  color: var(--vscode-button-foreground);
+}
+
+.badge-secondary {
+  background: var(--vscode-button-secondaryBackground);
+  color: var(--vscode-button-secondaryForeground);
+}
+
+.badge-success {
+  background: var(--vscode-testing-iconPassed);
+  color: var(--vscode-button-foreground);
+}
+
+.badge-danger {
+  background: var(--vscode-errorForeground);
+  color: var(--vscode-button-foreground);
+}
+
+/* Utility classes */
+.hidden {
+  display: none !important;
+}
+
+.visible {
+  visibility: visible;
+}
+
+.invisible {
+  visibility: hidden;
+}
+
+.text-center {
+  text-align: center;
+}
+
+.text-left {
+  text-align: left;
+}
+
+.text-right {
+  text-align: right;
+}
+
+.text-muted {
+  color: var(--vscode-descriptionForeground);
+}
+
+.text-bold {
+  font-weight: 600;
+}
+
+.text-sm {
+  font-size: 0.9em;
+}
+
+.text-lg {
+  font-size: 1.1em;
+}
+
+.mt-0 {
+  margin-top: 0;
+}
+
+.mt-1 {
+  margin-top: var(--spacing-xs);
+}
+
+.mt-2 {
+  margin-top: var(--spacing-sm);
+}
+
+.mt-3 {
+  margin-top: var(--spacing-md);
+}
+
+.mt-4 {
+  margin-top: var(--spacing-lg);
+}
+
+.mt-5 {
+  margin-top: var(--spacing-xl);
+}
+
+.mb-0 {
+  margin-bottom: 0;
+}
+
+.mb-1 {
+  margin-bottom: var(--spacing-xs);
+}
+
+.mb-2 {
+  margin-bottom: var(--spacing-sm);
+}
+
+.mb-3 {
+  margin-bottom: var(--spacing-md);
+}
+
+.mb-4 {
+  margin-bottom: var(--spacing-lg);
+}
+
+.mb-5 {
+  margin-bottom: var(--spacing-xl);
+}
+
+.ml-0 {
+  margin-left: 0;
+}
+
+.ml-1 {
+  margin-left: var(--spacing-xs);
+}
+
+.ml-2 {
+  margin-left: var(--spacing-sm);
+}
+
+.ml-3 {
+  margin-left: var(--spacing-md);
+}
+
+.ml-4 {
+  margin-left: var(--spacing-lg);
+}
+
+.ml-5 {
+  margin-left: var(--spacing-xl);
+}
+
+.mr-0 {
+  margin-right: 0;
+}
+
+.mr-1 {
+  margin-right: var(--spacing-xs);
+}
+
+.mr-2 {
+  margin-right: var(--spacing-sm);
+}
+
+.mr-3 {
+  margin-right: var(--spacing-md);
+}
+
+.mr-4 {
+  margin-right: var(--spacing-lg);
+}
+
+.mr-5 {
+  margin-right: var(--spacing-xl);
+}
+
+.pt-0 {
+  padding-top: 0;
+}
+
+.pt-1 {
+  padding-top: var(--spacing-xs);
+}
+
+.pt-2 {
+  padding-top: var(--spacing-sm);
+}
+
+.pt-3 {
+  padding-top: var(--spacing-md);
+}
+
+.pt-4 {
+  padding-top: var(--spacing-lg);
+}
+
+.pt-5 {
+  padding-top: var(--spacing-xl);
+}
+
+.pb-0 {
+  padding-bottom: 0;
+}
+
+.pb-1 {
+  padding-bottom: var(--spacing-xs);
+}
+
+.pb-2 {
+  padding-bottom: var(--spacing-sm);
+}
+
+.pb-3 {
+  padding-bottom: var(--spacing-md);
+}
+
+.pb-4 {
+  padding-bottom: var(--spacing-lg);
+}
+
+.pb-5 {
+  padding-bottom: var(--spacing-xl);
+}
+
+.pl-0 {
+  padding-left: 0;
+}
+
+.pl-1 {
+  padding-left: var(--spacing-xs);
+}
+
+.pl-2 {
+  padding-left: var(--spacing-sm);
+}
+
+.pl-3 {
+  padding-left: var(--spacing-md);
+}
+
+.pl-4 {
+  padding-left: var(--spacing-lg);
+}
+
+.pl-5 {
+  padding-left: var(--spacing-xl);
+}
+
+.pr-0 {
+  padding-right: 0;
+}
+
+.pr-1 {
+  padding-right: var(--spacing-xs);
+}
+
+.pr-2 {
+  padding-right: var(--spacing-sm);
+}
+
+.pr-3 {
+  padding-right: var(--spacing-md);
+}
+
+.pr-4 {
+  padding-right: var(--spacing-lg);
+}
+
+.pr-5 {
+  padding-right: var(--spacing-xl);
+}
+
+/* Scrollbar styling */
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+::-webkit-scrollbar-track {
+  background: var(--vscode-scrollbarSlider-background);
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--vscode-scrollbarSlider-hoverBackground);
+  border-radius: var(--border-radius);
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--vscode-scrollbarSlider-activeBackground);
+}
+
+/* Error message */
+
+.error-message {
+    background-color: var(--vscode-inputValidation-errorBackground);
+    border: 1px solid var(--vscode-inputValidation-errorBorder);
+    color: var(--vscode-errorForeground);
+    padding: 12px;
+    margin-bottom: 16px;
+    border-radius: 4px;
+    font-size: 0.9em;
+}
+
+/* Spinner */
+
+.spinner {
+    display: inline-block;
+    width: 12px;
+    height: 12px;
+    border: 2px solid var(--vscode-button-foreground);
+    border-radius: 50%;
+    border-top-color: transparent;
+    animation: spin 1s ease-in-out infinite;
+    vertical-align: middle;
+    margin-right: 6px;
+}
+
+@keyframes spin {
+    to {
+        transform: rotate(360deg);
+    }
+}
+
+/* HP Stripe in Electric Blue */
+
+.hp-stripe {
+  background-image: linear-gradient(-70deg,
+      transparent 0%,
+      transparent 45%,
+      var(--hp-electric-blue) 45%,
+      var(--hp-electric-blue) 55%,
+      transparent 55%,
+      transparent 100%);
+  background-size: 120px 100%;
+  background-position: right bottom 10px;
+  background-repeat: no-repeat;
+}
+
+.hp-double-stripe {
+  background-image:
+    linear-gradient(-70deg,
+      transparent 0%,
+      transparent 45%,
+      var(--hp-electric-blue) 45%,
+      var(--hp-electric-blue) 55%,
+      transparent 55%,
+      transparent 100%),
+    linear-gradient(-70deg,
+      transparent 0%,
+      transparent 45%,
+      var(--hp-electric-blue) 45%,
+      var(--hp-electric-blue) 55%,
+      transparent 55%,
+      transparent 100%);
+  background-size: 120px 100%, 120px 100%;
+  background-position: right bottom 10px, calc(right - 130px) top 10px;
+  background-repeat: no-repeat, no-repeat;
+}

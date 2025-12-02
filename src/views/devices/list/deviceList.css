@@ -1,0 +1,196 @@
+/*
+ * Copyright ©2025 HP Development Company, L.P.
+ * Licensed under the X11 License. See LICENSE file in the project root for details.
+ */
+
+html, body {
+    height: 100%;
+    margin: 0;
+    padding: 0;
+    overflow: hidden;
+}
+
+.fill-vertical {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    padding: 0;
+}
+
+.container.fill-vertical {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    overflow: hidden;
+}
+
+.content-area {
+    flex: 1 1 auto;
+    overflow-y: auto;
+    padding-bottom: var(--spacing-md);
+    margin: 0;
+}
+
+.header-buttons {
+    flex-shrink: 0;
+    padding: var(--spacing-sm);
+    padding-bottom: var(--spacing-sm);
+    border-bottom: 1px solid var(--vscode-panel-border);    
+}
+
+.device-item {
+    background-color: var(--vscode-list-inactiveSelectionBackground);
+    margin: var(--spacing-sm);
+    margin-bottom: var(--spacing-xs);
+    padding: var(--spacing-sm);
+    border-radius: var(--border-radius);
+    border-left: 3px solid var(--hp-electric-blue);
+    position: relative;
+}
+
+.device-name {
+    font-weight: bold;
+    margin-bottom: 4px;
+    padding-right: 60px;
+}
+
+.device-item-icons {
+    position: absolute;
+    top: var(--spacing-sm);
+    right: var(--spacing-sm);
+    display: flex;
+    gap: 6px;
+}
+
+.device-item-icon {
+    width: 16px;
+    height: 16px;
+    border: none;
+    background: none;
+    cursor: pointer;
+    padding: 2px;
+    border-radius: var(--border-radius-sm);
+    color: var(--vscode-descriptionForeground);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 10px;
+}
+
+.device-item-icon:hover {
+    background-color: var(--vscode-list-hoverBackground);
+    color: var(--vscode-foreground);
+}
+
+.device-item-icon.edit-icon:hover {
+    color: var(--vscode-button-background);
+}
+
+.device-item-icon.remove-icon:hover {
+    color: var(--vscode-errorForeground);
+}
+
+.device-host {
+    font-size: 0.9em;
+    color: var(--vscode-descriptionForeground);
+    margin-bottom: 6px;
+}
+
+.device-actions {
+    display: flex;
+    gap: var(--spacing-sm);
+    align-items: center;
+}
+
+.device-actions .btn, .device-actions .split-button-main, .device-actions .split-button-dropdown {
+    font-size: 0.8em;
+    min-height: 24px;
+    height: 24px;
+}
+
+.device-list {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+}
+
+.empty-state {
+    padding: var(--spacing-md);
+}
+
+/* Quick Links styles */
+.quick-links-root {
+    flex: 0 0 auto;
+    font-size: 13px;
+    padding: var(--spacing-md);
+    border-top: 1px solid var(--vscode-panel-border);
+    background: transparent;
+    color: var(--vscode-foreground);
+}
+
+.quick-links-header {
+    margin: 0 0 var(--spacing-md) 0;
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: .5px;
+    color: var(--vscode-descriptionForeground);
+}
+
+.quick-links-list {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+    display: flex;
+    flex-direction: column;
+    gap: var(--spacing-sm);
+}
+
+.quick-links-item {
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-sm);
+    padding: 6px 8px;
+    border-radius: var(--border-radius);
+    cursor: pointer;
+    user-select: none;
+    position: relative;
+}
+
+.quick-links-item:hover {
+    background: var(--vscode-list-hoverBackground);
+}
+
+.quick-links-item:active {
+    background: var(--vscode-list-activeSelectionBackground);
+}
+
+.quick-links-icon {
+    font-size: 16px;
+    line-height: 16px;
+    width: 16px;
+    height: 16px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--vscode-descriptionForeground);
+}
+
+.quick-links-text {
+    flex: 1 1 auto;
+}
+
+.quick-links-item.disabled {
+    opacity: .6;
+    cursor: default;
+}
+
+.quick-links-item.disabled:hover {
+    background: transparent;
+}
+
+@media (max-height: 600px) {
+    .quick-links-root {
+        max-height: none;
+    }
+}

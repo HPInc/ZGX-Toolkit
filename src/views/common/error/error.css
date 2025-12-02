@@ -1,0 +1,26 @@
+/*
+ * Copyright ©2025 HP Development Company, L.P.
+ * Licensed under the X11 License. See LICENSE file in the project root for details.
+ */
+
+.error-container {
+    min-height: 300px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.error-icon {
+    color: var(--vscode-errorForeground);
+}
+
+.error-message {
+    color: var(--vscode-input-foreground);
+    font-size: 1em;
+    max-width: 500px;
+    margin: 0 auto var(--spacing-md);
+}
+
+.empty-state button {
+    margin: var(--spacing-xs);
+}

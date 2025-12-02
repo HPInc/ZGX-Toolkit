@@ -1,0 +1,125 @@
+/*
+ * Copyright ©2025 HP Development Company, L.P.
+ * Licensed under the X11 License. See LICENSE file in the project root for details.
+ */
+
+/* Manual Setup specific styles */
+
+.step {
+    background-color: var(--vscode-list-inactiveSelectionBackground);
+    border: 1px solid var(--vscode-panel-border);
+    border-radius: 8px;
+    padding: 20px;
+    margin-bottom: 20px;
+    border-left: 4px solid var(--hp-electric-blue);
+}
+
+.step.step-disabled {
+    opacity: 0.6;
+    background-color: var(--vscode-input-background);
+    border-left-color: var(--vscode-descriptionForeground);
+}
+
+.step-disabled-message {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 12px;
+    background-color: var(--vscode-inputValidation-infoBackground);
+    border: 1px solid var(--vscode-inputValidation-infoBorder);
+    border-radius: 4px;
+    color: var(--vscode-inputValidation-infoForeground);
+    font-size: 0.95em;
+}
+
+.step-disabled-message .codicon {
+    font-size: 1.2em;
+    color: var(--vscode-testing-iconPassed);
+}
+
+.step h3 {
+    margin: 0 0 15px 0;
+    color: var(--vscode-foreground);
+}
+
+.code-block {
+    background-color: var(--vscode-textCodeBlock-background);
+    border: 1px solid var(--vscode-panel-border);
+    border-radius: 4px;
+    padding: 10px;
+    margin: 10px 0;
+    font-family: var(--vscode-editor-font-family);
+    font-size: 0.9em;
+    display: grid;
+    grid-template-columns: 1fr auto;
+    gap: 10px;
+    align-items: center;
+    min-height: calc(1.4em * 2 + 20px); /* Two lines of text plus padding */
+}
+
+.code-block pre.cmd-text {
+    margin: 0;
+    padding: 0;
+    background: transparent;
+    border: none;
+    font-family: var(--vscode-editor-font-family);
+    font-size: 0.9em;
+    line-height: 1.4;
+    overflow-x: auto;
+    white-space: pre-wrap;
+    word-break: break-word;
+    display: flex;
+    align-items: center;
+    min-height: calc(1.4em * 2); /* Two lines of text */
+}
+
+.copy-button {
+    background-color: var(--vscode-button-background);
+    color: var(--vscode-button-foreground);
+    border: 1px solid var(--vscode-panel-border);
+    padding: 6px 14px;
+    cursor: pointer;
+    border-radius: 3px;
+    font-size: 12px;
+    white-space: nowrap;
+}
+
+.copy-button:hover {
+    background-color: var(--vscode-button-hoverBackground);
+}
+
+.platform-tabs {
+    display: flex;
+    border-bottom: 1px solid var(--vscode-panel-border);
+    margin-bottom: 15px;
+    flex-wrap: wrap;
+}
+
+.platform-tab {
+    padding: 8px 16px;
+    background-color: var(--vscode-tab-inactiveBackground);
+    color: var(--vscode-tab-inactiveForeground);
+    border: none;
+    cursor: pointer;
+    border-top-left-radius: 4px;
+    border-top-right-radius: 4px;
+    margin-right: 2px;
+}
+
+.platform-tab.active {
+    background-color: var(--vscode-tab-activeBackground);
+    color: var(--vscode-tab-activeForeground);
+    border-bottom: 2px solid var(--vscode-activityBarBadge-background);
+}
+
+.platform-tab:hover {
+    background-color: var(--vscode-list-hoverBackground);
+}
+
+.platform-content {
+    display: none;
+}
+
+.platform-content.active {
+    display: block;
+}
