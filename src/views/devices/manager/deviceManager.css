@@ -255,6 +255,15 @@
     color: var(--vscode-errorForeground);
 }
 
+.device-card-icon.dns-warning-icon {
+    color: var(--vscode-editorWarning-foreground);
+}
+
+.device-card-icon.dns-warning-icon:hover {
+    color: var(--vscode-editorWarning-foreground);
+    background-color: rgb(from var(--vscode-editorWarning-foreground) r g b / 15%);
+}
+
 .device-details {
     color: var(--vscode-descriptionForeground);
     margin-bottom: var(--spacing-md);

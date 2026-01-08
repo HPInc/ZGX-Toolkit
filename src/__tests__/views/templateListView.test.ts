@@ -6,6 +6,7 @@
 import { TemplateListViewController } from '../../views/templates/templateListViewController';
 import { InferenceInstructionsViewController } from '../../views/instructions/inference/inferenceInstructionsViewController';
 import { FineTuningInstructionsViewController } from '../../views/instructions/finetuning/fineTuningInstructionsViewController';
+import { RagInstructionsViewController } from '../../views/instructions/rag/ragInstructionsViewController';
 import { Logger } from '../../utils/logger';
 import { ITelemetryService, TelemetryEventType } from '../../types/telemetry';
 import { jest } from '@jest/globals';
@@ -64,6 +65,7 @@ describe('TemplateListViewController', () => {
         expect(eventData.measurements?.templateCount).toBeGreaterThanOrEqual(1);
         expect(html).toMatch(/data-id="inference"/);
         expect(html).toMatch(/data-id="fine-tuning"/);
+        expect(html).toMatch(/data-id="rag"/);
     });
 
     test('render() template count equals number of unique data-id attributes', async () => {
@@ -160,10 +162,42 @@ describe('TemplateListViewController', () => {
             context: 'templates.fine-tuning'
         });
     });
-
     test('no telemetry feature event fired for non-selection messages', async () => {
         const controller = createController();
         await controller.handleMessage({ type: 'unrelated', foo: 'bar' });
         expect(mockTelemetry.trackEvent).not.toHaveBeenCalled();
+    });
+
+    test('handleMessage navigates to RAG instructions on rag selection', async () => {
+        const controller = createController();
+        const navigateSpy = jest.spyOn(controller as any, 'navigateTo').mockResolvedValue(undefined);
+
+        await controller.handleMessage({ type: 'template-select', id: 'rag' });
+
+        expect(mockTelemetry.trackEvent).toHaveBeenCalledWith({
+            eventType: TelemetryEventType.View,
+            action: 'navigate',
+            properties: {
+                toView: 'templates.rag',
+            }
+        });
+        expect(navigateSpy).toHaveBeenCalledWith(
+            RagInstructionsViewController.viewId(),
+            { templateId: 'rag' },
+            'editor'
+        );
+    });
+
+    test('handleMessage logs error telemetry when navigation fails for rag', async () => {
+        const controller = createController();
+        const err = new Error('navigate failed');
+        jest.spyOn(controller as any, 'navigateTo').mockRejectedValue(err);
+
+        await controller.handleMessage({ type: 'template-select', id: 'rag' });
+        expect(mockTelemetry.trackError).toHaveBeenCalledWith({
+            eventType: TelemetryEventType.Error,
+            error: err as Error,
+            context: 'templates.rag'
+        });
     });
 });

@@ -12,7 +12,7 @@ import { telemetryService } from './services/telemetryService';
 import { TelemetryEventType } from './types/telemetry';
 import { configService } from './services/configService';
 import { deviceStore } from './store';
-import { deviceService, AppInstallationService, PasswordService, deviceDiscoveryService, extensionStateService } from './services';
+import { deviceService, AppInstallationService, PasswordService, deviceDiscoveryService, extensionStateService, dnsServiceRegistration } from './services';
 import { ConnectionService } from './services/connectionService';
 import { registerCommands, setCommandContext } from './commands';
 import { createGlobalStatePersistenceService } from './services/globalStatePersistenceService';
@@ -78,6 +78,12 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
         });
         logger.debug('Storage service initialized');
 
+        // Run DNS service migration for existing devices (backwards compatibility)
+        // This runs asynchronously and doesn't block extension activation
+        dnsServiceRegistration.migrateExistingDevices(deviceService, vscode.window).catch(error => {
+            logger.error('mDNS migration failed but extension will continue', { error });
+        });
+
         // Create view factory with dependencies
         const viewFactory = new ViewFactory(logger, telemetryService, {
             deviceService,
@@ -109,6 +115,15 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
         // Register all commands
         setCommandContext(context);
         registerCommands(context);
+
+        // Start background updater for device discovery (non-blocking)
+        deviceService.startBackgroundUpdater()
+            .then(() => {
+                logger.debug('Background device updater started');
+            })
+            .catch(error => {
+                logger.error('Failed to start background device updater', { error });
+            });
 
         // Track activation
         if (extensionStateService.isFirstRun()) {
@@ -151,6 +166,10 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
  */
 export function deactivate(): void {
     logger.info('Deactivating ZGX Toolkit extension');
+
+    // Stop background updater
+    deviceService.stopBackgroundUpdater();
+    logger.debug('Background device updater stopped');
 
     // Cleanup provider
     if (provider) {

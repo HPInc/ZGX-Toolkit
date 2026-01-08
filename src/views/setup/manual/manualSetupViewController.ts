@@ -3,9 +3,6 @@
  * Licensed under the X11 License. See LICENSE file in the project root for details.
  */
 
-import * as os from 'os';
-import * as path from 'path';
-import * as fs from 'fs';
 import { BaseViewController } from '../../baseViewController';
 import { Logger } from '../../../utils/logger';
 import { ITelemetryService, TelemetryEventType } from '../../../types/telemetry';
@@ -13,7 +10,7 @@ import { Device } from '../../../types/devices';
 import { Message } from '../../../types/messages';
 import { ConnectionService } from '../../../services/connectionService';
 import { SetupOptionsViewController } from '../options/setupOptionsViewController';
-import { SetupSuccessViewController } from '../success/setupSuccessViewController';
+import { DnsRegistrationViewController } from '../dnsRegistration/dnsRegistrationViewController';
 
 /**
  * Manual SSH setup view - guides users through manual SSH key setup with platform-specific commands
@@ -121,19 +118,12 @@ export class ManualSetupViewController extends BaseViewController {
             if (testSuccessful) {
                 this.logger.info('SSH connection test successful', { device: device.name });
 
-                // Update device as setup complete
-                device.isSetup = true;
-                device.useKeyAuth = true;
-                device.keySetup = {
-                    keyGenerated: true,
-                    keyCopied: true,
-                    connectionTested: true
-                };
-
-                // Notify success and navigate to success view
-                this.sendMessageToWebview({ type: 'connectionTestSuccess' });
-                this.navigateTo(SetupSuccessViewController.viewId(), { device: device, setupType: "manual" }, 'editor');
-
+                // Navigate to DNS registration view
+                await this.navigateTo(DnsRegistrationViewController.viewId(), { 
+                    device: device,
+                    setupType: 'manual'
+                }, 'editor');
+                return;
             } else {
                 throw new Error('SSH connection test failed - could not connect to device');
             }
@@ -164,18 +154,12 @@ export class ManualSetupViewController extends BaseViewController {
             if (testSuccessful) {
                 this.logger.info('SSH setup verified successfully', { device: device.name });
 
-                // Update device as setup complete
-                device.isSetup = true;
-                device.useKeyAuth = true;
-                device.keySetup = {
-                    keyGenerated: true,
-                    keyCopied: true,
-                    connectionTested: true
-                };
-
-                // Navigate to success view
-                this.navigateTo(SetupSuccessViewController.viewId(), { device }, 'editor');
-
+                // Navigate to DNS registration view
+                await this.navigateTo(DnsRegistrationViewController.viewId(), { 
+                    device: device,
+                    setupType: 'manual'
+                }, 'editor');
+                return;
             } else {
                 throw new Error('SSH connection test failed');
             }
@@ -192,4 +176,5 @@ export class ManualSetupViewController extends BaseViewController {
             });
         }
     }
+
 }

@@ -27,3 +27,9 @@ export * from './apps';
 
 // App Insights
 export * from './appInsights';
+
+// Network protocols and DNS-SD services
+export * from './net';
+
+// Time constants
+export * from './time';

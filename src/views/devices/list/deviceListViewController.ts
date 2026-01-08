@@ -6,7 +6,6 @@
 import { BaseViewController } from '../../baseViewController';
 import { Logger } from '../../../utils/logger';
 import { ITelemetryService, TelemetryEventType } from '../../../types/telemetry';
-import { IDeviceStore, Unsubscribe } from '../../../types/store';
 import { Message } from '../../../types/messages';
 import { Device } from '../../../types/devices';
 import { URLS } from '../../../constants/config';
@@ -15,6 +14,7 @@ import { SetupOptionsViewController } from '../../setup/options/setupOptionsView
 import { AppSelectionViewController } from '../../apps/selection/appSelectionViewController';
 import { DeviceService } from '../../../services';
 import { TemplateListViewController } from '../../templates/templateListViewController';
+import { DnsRegistrationViewController } from '../../setup/dnsRegistration/dnsRegistrationViewController';
 
 /**
  * device list view for the sidebar.
@@ -22,8 +22,7 @@ import { TemplateListViewController } from '../../templates/templateListViewCont
  * Subscribes to device store updates to automatically refresh when devices change.
  */
 export class DeviceListViewController extends BaseViewController {
-    private unsubscribe?: Unsubscribe;
-    private deviceStore: IDeviceStore;
+    private readonly unsubscribe?: () => void;
     private deviceService: DeviceService;
     private lastRenderParams?: any;
 
@@ -34,11 +33,9 @@ export class DeviceListViewController extends BaseViewController {
     constructor(deps: { 
         logger: Logger; 
         telemetry: ITelemetryService;
-        deviceStore: IDeviceStore;
         deviceService: DeviceService;
     }) {
         super(deps.logger, deps.telemetry);
-        this.deviceStore = deps.deviceStore;
         this.deviceService = deps.deviceService;
         
         // Load templates
@@ -46,8 +43,8 @@ export class DeviceListViewController extends BaseViewController {
         this.styles = this.loadTemplate('./deviceList.css', __dirname);
         this.clientScript = this.loadTemplate('./deviceList.js', __dirname);
 
-        // Subscribe to device store updates
-        this.unsubscribe = this.deviceStore.subscribe(() => {
+        // Subscribe to device updates
+        this.unsubscribe = this.deviceService.subscribe(() => {
             this.logger.trace('Device store updated, refreshing device list view');
             // Call refresh with last render params to update the webview
             this.refresh(this.lastRenderParams).catch(error => {
@@ -62,11 +59,27 @@ export class DeviceListViewController extends BaseViewController {
         // Store params for later use in refresh
         this.lastRenderParams = params;
 
-        const devices = this.deviceStore.getAll();
+        const devices = await this.deviceService.getAllDevices();
+        
+        // Determine DNS registration status from dnsInstanceName property
+        // Device needs registration if it's set up but has no DNS instance name
+        const devicesWithDnsStatus = devices.map((device) => {
+            const needsDnsRegistration = device.isSetup && 
+                                        device.useKeyAuth && 
+                                        device.keySetup?.connectionTested &&
+                                        (device.dnsInstanceName === undefined ||
+                                         device.dnsInstanceName === null ||
+                                         device.dnsInstanceName.trim().length === 0);
+            
+            return {
+                ...device,
+                needsDnsRegistration
+            };
+        });
         
         // Prepare data for template
         const templateData = {
-            devices: devices,
+            devices: devicesWithDnsStatus,
             noDevices: devices.length === 0
         };
 
@@ -117,6 +130,10 @@ export class DeviceListViewController extends BaseViewController {
             
             case 'manage-apps':
                 await this.manageApps(message.id);
+                break;
+            
+            case 'register-dns':
+                await this.registerDns(message.id);
                 break;
             
             // Other message types are handled by the provider or services
@@ -206,7 +223,7 @@ export class DeviceListViewController extends BaseViewController {
         this.logger.info('Setting up device', { id });
 
         try {
-            const device = this.deviceService.getDevice(id);
+            const device = await this.deviceService.getDevice(id);
             
             if (!device) {
                 this.logger.error('device not found for setup', { id });
@@ -231,7 +248,7 @@ export class DeviceListViewController extends BaseViewController {
         this.logger.info('Deleting device', { id });
 
         try {
-            const device = this.deviceService.getDevice(id);
+            const device = await this.deviceService.getDevice(id);
             
             if (!device) {
                 this.logger.error('device not found for deletion', { id });
@@ -265,12 +282,25 @@ export class DeviceListViewController extends BaseViewController {
      */
     private async manageApps(id: string): Promise<void> {
         this.logger.info('Navigating to app management', { id });
-        const device = this.deviceService.getDevice(id);
+        const device = await this.deviceService.getDevice(id);
         if (!device) {
             this.logger.error('device not found for app management', { id });
             throw new Error(`device not found: ${id}`);
         }
         await this.navigateTo(AppSelectionViewController.viewId(), { device }, 'editor');
+    }
+
+    /**
+     * Navigate to DNS registration for a device
+     */
+    private async registerDns(id: string): Promise<void> {
+        this.logger.info('Navigating to mDNS registration', { id });
+        const device = await this.deviceService.getDevice(id);
+        if (!device) {
+            this.logger.error('device not found for mDNS registration', { id });
+            throw new Error(`device not found: ${id}`);
+        }
+        await this.navigateTo(DnsRegistrationViewController.viewId(), { device, setupType: 'migration' }, 'editor');
     }
 
     dispose(): void {

@@ -101,6 +101,19 @@ export interface DiscoverDevicesMessage {
 }
 
 /**
+ * Rediscover a specific device by its DNS instance name.
+ */
+export interface RediscoverDeviceMessage {
+  type: 'rediscover-device';
+  /** Device identifier */
+  deviceId: string;
+  /** DNS instance name to search for */
+  dnsInstanceName: string;
+  /** Optional discovery timeout in milliseconds */
+  timeoutMs?: number;
+}
+
+/**
  * Select device message when clicking on a device in the list.
  */
 export interface SelectDeviceMessage {
@@ -114,6 +127,15 @@ export interface SelectDeviceMessage {
  */
 export interface ManageAppsMessage {
   type: 'manage-apps';
+  /** device identifier */
+  id: string;
+}
+
+/**
+ * Register DNS message to navigate to DNS service registration.
+ */
+export interface RegisterDnsMessage {
+  type: 'register-dns';
   /** device identifier */
   id: string;
 }
@@ -423,8 +445,10 @@ export type Message =
   | SetupDeviceMessage
   | DisconnectDeviceMessage
   | DiscoverDevicesMessage
+  | RediscoverDeviceMessage
   | SelectDeviceMessage
   | ManageAppsMessage
+  | RegisterDnsMessage
   | UpdateAppsMessage
   | SetupSshKeyMessage
   | TestConnectionMessage

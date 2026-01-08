@@ -36,8 +36,8 @@
                                 <div class="combobox-dropdown-icon"></div>
                                 <div id="devicesDropdown" class="devices-dropdown"></div>
                             </div>
-                            <button type="button" id="discoverBtn" class="btn btn-secondary discover-btn">
-                                <span id="discoverBtnText">Discover Devices</span>
+                            <button type="button" id="discoverBtn" class="btn btn-secondary discover-btn" data-dns-instance-name="{{editingDeviceDnsInstanceName}}">
+                                <span id="discoverBtnText">{{#if editingDeviceDnsInstanceName}}Rediscover Device{{else}}Discover Devices{{/if}}</span>
                                 <span id="discoverSpinner" class="spinner hidden"></span>
                             </button>
                         </div>
@@ -67,8 +67,13 @@
         <div class="device-grid" id="deviceGrid">
             {{#if devices}}
             {{#each devices}}
-            <div class="device-card" data-id="{{id}}" data-name="{{name}}" data-host="{{host}}" data-username="{{username}}" data-port="{{port}}">
+            <div class="device-card" data-id="{{id}}" data-name="{{name}}" data-host="{{host}}" data-username="{{username}}" data-port="{{port}}" data-dns-instance-name="{{dnsInstanceName}}">
                 <div class="device-card-icons">
+                    {{#if needsDnsRegistration}}
+                    <button class="device-card-icon dns-warning-icon" data-action="register-dns" data-id="{{id}}" title="mDNS service not registered. Click to register for device discovery.">
+                        <i class="codicon codicon-warning"></i>
+                    </button>
+                    {{/if}}
                     <button class="device-card-icon edit-icon" data-id="{{id}}" title="Edit">
                         <i class="codicon codicon-edit"></i>
                     </button>

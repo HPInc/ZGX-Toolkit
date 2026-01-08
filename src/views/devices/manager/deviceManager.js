@@ -48,6 +48,18 @@
             });
         });
 
+        // DNS warning icon buttons
+        document.querySelectorAll('.dns-warning-icon').forEach(btn => {
+            btn.addEventListener('click', function (e) {
+                e.stopPropagation();
+                const deviceId = this.getAttribute('data-id');
+                vscode.postMessage({
+                    type: 'register-dns',
+                    id: deviceId
+                });
+            });
+        });
+
         // Delete buttons
         document.querySelectorAll('.remove-icon').forEach(btn => {
             btn.addEventListener('click', function () {
@@ -235,6 +247,7 @@
         const host = deviceCard.getAttribute('data-host');
         const username = deviceCard.getAttribute('data-username');
         const port = deviceCard.getAttribute('data-port');
+        const dnsInstanceName = deviceCard.getAttribute('data-dns-instance-name') || '';
 
         // Set editing state
         editingDeviceId = deviceId;
@@ -244,6 +257,14 @@
         document.getElementById('deviceHost').value = host;
         document.getElementById('deviceUsername').value = username;
         document.getElementById('devicePort').value = port;
+
+        // Update discover button for this device
+        const discoverBtn = document.getElementById('discoverBtn');
+        const discoverBtnText = document.getElementById('discoverBtnText');
+        if (discoverBtn && discoverBtnText) {
+            discoverBtn.setAttribute('data-dns-instance-name', dnsInstanceName);
+            discoverBtnText.textContent = dnsInstanceName ? 'Rediscover Device' : 'Discover Devices';
+        }
 
         // Clear any previous error
         hideFormError();
@@ -271,6 +292,14 @@
         document.getElementById('devicePort').value = '22';
         hideFormError();
 
+        // Reset discover button to default state (no DNS instance name)
+        const discoverBtn = document.getElementById('discoverBtn');
+        const discoverBtnText = document.getElementById('discoverBtnText');
+        if (discoverBtn && discoverBtnText) {
+            discoverBtn.setAttribute('data-dns-instance-name', '');
+            discoverBtnText.textContent = 'Discover Devices';
+        }
+
         // Clear discovery status
         const statusEl = document.getElementById('discoveryStatus');
         statusEl.classList.add('hidden');
@@ -288,18 +317,32 @@
         const btnText = document.getElementById('discoverBtnText');
         const spinner = document.getElementById('discoverSpinner');
         const statusEl = document.getElementById('discoveryStatus');
+        const dnsInstanceName = btn.getAttribute('data-dns-instance-name');
+
+        // Check if we're editing a device with a DNS instance name (use module-level editingDeviceId)
+        const isEditingWithDns = editingDeviceId && dnsInstanceName && dnsInstanceName !== '';
 
         // Disable button and show spinner
         btn.disabled = true;
-        btnText.textContent = 'Discovering...';
+        btnText.textContent = isEditingWithDns ? 'Rediscovering...' : 'Discovering...';
         spinner.classList.remove('hidden');
 
         // Show status
         statusEl.classList.remove('hidden');
-        statusEl.textContent = 'Searching for devices...';
+        statusEl.textContent = isEditingWithDns ? 'Searching for device...' : 'Searching for devices...';
         statusEl.className = 'discovery-status';
 
-        vscode.postMessage({ type: 'discover-devices' });
+        if (isEditingWithDns) {
+            // Rediscover specific device
+            vscode.postMessage({ 
+                type: 'rediscover-device',
+                deviceId: editingDeviceId,
+                dnsInstanceName: dnsInstanceName
+            });
+        } else {
+            // Full device discovery
+            vscode.postMessage({ type: 'discover-devices' });
+        }
     }
 
     function showDevicesDropdown() {
@@ -377,10 +420,13 @@
                 const btnText = document.getElementById('discoverBtnText');
                 const spinner = document.getElementById('discoverSpinner');
                 const statusEl = document.getElementById('discoveryStatus');
+                const dnsInstanceName = btn.getAttribute('data-dns-instance-name');
+                // Use module-level editingDeviceId instead of reading from DOM
+                const isEditingWithDns = editingDeviceId && dnsInstanceName && dnsInstanceName !== '';
 
                 // Re-enable button
                 btn.disabled = false;
-                btnText.textContent = 'Discover Devices';
+                btnText.textContent = isEditingWithDns ? 'Rediscover Device' : 'Discover Devices';
                 spinner.classList.add('hidden');
 
                 // Update status
@@ -400,10 +446,13 @@
                 const errorBtnText = document.getElementById('discoverBtnText');
                 const errorSpinner = document.getElementById('discoverSpinner');
                 const errorStatusEl = document.getElementById('discoveryStatus');
+                const errorDnsInstanceName = errorBtn.getAttribute('data-dns-instance-name');
+                // Use module-level editingDeviceId instead of reading from DOM
+                const isEditingWithDnsError = editingDeviceId && errorDnsInstanceName && errorDnsInstanceName !== '';
 
                 // Re-enable button
                 errorBtn.disabled = false;
-                errorBtnText.textContent = 'Discover Devices';
+                errorBtnText.textContent = isEditingWithDnsError ? 'Rediscover Device' : 'Discover Devices';
                 errorSpinner.classList.add('hidden');
 
                 // Show error

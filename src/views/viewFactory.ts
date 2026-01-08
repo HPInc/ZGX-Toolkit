@@ -15,12 +15,14 @@ import { LoadingViewController } from './common/loading/loadingViewController';
 import { SetupOptionsViewController } from './setup/options/setupOptionsViewController';
 import { AutomaticSetupViewController } from './setup/automatic/automaticSetupViewController';
 import { ManualSetupViewController } from './setup/manual/manualSetupViewController';
+import { DnsRegistrationViewController } from './setup/dnsRegistration/dnsRegistrationViewController';
 import { SetupSuccessViewController } from './setup/success/setupSuccessViewController';
 import { AppSelectionViewController } from './apps/selection/appSelectionViewController';
 import { AppProgressViewController } from './apps/progress/appProgressViewController';
 import { AppCompleteViewController } from './apps/complete/appCompleteViewController';
 import { InferenceInstructionsViewController } from './instructions/inference/inferenceInstructionsViewController';
 import { FineTuningInstructionsViewController } from './instructions/finetuning/fineTuningInstructionsViewController';
+import { RagInstructionsViewController } from './instructions/rag/ragInstructionsViewController';
 import { TemplateListViewController } from './templates/templateListViewController';
 
 /**
@@ -60,6 +62,7 @@ export class ViewFactory {
         this.register(SetupOptionsViewController.viewId(), SetupOptionsViewController);
         this.register(AutomaticSetupViewController.viewId(), AutomaticSetupViewController);
         this.register(ManualSetupViewController.viewId(), ManualSetupViewController);
+        this.register(DnsRegistrationViewController.viewId(), DnsRegistrationViewController);
         this.register(SetupSuccessViewController.viewId(), SetupSuccessViewController);
 
         // App views
@@ -70,6 +73,7 @@ export class ViewFactory {
         // Instruction views
         this.register(InferenceInstructionsViewController.viewId(), InferenceInstructionsViewController);
         this.register(FineTuningInstructionsViewController.viewId(), FineTuningInstructionsViewController);
+        this.register(RagInstructionsViewController.viewId(), RagInstructionsViewController);
 
         // Template views
         this.register(TemplateListViewController.viewId(), TemplateListViewController);

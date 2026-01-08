@@ -136,6 +136,7 @@
     "@types/jest": "^29.5.5",
     "@types/mocha": "^10.0.10",
     "@types/node": "16.x",
+    "@types/rwlock": "^5.0.6",
     "@types/ssh2": "^1.15.5",
     "@types/vscode": "^1.74.0",
     "@typescript-eslint/eslint-plugin": "^6.7.3",
@@ -154,6 +155,7 @@
     "@vscode/extension-telemetry": "^1.2.0",
     "dnssd": "^0.4.1",
     "handlebars": "^4.7.8",
+    "rwlock": "^5.0.0",
     "ssh-config": "^5.0.3",
     "ssh2": "^1.17.0"
   },

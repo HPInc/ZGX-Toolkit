@@ -10,7 +10,8 @@ import { Device } from '../../../types/devices';
 import { Message } from '../../../types/messages';
 import { ConnectionService } from '../../../services/connectionService';
 import { SetupOptionsViewController } from '../options/setupOptionsViewController';
-import { SetupSuccessViewController } from '../success/setupSuccessViewController';
+import { DnsRegistrationViewController } from '../dnsRegistration/dnsRegistrationViewController';
+
 
 /**
  * Automatic SSH setup view - guides users through automated SSH key setup
@@ -104,20 +105,13 @@ export class AutomaticSetupViewController extends BaseViewController {
 
             if (testSuccessful) {
                 this.logger.info('SSH connection test successful', { device: device.name });
-
-                // Update device as setup complete
-                device.isSetup = true;
-                device.useKeyAuth = true;
-                device.keySetup = {
-                    keyGenerated: true,
-                    keyCopied: true,
-                    connectionTested: true
-                };
-
-                // Notify success and navigate to success view
-                this.sendMessageToWebview({ type: 'connectionTestSuccess' });
-                this.navigateTo(SetupSuccessViewController.viewId(), { device }, 'editor');
-
+                
+                // Navigate to DNS registration view
+                await this.navigateTo(DnsRegistrationViewController.viewId(), { 
+                    device: device,
+                    setupType: 'automatic'
+                }, 'editor');
+                return;
             } else {
                 throw new Error('SSH connection test failed - could not connect to device');
             }

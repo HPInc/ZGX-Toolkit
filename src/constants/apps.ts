@@ -270,6 +270,24 @@ export const APP_CATEGORIES: AppCategory[] = [
                 dependencies: ['zgx-python-env']
             },
             {
+                id: 'langchain',
+                name: 'LangChain',
+                icon: '📃',
+                description: 'LangChain and tools for RAG applications',
+                features: [
+                    'Base LangChain library',
+                    'Community and Ollama extensions',
+                    'FAISS vector store'
+                ],
+                category: 'python-tools',
+                installCommand: '$HOME/miniforge3/bin/conda run -n zgx pip install faiss-cpu langchain langchain-community langchain-text-splitters langchain-ollama pypdf',
+                verifyCommand: '$HOME/miniforge3/bin/conda run -n zgx python -c "import langchain; import langchain_community; import langchain_text_splitters; import langchain_ollama; import pypdf; print(langchain.__version__); print(langchain_community.__version__); print(langchain_ollama.__version__); print(pypdf.__version__)"',
+                uninstallCommand: '$HOME/miniforge3/bin/conda run -n zgx pip uninstall -y faiss-cpu langchain langchain-community langchain-text-splitters langchain-ollama pypdf',
+
+                requiresVirtualEnv: true,
+                dependencies: ['zgx-python-env']
+            },
+            {
                 id: 'mlflow',
                 name: 'MLFlow',
                 icon: '🔄',

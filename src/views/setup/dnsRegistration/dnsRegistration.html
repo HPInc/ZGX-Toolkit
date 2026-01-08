@@ -5,8 +5,12 @@
 
 <div class="container">
     <div class="header">
-        <h1>Application {{operationLabel}}</h1>
-        <p>{{operationVerb}} selected applications on <strong>{{deviceName}}</strong></p>
+        <h1>🔧 mDNS Service Registration</h1>
+        <p>Setting up mDNS service discovery for <strong>{{deviceName}}</strong></p>
+    </div>
+
+    <div class="description-section">
+        <p>To manage your ZGX device on your local network, we need to enable secure mDNS (multicast DNS) discovery. This allows the extension to locate the device if its IP address changes. This only affects your local network, never external DNS servers or the internet.</p>
     </div>
 
     <div class="password-section hidden" id="password-section">
@@ -22,24 +26,7 @@
         </div>
     </div>
 
-    <div class="progress-container">
-        <div class="progress-text" id="progress-text">Preparing {{operationPastTense}}...</div>
-        <div class="progress-bar">
-            <div class="progress-fill" id="progress-fill"></div>
-        </div>
-        <div class="current-app" id="current-app"></div>
+    <div class="status-container" id="status-container">
+        <div class="status-text" id="status-text">Performing mDNS registration...</div>
     </div>
-
-    {{#unless fullUninstall}}
-    <div class="app-list">
-        <h3>{{operationLabel}} Queue</h3>
-        {{#each apps}}
-        <div class="app-item" id="app-{{id}}">
-            <div class="app-icon">{{icon}}</div>
-            <div class="app-name">{{name}}</div>
-            <div class="app-status status-pending" id="status-{{id}}">Pending</div>
-        </div>
-        {{/each}}
-    </div>
-    {{/unless}}
 </div>

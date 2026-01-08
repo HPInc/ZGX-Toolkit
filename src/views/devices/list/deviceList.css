@@ -86,6 +86,16 @@ html, body {
     color: var(--vscode-button-background);
 }
 
+.device-item-icon.dns-warning-icon {
+    color: var(--vscode-notificationsWarningIcon-foreground);
+}
+
+.device-item-icon.dns-warning-icon:hover {
+    color: var(--vscode-notificationsWarningIcon-foreground);
+    background-color: var(--vscode-inputValidation-warningBackground);
+    opacity: 0.8;
+}
+
 .device-item-icon.remove-icon:hover {
     color: var(--vscode-errorForeground);
 }

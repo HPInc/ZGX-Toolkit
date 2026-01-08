@@ -206,6 +206,16 @@ describe('ViewFactory', () => {
             expect(factory.has('apps/selection')).toBe(true);
         });
 
+        it('should have instruction views registered', () => {
+            expect(factory.has('instructions/inference')).toBe(true);
+            expect(factory.has('instructions/finetuning')).toBe(true);
+            expect(factory.has('instructions/rag')).toBe(true);
+        });
+
+        it('should have template views registered', () => {
+            expect(factory.has('templates/list')).toBe(true);
+        });
+
         it('should log initialization', () => {
             expect(mockLogger.debug).toHaveBeenCalledWith(
                 'View registry initialized',

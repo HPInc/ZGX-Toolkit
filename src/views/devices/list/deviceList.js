@@ -86,6 +86,14 @@
             });
         });
 
+        // Register DNS buttons
+        document.querySelectorAll('[data-action="register-dns"]').forEach(btn => {
+            btn.addEventListener('click', function() {
+                const id = this.getAttribute('data-id');
+                registerDns(id);
+            });
+        });
+
         // Setup buttons
         document.querySelectorAll('[data-action="setup"]').forEach(btn => {
             btn.addEventListener('click', function() {
@@ -163,6 +171,13 @@
     function manageApps(id) {
         vscode.postMessage({
             type: 'manage-apps',
+            id: id
+        });
+    }
+
+    function registerDns(id) {
+        vscode.postMessage({
+            type: 'register-dns',
             id: id
         });
     }

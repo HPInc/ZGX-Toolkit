@@ -8,7 +8,6 @@ import { BaseViewController } from '../../baseViewController';
 import { Logger } from '../../../utils/logger';
 import { ITelemetryService, TelemetryEventType } from '../../../types/telemetry';
 import { Message } from '../../../types/messages';
-import { IDeviceStore } from '../../../types/store';
 import { Device } from '../../../types/devices';
 import { SetupOptionsViewController } from '../../setup/options/setupOptionsViewController';
 import { AppSelectionViewController } from '../../apps/selection/appSelectionViewController';
@@ -32,13 +31,11 @@ export class DeviceManagerViewController extends BaseViewController {
     constructor(deps: {
         logger: Logger;
         telemetry: ITelemetryService;
-        deviceStore: IDeviceStore;
         deviceService: DeviceService;
         deviceDiscoveryService: DeviceDiscoveryService;
     }) {
         super(deps.logger, deps.telemetry);
 
-        this.deviceStore = deps.deviceStore;
         this.deviceService = deps.deviceService;
         this.deviceDiscoveryService = deps.deviceDiscoveryService;
 
@@ -46,8 +43,8 @@ export class DeviceManagerViewController extends BaseViewController {
         this.styles = this.loadTemplate('./deviceManager.css', __dirname);
         this.clientScript = this.loadTemplate('./deviceManager.js', __dirname);
 
-        // Subscribe to device store changes
-        this.unsubscribe = this.deviceStore.subscribe(() => {
+        // Subscribe to device updates
+        this.unsubscribe = this.deviceService.subscribe(() => {
             this.logger.trace('Device store updated, refreshing device manager view');
             // Call refresh with last render params to update the webview
             this.refresh(this.lastRenderParams).catch(error => {
@@ -56,7 +53,6 @@ export class DeviceManagerViewController extends BaseViewController {
         });
     }
 
-    private deviceStore: IDeviceStore;
     private deviceService: DeviceService;
     private deviceDiscoveryService: DeviceDiscoveryService;
 
@@ -66,17 +62,33 @@ export class DeviceManagerViewController extends BaseViewController {
         // Store params for later use in refresh
         this.lastRenderParams = params;
 
-        const devices = this.deviceStore.getAll();
+        const devices = await this.deviceService.getAllDevices();  
+
+        // Add DNS registration status to each device based on dnsInstanceName property
+        const devicesWithDnsStatus = devices.map((device) => {
+            const needsDnsRegistration = device.isSetup && 
+                                        device.useKeyAuth && 
+                                        device.keySetup?.connectionTested &&
+                                        (device.dnsInstanceName === undefined ||
+                                         device.dnsInstanceName === null ||
+                                         device.dnsInstanceName.trim().length === 0);
+            
+            return {
+                ...device,
+                needsDnsRegistration
+            };
+        });
+        
         this.showForm = params?.showAddForm || devices.length === 0 || !!params?.editDeviceId;
         this.editingDeviceId = params?.editDeviceId;
 
         let editingDevice: Device | undefined;
         if (this.editingDeviceId) {
-            editingDevice = this.deviceStore.get(this.editingDeviceId);
+            editingDevice = await this.deviceService.getDevice(this.editingDeviceId);
         }
 
         const data = {
-            devices: devices.length > 0 ? devices : null,
+            devices: devicesWithDnsStatus.length > 0 ? devicesWithDnsStatus : null,
             noDevices: devices.length === 0,
             hiddenFormButton: this.showForm,
             hiddenForm: !this.showForm,
@@ -87,6 +99,8 @@ export class DeviceManagerViewController extends BaseViewController {
             deviceUsername: editingDevice?.username || '',
             devicePort: editingDevice?.port || 22,
             editingDeviceId: this.editingDeviceId || '',
+            editingDevice: !!editingDevice,
+            editingDeviceDnsInstanceName: editingDevice?.dnsInstanceName || '',
         };
 
         const html = this.renderTemplate(this.template, data);
@@ -127,8 +141,14 @@ export class DeviceManagerViewController extends BaseViewController {
             case 'manage-apps':
                 await this.manageApps(message.id);
                 break;
+            case 'register-dns':
+                await this.registerDns(message.id);
+                break;
             case 'discover-devices':
                 await this.discoverDevices(message.options);
+                break;
+            case 'rediscover-device':
+                await this.rediscoverDevice(message.deviceId, message.dnsInstanceName, message.timeoutMs);
                 break;
             case 'refresh':
                 this.refresh(this.lastRenderParams).catch(error => {
@@ -188,7 +208,7 @@ export class DeviceManagerViewController extends BaseViewController {
         this.logger.info('Deleting device', { id });
 
         try {
-            const device = this.deviceService.getDevice(id);
+            const device = await this.deviceService.getDevice(id);
             
             if (!device) {
                 this.logger.error('device not found for deletion', { id });
@@ -248,7 +268,7 @@ export class DeviceManagerViewController extends BaseViewController {
         this.logger.info('Setting up device', { id });
 
         try {
-            const device = this.deviceService.getDevice(id);
+            const device = await this.deviceService.getDevice(id);
             
             if (!device) {
                 this.logger.error('device not found for setup', { id });
@@ -269,13 +289,24 @@ export class DeviceManagerViewController extends BaseViewController {
     private async manageApps(id: string): Promise<void> {
         this.logger.info('Navigating to app management', { id });
 
-        const device = this.deviceStore.get(id);
+        const device = await this.deviceService.getDevice(id);
         if (!device) {
             this.logger.error('device not found for app management', { id });
             throw new Error(`device not found: ${id}`);
         }
 
-        this.navigateTo(AppSelectionViewController.viewId(), { device });
+        await this.navigateTo(AppSelectionViewController.viewId(), { device });
+    }
+
+    private async registerDns(id: string): Promise<void> {
+        this.logger.info('Navigating to mDNS registration', { id });
+        const device = await this.deviceService.getDevice(id);
+        if (!device) {
+            this.logger.error('device not found for mDNS registration', { id });
+            throw new Error(`device not found: ${id}`);
+        }
+        const { DnsRegistrationViewController } = await import('../../setup/dnsRegistration/dnsRegistrationViewController');
+        await this.navigateTo(DnsRegistrationViewController.viewId(), { device, setupType: 'migration' }, 'editor');
     }
 
     private async discoverDevices(options?: any): Promise<void> {
@@ -303,6 +334,38 @@ export class DeviceManagerViewController extends BaseViewController {
             this.sendMessageToWebview({
                 type: 'discoveryError',
                 error: error instanceof Error ? error.message : 'Discovery failed'
+            });
+        }
+    }
+
+    /**
+     * Rediscover a specific device by its DNS instance name.
+     */
+    private async rediscoverDevice(deviceId: string, dnsInstanceName: string, timeoutMs?: number): Promise<void> {
+        this.logger.info('Starting device rediscovery', { deviceId, dnsInstanceName, timeoutMs });
+
+        try {
+            // Notify webview that discovery has started
+            this.sendMessageToWebview({
+                type: 'discoveryStarted'
+            });
+
+            // Perform rediscovery for this specific device
+            const devices = await this.deviceDiscoveryService.rediscoverDevices([dnsInstanceName], timeoutMs);
+            this.logger.info('Device rediscovery completed', { deviceId, count: devices.length });
+
+            // Send results back to webview
+            this.sendMessageToWebview({
+                type: 'discoveryCompleted',
+                devices: devices
+            });
+        } catch (error) {
+            this.logger.error('Device rediscovery failed', { deviceId, error });
+
+            // Send error to webview
+            this.sendMessageToWebview({
+                type: 'discoveryError',
+                error: error instanceof Error ? error.message : 'Device rediscovery failed'
             });
         }
     }

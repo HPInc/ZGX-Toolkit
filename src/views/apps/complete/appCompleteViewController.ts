@@ -148,7 +148,7 @@ export class AppCompleteViewController extends BaseViewController {
             case 'connect-device': {
                 // Connect to device - delegate to connection service via navigation
                 this.logger.debug('Connect device request from apps/complete view', { deviceId: message.id });
-                let device = this.deviceService.getDevice(message.id);
+                let device = await this.deviceService.getDevice(message.id);
                 if (!device) {
                     this.logger.error('device not found for connection', { deviceId: message.id });
                     return;
@@ -160,7 +160,7 @@ export class AppCompleteViewController extends BaseViewController {
             case 'continue-to-inference': {
                 // Navigate to inference instructions
                 this.logger.debug('Continuing to inference instructions', { deviceId: message.deviceId });
-                const device = this.deviceService.getDevice(message.deviceId);
+                const device = await this.deviceService.getDevice(message.deviceId);
                 if (!device) {
                     this.logger.error('device not found for inference instructions', { deviceId: message.deviceId });
                 }
@@ -171,7 +171,7 @@ export class AppCompleteViewController extends BaseViewController {
             case 'retry-failed': {
                 // Navigate back to app selection view
                 this.logger.debug('Retrying app selection', { deviceId: message.deviceId });
-                const device = this.deviceService.getDevice(message.deviceId);
+                const device = await this.deviceService.getDevice(message.deviceId);
                 if (!device) {
                     this.logger.error('device not found for inference instructions', { deviceId: message.deviceId });
                 }

@@ -8,6 +8,7 @@ import { Logger } from '../../utils/logger';
 import { ITelemetryService, TelemetryEventType } from '../../types/telemetry';
 import { InferenceInstructionsViewController } from '../instructions/inference/inferenceInstructionsViewController';
 import { FineTuningInstructionsViewController } from '../instructions/finetuning/fineTuningInstructionsViewController';
+import { RagInstructionsViewController } from '../instructions/rag/ragInstructionsViewController';
 
 export class TemplateListViewController extends BaseViewController {
     public static viewId(): string {
@@ -93,6 +94,30 @@ export class TemplateListViewController extends BaseViewController {
                         eventType: TelemetryEventType.Error,
                         error: err as Error,
                         context: 'templates.fine-tuning'
+                    });
+                }
+                break;
+
+            case 'rag':
+                try {
+                    this.telemetry.trackEvent({
+                        eventType: TelemetryEventType.View,
+                        action: 'navigate',
+                        properties: {
+                            toView: 'templates.rag',
+                        }
+                    });
+                    await this.navigateTo(
+                        RagInstructionsViewController.viewId(),
+                        { templateId: message.id },
+                        'editor'
+                    );
+                } catch (err) {
+                    this.logger.error('Failed to navigate to RAG instructions view', { error: err });
+                    this.telemetry.trackError({ 
+                        eventType: TelemetryEventType.Error,
+                        error: err as Error,
+                        context: 'templates.rag'
                     });
                 }
                 break;

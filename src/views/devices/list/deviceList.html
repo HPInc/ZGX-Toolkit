@@ -15,6 +15,11 @@
             {{#each devices}}
             <li class="device-item" data-id="{{id}}" role="listitem">
                 <div class="device-item-icons">
+                    {{#if needsDnsRegistration}}
+                    <button class="device-item-icon dns-warning-icon" data-action="register-dns" data-id="{{id}}" title="mDNS service not registered. Click to register for device discovery." aria-label="Register mDNS service for {{name}}">
+                        <i class="codicon codicon-warning" aria-hidden="true"></i>
+                    </button>
+                    {{/if}}
                     <button class="device-item-icon edit-icon" data-action="edit" data-id="{{id}}" title="Edit device" aria-label="Edit device {{name}}">
                         <i class="codicon codicon-edit" aria-hidden="true"></i>
                     </button>

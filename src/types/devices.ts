@@ -70,6 +70,8 @@ export interface Device {
   useKeyAuth: boolean;
   /** SSH key setup state */
   keySetup: KeySetup;
+  /** DNS-SD instance name (MAC address hash used for service discovery) */
+  dnsInstanceName?: string;
   /** Whether app setup is complete */
   appSetupComplete?: boolean;
   /** Last connection method used (false = current window, true = new window) */
@@ -86,12 +88,14 @@ export interface Device {
  * Result of a device discovery operation.
  */
 export interface DiscoveredDevice {
-  /** Discovered device name */
+  /** DNS-SD service name */
   name: string;
   /** Hostname of the device */
   hostname: string;
   /** Array of IP addresses for the device */
   addresses: string[];
+  /** Network protocol used (TCP/UDP) */
+  protocol: string;
   /** SSH port number */
   port: number;
   /** TXT records from mDNS service discovery */

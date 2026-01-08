@@ -16,3 +16,4 @@ export { ConnectionService, connectionService } from './connectionService';
 export { AppInstallationService, InstallationErrorType } from './appInstallationService';
 export { PasswordService } from './passwordService';
 export { ExtensionStateService, extensionStateService } from './extensionStateService';
+export { DNSServiceRegistration, dnsServiceRegistration } from './dnsRegistrationService';

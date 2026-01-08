@@ -1,0 +1,329 @@
+resources:
+  repositories:
+    - repository: templates
+      type: githubenterprise
+      name: codeway/templates
+      endpoint: ghe-aistudio
+    - repository: phoenixtemplate
+      type: githubenterprise
+      name: phoenix/phoenixtemplate
+      endpoint: ghe-aistudio
+    - repository: templatesPython
+      type: githubenterprise
+      name: phoenix/phoenix-template-python
+      endpoint: ghe-aistudio
+
+trigger:
+  batch: true
+  branches:
+    include:
+      - main
+  paths:
+    include:
+      - "*"
+
+pr:
+  autoCancel: false
+  branches:
+    include:
+      - main 
+
+variables:
+  - group: agent_pools
+  - group: ghec-vars
+  - group: hpss-vars
+  - name: sonarqubeCredentials
+    value: sonarqube
+  - name: sonarProjectKey
+    value: Phoenix_solution-zgx-vscode-extention
+  - name: sonarProjectName
+    value: solution-zgx-vscode-extension
+  - name: hpssProject
+    value: phoenix
+  - name: hpssAdditionalArgs
+    value: "-singleFile"
+  - name: hpssProjectProperties
+    value: "project.properties.vsix"
+  - name: hpssKeytab
+    value: "phoenix.keytab"
+
+pool: $(agent_pool_linux_ephemeral)
+
+stages:
+  - template: /stages/versioning/versioning-v5.yaml@phoenixtemplate
+    parameters:
+      gitHost: 'github.com'
+      github_token: $(ghec_token)
+  - stage: InstallNodeNPM
+    displayName: Verify OS, Node.js, and NPM
+    dependsOn:
+      - versioning
+    variables:
+      - name: version
+        value: $[ stageDependencies.versioning.get_next_release_version.outputs['version.new_release_version'] ]
+
+    jobs:
+      - job: VerifyVersions
+        displayName: Verify versions
+        steps:
+          - script: |
+              echo "Running on $(lsb_release -d)"
+              echo "Using pre-installed Node.js $(node --version)"
+              echo "Using pre-installed npm $(npm --version)"
+            displayName: OS Node and NPM versions
+
+      - job: build
+        displayName: Build
+        variables:
+          - name: version
+            value: $[ stageDependencies.versioning.get_next_release_version.outputs['version.new_release_version'] ]
+        steps:
+          - checkout: self
+            fetchDepth: 0
+          - bash: |
+              echo "Extracted version: $(version)"
+              if [[ "$(version)" == "none" || "$(version)" == "" || "$(version)" == "\$(version)" ]]; then
+                echo "WARNING: Version is '$(version)' - this typically means no version bump is needed"
+                echo "This usually happens for chore commits or invalid commit messages"
+                echo "Skipping version update and using current package.json version"
+                # Get current version from package.json
+                if [ -f ./package.json ]; then
+                  CURRENT_VERSION=$(node -p "require('./package.json').version")
+                  echo "##vso[task.setvariable variable=version;]$CURRENT_VERSION"
+                  echo "Set version to current package.json version: $CURRENT_VERSION"
+                else
+                  echo "ERROR: package.json not found in the working directory."
+                  exit 1
+                fi
+              fi
+            name: setVersion
+            displayName: "Report version from pipeline variable"
+          - bash: |
+              # Validate version before updating package.json
+              if [[ "$(version)" == "" ]]; then
+                echo "ERROR: Version is empty after validation"
+                exit 1
+              fi
+              if [[ "$(version)" == "none" ]]; then
+                echo "INFO: Version is 'none' - skipping version update"
+                echo "Keeping current package.json version"
+              else
+                echo "Updating package.json version to: $(version)"
+                # Clean version (remove 'v' prefix if present)
+                CLEAN_VERSION=$(echo "$(version)" | sed 's/^v//')
+                echo "Clean version: $CLEAN_VERSION"
+                # Update package.json version using npm
+                npm version "$CLEAN_VERSION" --no-git-tag-version
+                echo "✓ Updated package.json version to: $CLEAN_VERSION"
+              fi
+            displayName: Update package.json version
+          - bash: |
+              # Install system dependencies first
+              sudo make install-system-deps || echo "System deps installation failed, continuing..."
+              # Run the CI-friendly build (excludes integration tests)
+              make -s all-ci VERSION=$(version) CICD=true
+            displayName: Build ZGX version
+            env:
+              VERSION: $(version)
+
+          - bash: |
+              # Install system dependencies first
+              sudo make install-system-deps || echo "System deps installation failed, continuing..."
+            displayName: Install system dependencies
+            
+          - bash: |
+              # Install npm dependencies
+              npm ci
+            displayName: Install npm dependencies
+            
+          - bash: |
+              # Run linting and compilation
+              make lint
+              make compile
+            displayName: Lint and compile
+            
+          - bash: |
+              # Run tests with coverage for SonarQube
+              make coverage
+            displayName: Run tests with coverage
+
+          # - task: SonarQubePrepare@7
+          #   displayName: Setup SonarQube
+          #   inputs:
+          #     SonarQube: sonarQubeUAT
+          #     scannerMode: "CLI"
+          #     configMode: "manual"
+          #     cliProjectKey: "$(sonarProjectKey)"
+          #     cliProjectName: "$(sonarProjectName)"
+          #     cliSources: "."
+          #     extraProperties: |
+          #      # If this is a PR build, set PR properties; otherwise, set branch name
+          #      $(if eq(variables['Build.Reason'], 'PullRequest'), 'sonar.pullrequest.key=$(System.PullRequest.PullRequestId)\nsonar.pullrequest.branch=$(System.PullRequest.SourceBranch)\nsonar.pullrequest.base=$(System.PullRequest.TargetBranch)', 'sonar.branch.name=$(Build.SourceBranchName)')
+          #      sonar.exclusions=**/node_modules/**,**/out/**,**/*.test.ts,**/__tests__/**,**/__mocks__/**
+          #      sonar.c.file.suffixes=-
+          #      sonar.cpp.file.suffixes=-
+          #      sonar.objc.file.suffixes=-
+          #      sonar.javascript.lcov.reportPaths=coverage/lcov.info
+          #      sonar.typescript.lcov.reportPaths=coverage/lcov.info
+
+          - bash: |
+              ls -lah dist/
+            displayName: List vsix files
+
+          - template: /steps/security/hpss-v0.yaml@templates
+            parameters:
+              filename: dist/zgx-toolkit-$(version).vsix
+              hpssUser: $(hpssServiceAccount)
+              hpssKeytab: $(hpssKeytab)
+              hpssProject: $(hpssProject)
+              hpssProjectPropertiesFile: $(hpssProjectProperties)
+              additionalArgs: $(hpssAdditionalArgs)
+
+          - task: CopyFiles@2
+            condition: always()
+            continueOnError: true
+            inputs:
+              SourceFolder: dist/
+              contents: |
+                *.vsix
+              TargetFolder: '$(Build.ArtifactStagingDirectory)'
+
+          - task: PublishBuildArtifacts@1
+            displayName: Publish artifact
+            inputs:
+              pathToPublish: $(Build.ArtifactStagingDirectory)
+              artifactName: 'artifacts'
+
+          # - task: SonarQubeAnalyze@7
+          #   displayName: SQ Analysis
+
+          # - task: SonarQubePublish@7
+          #   displayName: Publish SQ Results
+          #   inputs:
+          #     pollingTimeoutSec: '300'
+          #     waitForQualityGate: true
+              
+      - job: publishRelease
+        displayName: "Publish Release"
+        dependsOn:
+          - build
+        condition: and(succeeded(), eq(variables['Build.SourceBranch'], 'refs/heads/main'))
+        variables:
+          - name: version
+            value: $[ stageDependencies.versioning.get_next_release_version.outputs['version.new_release_version'] ]
+        steps:
+          - checkout: none
+          - bash: |
+              echo "Release version: $(version)"
+              if [[ "$(version)" == "none" || "$(version)" == "" ]]; then
+                echo "WARNING: Version is '$(version)' - skipping release creation"
+                echo "This typically means no version bump was needed"
+                exit 0
+              fi
+            displayName: "Validate release version"
+          - template: /steps/git/git-persist-credentials-v0.yaml@templates
+          - template: /steps/git/git-config-v0.yaml@templates
+            parameters:
+              gitHost: 'github.com'
+              ghUser: $(ghec_user)
+              github_token: $(ghec_token)
+          
+          - task: DownloadBuildArtifacts@0
+            inputs:
+              buildType: 'current'
+              downloadType: 'single'
+              artifactName: 'artifacts'
+              downloadPath: '$(Build.ArtifactStagingDirectory)'
+            displayName: 'Download build artifacts'
+
+          - template: /steps/git/github-create-release-v2.yaml@phoenixtemplate
+            parameters:
+              githubUser: $(ghec_user)
+              githubToken: $(ghec_token)
+              githubUrl: 'https://github.com'
+              githubOrg: 'hpi-main'
+              githubRepo: $(Build.Repository.Name)
+              body: '$(Build.SourceVersion)\n\nSource Branch: $(Build.SourceBranch)'
+              tagName: v$(version)
+              name: v$(version)
+              assets: '$(Build.ArtifactStagingDirectory)/artifacts/zgx-toolkit-$(version).vsix'
+              
+      # - job: updatePackageVersion
+      #   displayName: "Update package.json version in repo"
+      #   dependsOn:
+      #     - publishRelease
+      #   condition: and(succeeded(), eq(variables['Build.SourceBranch'], 'refs/heads/main'))
+      #   variables:
+      #     - name: version
+      #       value: $[ stageDependencies.versioning.get_next_release_version.outputs['version.new_release_version'] ]
+      #   steps:
+      #     - checkout: self
+      #       persistCredentials: true
+      #       fetchDepth: 0
+      #     - template: /steps/git/git-persist-credentials-v0.yaml@templates
+      #     - template: /steps/git/git-config-v0.yaml@templates
+      #       parameters:
+      #         gitHost: 'github.com'
+      #         ghUser: $(ghec_user)
+      #         github_token: $(ghec_token)
+      #     - bash: |
+      #         # Debug working directory and file existence
+      #         echo "Current working directory: $(pwd)"
+      #         echo "Directory contents:"
+      #         ls -la
+
+      #         # Navigate to the repository directory
+      #         if [ -d "./solution-zgx-vscode-extension" ]; then
+      #           echo "Entering solution-zgx-vscode-extension directory"
+      #           cd ./solution-zgx-vscode-extension
+      #           echo "Looking for package.json:"
+      #           find . -maxdepth 1 -name "package.json" -type f 2>/dev/null || echo "No package.json found"
+      #           # Try to checkout main branch, handle possible errors
+      #           git checkout main 2>/dev/null || {
+      #             echo "git checkout main failed, attempting forced checkout (-f)..."
+      #             git checkout -f main 2>/dev/null || {
+      #               echo "ERROR: Unable to checkout main branch, even with force. Aborting."
+      #               exit 1
+      #             }
+      #           }
+      #           echo "New working directory: $(pwd)"
+      #           echo "Contents:"
+      #           ls -la
+      #         fi
+
+      #         echo "Updating package.json version in repository to: $(version)"
+      #         if [[ "$(version)" == "none" || "$(version)" == "" ]]; then
+      #           echo "Version is '$(version)' - skipping package.json update"
+      #           exit 0
+      #         fi
+              
+      #         # Verify package.json exists
+      #         if [ ! -f "./package.json" ]; then
+      #           echo "ERROR: package.json not found in current directory"
+      #           exit 1
+      #         fi
+              
+      #         # Clean version (remove 'v' prefix if present)
+      #         CLEAN_VERSION=$(echo "$(version)" | sed 's/^v//')
+      #         echo "Clean version: $CLEAN_VERSION"
+              
+      #         # Update package.json version using npm
+      #         npm version "$CLEAN_VERSION" --no-git-tag-version
+              
+      #         # Check if there are changes to commit
+      #         if git diff --quiet package.json; then
+      #           echo "No changes to package.json - version already up to date"
+      #           exit 0
+      #         fi
+              
+      #         # Commit the updated package.json with [skip ci] to prevent triggering another build
+      #         git add package.json
+      #         # Only add package-lock.json if it exists and was modified
+      #         if [ -f "package-lock.json" ]; then
+      #           git add package-lock.json
+      #         fi
+      #         git commit -m "[skip ci] Update package.json version to $CLEAN_VERSION"
+      #         git push origin main
+              
+      #         echo "✓ Successfully updated package.json version in repository"
+      #       displayName: "Commit updated package.json version"

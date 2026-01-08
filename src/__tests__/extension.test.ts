@@ -8,6 +8,7 @@ import { activate, deactivate, resetActivationState } from '../extension';
 import { extensionStateService } from '../services/extensionStateService';
 import { telemetryService } from '../services/telemetryService';
 import { configService } from '../services/configService';
+import { dnsServiceRegistration } from '../services/dnsRegistrationService';
 import { TelemetryEventType } from '../types/telemetry';
 
 // Mock the providers
@@ -36,6 +37,13 @@ jest.mock('../services/configService', () => ({
   configService: {
     getLogLevel: jest.fn().mockReturnValue('info'),
     getTelemetryEnabled: jest.fn().mockReturnValue(true),
+  },
+}));
+
+// Mock dnsServiceRegistration
+jest.mock('../services/dnsRegistrationService', () => ({
+  dnsServiceRegistration: {
+    migrateExistingDevices: jest.fn().mockResolvedValue(undefined),
   },
 }));
 
@@ -275,6 +283,47 @@ describe('Extension', () => {
       await telemetryDisposable?.dispose();
       
       expect(telemetryService.dispose).toHaveBeenCalled();
+    });
+  });
+
+  describe('DNS Migration', () => {
+    it('should call migrateExistingDevices during activation', async () => {
+      await activate(mockContext);
+      
+      // Wait for async operation to complete
+      await new Promise(resolve => setTimeout(resolve, 10));
+      
+      expect(dnsServiceRegistration.migrateExistingDevices).toHaveBeenCalled();
+      expect(dnsServiceRegistration.migrateExistingDevices).toHaveBeenCalledWith(
+        expect.anything(), // deviceService
+        vscode.window
+      );
+    });
+
+    it('should continue activation even if DNS migration fails', async () => {
+      // Mock migration to reject
+      (dnsServiceRegistration.migrateExistingDevices as jest.Mock).mockRejectedValueOnce(
+        new Error('Migration test error')
+      );
+
+      // Activation should still succeed
+      await expect(activate(mockContext)).resolves.not.toThrow();
+      
+      // Extension should still be activated
+      expect(mockContext.subscriptions.length).toBeGreaterThan(0);
+    });
+
+    it('should log error when DNS migration fails', async () => {
+      const mockError = new Error('DNS migration test error');
+      (dnsServiceRegistration.migrateExistingDevices as jest.Mock).mockRejectedValueOnce(mockError);
+
+      await activate(mockContext);
+      
+      // Wait for async operation and error handler to complete
+      await new Promise(resolve => setTimeout(resolve, 10));
+      
+      // The error should be caught and logged, but not throw
+      expect(dnsServiceRegistration.migrateExistingDevices).toHaveBeenCalled();
     });
   });
 

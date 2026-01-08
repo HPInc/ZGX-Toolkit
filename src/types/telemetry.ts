@@ -114,7 +114,7 @@ export interface DeviceLifecycleEvent extends TelemetryEvent {
  */
 export interface DeviceDiscoveryEvent extends TelemetryEvent {
     eventType: TelemetryEventType.Device;
-    action: 'discover';
+    action: 'discover' | 'rediscover';
     properties: {
         /** Discovery method used */
         method: 'dns-sd';
