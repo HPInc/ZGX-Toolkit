@@ -1,0 +1,60 @@
+<!--
+  Copyright ©2025 HP Development Company, L.P.
+  Licensed under the X11 License. See LICENSE file in the project root for details.
+-->
+
+<div class="container">
+    <div class="header">
+        <div class="completion-icon codicon codicon-arrow-swap"></div>
+        <h1>Build your first RAG application</h1>
+        <p class="install-note">
+            To run these commands, first install the required applications via <em>Manage Apps</em> on a device
+        </p>
+    </div>
+
+    <div class="instructions">
+        <div class="step">
+            <h3>Create a new directory and navigate to it</h3>
+            <div class="code-block">
+                <pre class="cmd-text">mkdir rag_quickstart && cd rag_quickstart</pre>
+                <button class="btn copy-button" data-copy="mkdir rag_quickstart && cd rag_quickstart">Copy</button>
+            </div>
+        </div>
+
+        <div class="step">
+            <h3>Download the RAG application script</h3>
+            <div class="code-block">
+                <pre class="cmd-text">curl -L -o rag.py https://raw.githubusercontent.com/HPInc/ZGX-Toolkit/main/samples/rag.py</pre>
+                <button class="btn copy-button" data-copy="curl -L -o rag.py https://raw.githubusercontent.com/HPInc/ZGX-Toolkit/main/samples/rag.py">Copy</button>
+            </div>
+        </div>
+
+        <div class="step">
+            <h3>Pull the required Ollama models</h3>
+            <div class="code-block">
+                <pre class="cmd-text">ollama pull llama3.2 && ollama pull nomic-embed-text</pre>
+                <button class="btn copy-button" data-copy="ollama pull llama3.2 && ollama pull nomic-embed-text">Copy</button>
+            </div>
+        </div>
+
+        <div class="step">
+            <h3>Download a sample PDF document</h3>
+            <div class="code-block">
+                <pre class="cmd-text">curl -L -o document.pdf https://kaas.hpcloud.hp.com/pdf-public/pdf_10584042_en-US-1.pdf</pre>
+                <button class="btn copy-button" data-copy="curl -L -o document.pdf https://kaas.hpcloud.hp.com/pdf-public/pdf_10584042_en-US-1.pdf">Copy</button>
+            </div>
+        </div>
+
+        <div class="step">
+            <h3>Run the Streamlit application</h3>
+            <div class="code-block">
+                <pre class="cmd-text">conda run -n zgx --no-capture-output streamlit run rag.py</pre>
+                <button class="btn copy-button" data-copy="conda run -n zgx --no-capture-output streamlit run rag.py">Copy</button>
+            </div>
+        </div>
+
+        <div class="tip">
+            <strong>💡</strong> Tip: Use the network address that will be printed to the console to access the application from your non-ZGX device.
+        </div>
+    </div>
+</div>

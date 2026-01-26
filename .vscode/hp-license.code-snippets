@@ -1,0 +1,24 @@
+{
+  "HP X11 License Header": {
+    "scope": "javascript,typescript,javascriptreact,typescriptreact,css",
+    "prefix": "hp-license",
+    "body": [
+      "/*",
+      " * Copyright ©${CURRENT_YEAR} HP Development Company, L.P.",
+      " * Licensed under the X11 License. See LICENSE file in the project root for details.",
+      " */"
+    ],
+    "description": "Insert HP X11 license header"
+  },
+  "HP X11 License Header - HTML": {
+    "scope": "html",
+    "prefix": "hp-license",
+    "body": [
+      "<!--",
+      "  Copyright ©${CURRENT_YEAR} HP Development Company, L.P.",
+      "  Licensed under the X11 License. See LICENSE file in the project root for details.",
+      "-->"
+    ],
+    "description": "Insert HP X11 license header for HTML"
+  }
+}

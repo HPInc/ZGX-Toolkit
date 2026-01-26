@@ -1,0 +1,147 @@
+/*
+ * Copyright ©2025 HP Development Company, L.P.
+ * Licensed under the X11 License. See LICENSE file in the project root for details.
+ */
+
+/**
+ * Error overlay styles for connection error display
+ */
+
+.error-overlay-backdrop {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background-color: rgba(0, 0, 0, 0.2);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 1000;
+    backdrop-filter: blur(8px);
+    pointer-events: auto;
+    overflow: hidden;
+}
+
+.error-overlay-widget {
+    position: relative;
+    background-color: var(--vscode-editor-background);
+    border-radius: 8px;
+    padding: 0;
+    max-width: 600px;
+    width: 90%;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.8);
+    animation: slideInWidget 0.3s ease-out;
+    pointer-events: auto;
+}
+
+@keyframes slideInWidget {
+    from {
+        opacity: 0;
+        transform: scale(0.95) translateY(-20px);
+    }
+    to {
+        opacity: 1;
+        transform: scale(1) translateY(0);
+    }
+}
+
+.error-overlay-header {
+    display: flex;
+    align-items: center;
+    padding: 20px 32px;
+    margin: 0;
+}
+
+.error-overlay-icon {
+    font-size: 36px !important;
+    width: 36px;
+    height: 36px;
+    margin-right: 12px;
+    flex-shrink: 0;
+    color: var(--vscode-errorForeground);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.error-overlay-title {
+    font-size: 20px;
+    font-weight: 600;
+    color: var(--vscode-foreground);
+    margin: 0;
+}
+
+.error-overlay-message-container {
+    display: flex;
+    align-items: flex-start;
+    margin: 0 32px 20px 32px;
+    padding: 14px 16px;
+    background-color: var(--vscode-inputValidation-errorBackground);
+    border-radius: 4px;
+}
+
+.error-overlay-message-icon {
+    width: 20px;
+    height: 20px;
+    margin-right: 12px;
+    flex-shrink: 0;
+    color: var(--vscode-errorForeground);
+}
+
+.error-overlay-message {
+    font-size: 14px;
+    line-height: 1.5;
+    color: var(--vscode-foreground);
+    margin: 0;
+    padding: 0;
+    white-space: pre-wrap;
+    flex: 1;
+}
+
+.error-overlay-details {
+    font-size: 13px;
+    color: var(--vscode-descriptionForeground);
+    margin: 0 32px 24px 32px;
+    padding: 12px;
+    background-color: var(--vscode-editor-background);
+    border-radius: 4px;
+    max-height: 120px;
+    overflow-y: auto;
+}
+
+.error-overlay-details-label {
+    font-size: 15px;
+    font-weight: 600;
+    color: var(--vscode-foreground);
+    margin-bottom: 8px;
+}
+
+.error-overlay-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 12px;
+    padding: 0 32px 24px 32px;
+    margin: 0;
+}
+
+/* Primary action button */
+.error-overlay-close-btn {
+    padding: 10px 20px;
+    border: none;
+    border-radius: 4px;
+    font-size: 13px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    background-color: var(--vscode-button-background);
+    color: var(--vscode-button-foreground);
+}
+
+.error-overlay-close-btn:hover {
+    background-color: var(--vscode-button-hoverBackground);
+}
+
+.error-overlay-close-btn:active {
+    transform: scale(0.98);
+}

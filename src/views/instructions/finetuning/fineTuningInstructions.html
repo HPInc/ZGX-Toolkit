@@ -1,0 +1,74 @@
+<!--
+  Copyright ©2025 HP Development Company, L.P.
+  Licensed under the X11 License. See LICENSE file in the project root for details.
+-->
+
+<div class="container">
+    <div class="header">
+        <div class="completion-icon codicon codicon-settings"></div>
+        <h1>Run your first fine-tuning</h1>
+        {{#if deviceId}}
+        <p>Follow these commands to fine-tune the Qwen2-7B model using <code>torchtune</code> on <strong>{{deviceName}}</strong></p>
+        {{else}}
+        <p class="install-note">
+            To run these commands, first install the <strong>ZGX Python Environment</strong> via <em>Manage Apps</em> on a device
+        </p>
+        {{/if}}
+    </div>
+
+    <div class="instructions">
+        <div class="step">
+            <h3>Activate the ZGX Python environment</h3>
+            <div class="code-block">
+                <pre class="cmd-text">conda activate zgx</pre>
+                <button class="btn copy-button" data-copy="conda activate zgx">Copy</button>
+            </div>
+        </div>
+
+        <div class="step">
+            <h3>Create a directory and navigate to it</h3>
+            <div class="code-block">
+                <pre class="cmd-text">mkdir fine-tuning-qwen2_7b && cd fine-tuning-qwen2_7b</pre>
+                <button class="btn copy-button" data-copy="mkdir fine-tuning-qwen2_7b && cd fine-tuning-qwen2_7b">Copy</button>
+            </div>
+        </div>
+
+        <div class="step">
+            <h3>Copy the fine-tuning configuration file from torchtune</h3>
+            <div class="code-block">
+                <pre class="cmd-text">tune cp qwen2/7B_lora_single_device custom_config_qwen2_7b_lora.yaml</pre>
+                <button class="btn copy-button" data-copy="tune cp qwen2/7B_lora_single_device custom_config_qwen2_7b_lora.yaml">Copy</button>
+            </div>
+        </div>
+
+        <div class="step">
+            <h3>Download the model</h3>
+            <div class="code-block">
+                <pre class="cmd-text">tune download Qwen/Qwen2-7B-Instruct --output-dir /tmp/Qwen2-7B-Instruct</pre>
+                <button class="btn copy-button" data-copy="tune download Qwen/Qwen2-7B-Instruct --output-dir /tmp/Qwen2-7B-Instruct">Copy</button>
+            </div>
+        </div>
+
+        <div class="step">
+            <h3>Run the fine-tuning</h3>
+            <div class="code-block">
+                <pre class="cmd-text">tune run lora_finetune_single_device --config qwen2/7B_lora_single_device</pre>
+                <button class="btn copy-button" data-copy="tune run lora_finetune_single_device --config qwen2/7B_lora_single_device">Copy</button>
+            </div>
+        </div>
+
+        <div class="tip">
+            <strong>💡</strong> Tip: Use <code>nvtop</code> to monitor GPU utilization and <code>btop</code> to monitor CPU and memory usage in real-time.
+        </div>
+    </div>
+
+    <!-- Only rendered when a device context is present -->
+    {{#if deviceId}}
+    <div class="instructions-cta-sticky-wrapper">
+        <div class="instructions-cta-sticky">
+            <button class="btn btn-secondary" id="backBtn">Back to Device Manager</button>
+            <button class="btn" id="connectBtn" data-id="{{deviceId}}">Connect</button>
+        </div>
+    </div>
+    {{/if}}
+</div>

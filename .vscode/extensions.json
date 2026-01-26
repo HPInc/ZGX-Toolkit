@@ -1,0 +1,7 @@
+{
+    "recommendations": [
+        "ms-vscode-remote.remote-ssh",
+        "psioniq.psi-header",
+        "orta.vscode-jest"
+    ]
+}

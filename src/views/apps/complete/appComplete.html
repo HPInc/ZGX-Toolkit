@@ -1,0 +1,89 @@
+<!--
+  Copyright ©2025 HP Development Company, L.P.
+  Licensed under the X11 License. See LICENSE file in the project root for details.
+-->
+
+<meta name="device-id" content="{{deviceId}}">
+<meta name="failed-app-ids" content="{{failedAppIds}}">
+<meta name="operation" content="{{operation}}">
+<div class="container">
+    <div class="header">
+        <div class="completion-icon">{{completionIcon}}</div>
+        <h1>{{title}}</h1>
+        <p>{{subtitle}}</p>
+    </div>
+
+    <div class="summary">
+        {{#if isPasswordError}}
+        <div class="password-error-message">
+            <h3 style="margin-top: 0;">🔑 Password Authentication Required</h3>
+            <p>The sudo password provided could not be verified. Please check your password and try again.</p>
+            <p>Application {{operationPastAction}} requires a valid sudo password to modify system packages on your ZGX device.</p>
+        </div>
+        {{#if failedApps}}
+        <h3 class="section-title">✗ Failed {{operationLabel}}s</h3>
+        <div class="installed-apps">
+            {{#each failedApps}}
+            <div class="app-item">
+                <div class="app-icon">{{icon}}</div>
+                <div class="app-name">{{name}}</div>
+                <div class="failure-indicator">✗ Failed</div>
+            </div>
+            {{/each}}
+        </div>
+        {{/if}}
+        {{else}}
+        {{#if hasAnyInstalls}}
+        <h3 class="section-title">✓ Successfully {{operationPastActionCap}} Applications</h3>
+        <div class="installed-apps">
+            {{#each successfulApps}}
+            <div class="app-item">
+                <div class="app-icon">{{icon}}</div>
+                <div class="app-name">{{name}}</div>
+                <div class="success-indicator">✓ {{operationPastActionCap}}</div>
+            </div>
+            {{/each}}
+        </div>
+        {{/if}}
+
+        {{#if failedApps.length}}
+        <h3 class="section-title">✗ Failed {{operationLabel}}s</h3>
+        <div class="installed-apps">
+            {{#each failedApps}}
+            <div class="app-item">
+                <div class="app-icon">{{icon}}</div>
+                <div class="app-name">{{name}}</div>
+                <div class="failure-indicator">✗ Failed</div>
+            </div>
+            {{/each}}
+        </div>
+        <div class="warning-message">
+            <strong>Note:</strong> Some applications failed to {{operation}}. You can retry the failed {{operationPastAction}}s or check the logs for more details (Ctrl+Shift+P and type 'ZGX Toolkit: Open Log File').
+        </div>
+        {{else}}
+        {{#if hasAnyInstalls}}
+        <p>All selected applications have been successfully {{operationPastAction}} and your device is now ready for use.</p>
+        {{else}}
+        <div class="no-installs">
+            <p>You can manage applications later using the "Manage Apps" feature in the device manager.</p>
+        </div>
+        {{/if}}
+        {{/if}}
+        {{/if}}
+    </div>
+
+    <div class="footer-button-group">
+        {{#unless isPasswordError}}
+        {{#unless hasFailures}}
+        <button class="btn" data-action="connectNow">Connect Now</button>
+        {{#if hasOllamaJustBeenInstalled}}
+        <button class="btn btn-secondary" data-action="continueToInference">Continue to Inference</button>
+        {{/if}}
+        {{/unless}}
+        {{/unless}}
+        {{#if hasFailures}}
+        <button class="btn" data-action="retryFailed">Retry Failed</button>
+        {{/if}}
+        <button class="btn btn-secondary" data-action="closePage">Back to Device Manager</button>
+    </div>
+</div>

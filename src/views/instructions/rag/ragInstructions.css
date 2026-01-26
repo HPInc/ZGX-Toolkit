@@ -1,0 +1,94 @@
+/*
+ * Copyright ©2025 HP Development Company, L.P.
+ * Licensed under the X11 License. See LICENSE file in the project root for details.
+ */
+
+/* RAG Instructions specific styles */
+
+.completion-icon.codicon,
+.completion-icon.codicon::before {
+    font-size: 64px !important;
+    line-height: 64px;
+    width: 64px;
+    height: 64px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    margin: 28px 0 24px;
+}
+
+.instructions {
+    background-color: var(--vscode-list-inactiveSelectionBackground);
+    border: 1px solid var(--vscode-panel-border);
+    border-radius: 8px;
+    padding: 30px;
+    margin-bottom: 30px;
+    text-align: left;
+}
+
+.step {
+    margin-bottom: 30px;
+}
+
+.step h3 {
+    margin: 0 0 15px 0;
+    color: var(--hp-cyan-blue);
+}
+
+.code-block {
+    background-color: var(--vscode-textCodeBlock-background);
+    border: 1px solid var(--vscode-panel-border);
+    border-radius: 4px;
+    padding: 15px;
+    margin: 15px 0;
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+}
+
+.cmd-text {
+    font-family: var(--vscode-editor-font-family);
+    font-size: var(--vscode-editor-font-size);
+    margin: 0;
+    flex-grow: 1;
+    white-space: pre-wrap;
+    word-break: break-all;
+    color: var(--vscode-editor-foreground);
+}
+
+.tip {
+    padding: 12px 15px;
+    margin: 15px 0;
+    font-size: 0.95em;
+    color: var(--vscode-foreground);
+}
+
+.tip strong {
+    color: var(--vscode-activityBarBadge-background);
+}
+
+.install-note {
+    background-color: var(--vscode-editorWarning-background);
+    border: 1px solid var(--vscode-editorWarning-border);
+    border-radius: 6px;
+    padding: 15px 20px;
+    margin: 20px 0;
+    text-align: left;
+}
+
+.instructions-cta-sticky-wrapper {
+    position: sticky;
+    bottom: 0;
+    margin-top: auto;
+    padding-top: 20px;
+}
+
+.instructions-cta-sticky {
+    background: var(--vscode-editor-background);
+    padding: 20px;
+    border-top: 1px solid var(--vscode-panel-border);
+    display: flex;
+    gap: 12px;
+    justify-content: flex-end;
+}

@@ -1,0 +1,47 @@
+<!--
+  Copyright ©2025 HP Development Company, L.P.
+  Licensed under the X11 License. See LICENSE file in the project root for details.
+-->
+
+<div class="container">
+    <div class="header">
+        <h1>SSH Key Setup</h1>
+        <p>Choose how you'd like to set up SSH key authentication for <strong>{{deviceName}}</strong></p>
+    </div>
+
+    <div class="options-grid">
+        <div class="option-widget" data-option="automatic" id="option-automatic">
+            <div class="option-title">🔐 Automatic Setup</div>
+            <div class="option-description">
+                We'll handle everything for you. Just provide the password for your ZGX device and we'll generate and transfer the SSH key automatically.
+            </div>
+            <ul class="option-features">
+                <li>Fastest setup process</li>
+                <li>SSH key generated and transferred automatically</li>
+                <li>One-time password entry</li>
+                <li>Passwordless login after setup</li>
+                <li>No password stored in VS Code or in the ZGX Toolkit</li>
+            </ul>
+            <button class="next-button" data-option="automatic">Next</button>
+        </div>
+
+        <div class="option-widget" data-option="manual" id="option-manual">
+            <div class="option-title">📋 Manual Setup</div>
+            <div class="option-description">
+                Copy and paste commands in your preferred terminal. Great for users who want full control over the process.
+            </div>
+            <ul class="option-features">
+                <li>Works with any terminal (Command Prompt, PowerShell, VS Code terminal)</li>
+                <li>Step-by-step instructions</li>
+                <li>Full control over the process</li>
+                <li>No password stored in VS Code or in the ZGX Toolkit</li>
+            </ul>
+            <button class="next-button" data-option="manual">Next</button>
+        </div>
+
+    </div>
+
+    <div class="footer-button-group">
+        <button class="cancel-button" id="cancelBtn">Cancel</button>
+    </div>
+</div>

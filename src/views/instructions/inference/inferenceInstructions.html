@@ -1,0 +1,54 @@
+<!--
+  Copyright ©2025 HP Development Company, L.P.
+  Licensed under the X11 License. See LICENSE file in the project root for details.
+-->
+
+<div class="container">
+    <div class="header">
+        <div class="completion-icon codicon codicon-circuit-board"></div>
+        <h1>Run your first inference</h1>
+        {{#if deviceId}}
+        <p>Follow these commands to start using Ollama on <strong>{{deviceName}}</strong></p>
+        {{else}}
+        <p class="install-note">
+            To run these commands, first install <strong>Ollama</strong> via <em>Manage Apps</em> on a device
+        </p>
+        {{/if}}
+    </div>
+
+    <div class="instructions">
+        <div class="step">
+            <h3>In a new terminal, pull a model from Ollama</h3>
+            <div class="code-block">
+                <pre class="cmd-text">ollama pull llama3.1:8b</pre>
+                <button class="btn copy-button" data-copy="ollama pull llama3.1:8b">Copy</button>
+            </div>
+        </div>
+
+        <div class="step">
+            <h3>Send a prompt</h3>
+            <div class="code-block">
+                <pre class="cmd-text">ollama run llama3.1:8b 'YOUR_PROMPT'</pre>
+                <button class="btn copy-button" data-copy="ollama run llama3.1:8b 'YOUR_PROMPT'">Copy</button>
+            </div>
+        </div>
+
+        <div class="tip">
+            <strong>💡</strong> Tip: Add the <code>--verbose</code> flag to show tokens per second after the inference.
+        </div>
+    </div>
+
+    <!-- Only rendered when a device context is present -->
+    {{#if deviceId}}
+    <div class="instructions-cta-sticky-wrapper">
+        <div class="instructions-cta-sticky">
+            <button class="btn btn-secondary" id="backBtn">Back to Device Manager</button>
+            <button class="btn btn-secondary" id="continueBtn" data-id="{{deviceId}}" disabled title="Checking installation...">
+                <span class="spinner"></span>
+                <span class="button-text">Continue to Fine-Tuning</span>
+            </button>
+            <button class="btn" id="connectBtn" data-id="{{deviceId}}">Connect</button>
+        </div>
+    </div>
+    {{/if}}
+</div>

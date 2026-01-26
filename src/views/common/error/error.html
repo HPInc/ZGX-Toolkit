@@ -1,0 +1,18 @@
+<!--
+  Copyright ©2025 HP Development Company, L.P.
+  Licensed under the X11 License. See LICENSE file in the project root for details.
+-->
+
+<div class="container error-container" role="alert" aria-live="assertive">
+    <div class="empty-state">
+        <div class="empty-state-icon error-icon" aria-hidden="true">⚠️</div>
+        <h2 class="empty-state-title">Error</h2>
+        <p class="empty-state-message error-message">{{message}}</p>
+        {{#if canRetry}}
+        <button id="retry-btn" class="btn" aria-label="Retry the failed operation">Retry</button>
+        {{/if}}
+        {{#if canGoBack}}
+        <button id="back-btn" class="btn btn-secondary" aria-label="Go back to the previous view">Go Back</button>
+        {{/if}}
+    </div>
+</div>

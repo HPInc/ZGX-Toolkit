@@ -1,0 +1,117 @@
+/*
+ * Copyright ©2025 HP Development Company, L.P.
+ * Licensed under the X11 License. See LICENSE file in the project root for details.
+ */
+
+/* Fine-tuning Instructions specific styles */
+
+.completion-icon.codicon,
+.completion-icon.codicon::before {
+    font-size: 64px !important;
+    line-height: 64px;
+    width: 64px;
+    height: 64px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    margin: 28px 0 24px;
+}
+
+.instructions {
+    background-color: var(--vscode-list-inactiveSelectionBackground);
+    border: 1px solid var(--vscode-panel-border);
+    border-radius: 8px;
+    padding: 30px;
+    margin-bottom: 30px;
+    text-align: left;
+}
+
+.step {
+    margin-bottom: 30px;
+}
+
+.step h3 {
+    margin: 0 0 15px 0;
+    color: var(--hp-cyan-blue);
+}
+
+.code-block {
+    background-color: var(--vscode-textCodeBlock-background);
+    border: 1px solid var(--vscode-panel-border);
+    border-radius: 4px;
+    padding: 15px;
+    margin: 15px 0;
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+}
+
+.cmd-text {
+    margin: 0;
+    font-family: var(--vscode-editor-font-family);
+    font-size: var(--vscode-editor-font-size);
+    flex: 1;
+    white-space: pre-wrap;
+    word-wrap: break-word;
+}
+
+.copy-button {
+    font-size: 12px;
+    height: 20px;
+}
+
+.tip {
+    padding: 12px 15px;
+    margin: 15px 0;
+    font-size: 0.95em;
+    color: var(--vscode-foreground);
+}
+
+.tip strong {
+    color: var(--vscode-activityBarBadge-background);
+}
+
+.install-note {
+    margin: 8px 0 24px 0;
+    font-size: 13px;
+    color: var(--vscode-descriptionForeground);
+}
+
+.container {
+    padding-bottom: 100px;
+}
+
+/* Sticky CTA bar */
+.instructions-cta-sticky-wrapper {
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    padding: 12px 24px;
+    background: var(--vscode-editor-background);
+    border-top: 1px solid var(--vscode-panel-border);
+    z-index: 50;
+    display: flex;
+    justify-content: center;
+}
+
+.instructions-cta-sticky {
+    width: 100%;
+    max-width: 960px;
+    display: flex;
+    gap: 12px;
+    justify-content: flex-end;
+    align-items: center;
+    flex-wrap: wrap;
+}
+
+.instructions-cta-sticky .btn {
+    min-height: 32px;
+}
+
+.btn.connected {
+    background: var(--vscode-button-secondaryBackground);
+    color: var(--vscode-button-secondaryForeground);
+    cursor: default;
+}

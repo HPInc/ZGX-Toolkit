@@ -1,0 +1,163 @@
+/*
+ * Copyright ©2025 HP Development Company, L.P.
+ * Licensed under the X11 License. See LICENSE file in the project root for details.
+ */
+
+/* DNS Registration specific styles */
+
+.description-section {
+    margin: 20px 0;
+    padding: 0;
+}
+
+.description-section p {
+    line-height: 1.6;
+    color: var(--vscode-foreground);
+    margin: 0;
+}
+
+.password-section {
+    background-color: var(--vscode-list-inactiveSelectionBackground);
+    border: 1px solid var(--vscode-panel-border);
+    border-radius: 8px;
+    padding: 20px;
+    margin-bottom: 20px;
+}
+
+.password-prompt {
+    text-align: left;
+}
+
+.password-prompt p {
+    margin: 5px 0;
+    line-height: 1.6;
+}
+
+.password-prompt p:first-child {
+    font-size: 1em;
+    color: var(--vscode-foreground);
+}
+
+.password-input-container {
+    display: flex;
+    gap: 12px;
+    margin-top: 20px;
+}
+
+.password-input {
+    flex: 1;
+    padding: 10px 14px;
+    background-color: var(--vscode-input-background);
+    color: var(--vscode-input-foreground);
+    border: 1px solid var(--vscode-input-border);
+    border-radius: 4px;
+    font-family: var(--vscode-font-family);
+    font-size: var(--vscode-font-size);
+}
+
+.password-input:focus {
+    outline: 1px solid var(--vscode-focusBorder);
+    outline-offset: -1px;
+}
+
+.password-input:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+.btn-primary {
+    background-color: var(--vscode-button-background);
+    color: var(--vscode-button-foreground);
+    padding: 10px 24px;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: var(--vscode-font-size);
+    font-weight: 500;
+    white-space: nowrap;
+}
+
+.btn-primary:hover:not(:disabled) {
+    background-color: var(--vscode-button-hoverBackground);
+}
+
+.btn-primary:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+.password-feedback {
+    margin-top: 12px;
+    padding: 10px;
+    border-radius: 4px;
+    font-size: 0.95em;
+    display: none;
+}
+
+.password-feedback.visible {
+    display: block;
+}
+
+.password-feedback.success {
+    background-color: var(--vscode-testing-iconPassed);
+    color: var(--vscode-editor-background);
+}
+
+.password-feedback.error {
+    background-color: var(--vscode-inputValidation-errorBackground);
+    color: var(--vscode-inputValidation-errorForeground);
+    border: 1px solid var(--vscode-inputValidation-errorBorder);
+}
+
+.progress-container {
+    margin: 40px 0;
+    text-align: center;
+}
+
+.status-container {
+    margin: 40px 0;
+    text-align: center;
+}
+
+.status-text {
+    font-size: 1em;
+    color: var(--vscode-foreground);
+    padding: 16px;
+}
+
+.actions {
+    margin-top: 30px;
+    text-align: center;
+}
+
+.btn-secondary {
+    background-color: var(--vscode-button-secondaryBackground);
+    color: var(--vscode-button-secondaryForeground);
+    padding: 10px 24px;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: var(--vscode-font-size);
+}
+
+.btn-secondary:hover {
+    background-color: var(--vscode-button-secondaryHoverBackground);
+}
+
+.spinner {
+    display: inline-block;
+    width: 14px;
+    height: 14px;
+    border: 2px solid var(--vscode-button-foreground);
+    border-top-color: transparent;
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+    margin-right: 6px;
+    vertical-align: middle;
+}
+
+@keyframes spin {
+    to {
+        transform: rotate(360deg);
+    }
+}

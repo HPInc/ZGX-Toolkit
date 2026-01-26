@@ -1,0 +1,39 @@
+/*
+ * Copyright ©2025 HP Development Company, L.P.
+ * Licensed under the X11 License. See LICENSE file in the project root for details.
+ */
+
+/* Automatic Setup specific styles */
+
+.info-box {
+    background-color: var(--vscode-textPreformat-background);
+    border: 1px solid var(--vscode-panel-border);
+    border-radius: 4px;
+    padding: 15px;
+    margin: 20px 0;
+}
+
+.info-box h4 {
+    margin: 0 0 10px 0;
+    color: var(--vscode-activityBarBadge-background);
+}
+
+.info-box ol {
+    margin: 0 0 15px 0;
+    padding-left: 20px;
+}
+
+.info-box li {
+    margin: 5px 0;
+}
+
+.button-group#actionButtons {
+    justify-content: center;
+}
+
+.loading {
+    display: none;
+    text-align: center;
+    color: var(--vscode-descriptionForeground);
+    margin: 20px 0;
+}

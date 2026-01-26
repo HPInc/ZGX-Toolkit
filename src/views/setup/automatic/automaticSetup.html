@@ -1,0 +1,37 @@
+<!--
+  Copyright ©2025 HP Development Company, L.P.
+  Licensed under the X11 License. See LICENSE file in the project root for details.
+-->
+
+<div class="container">
+    <div class="header">
+        <h1>🔐 Automatic SSH Key Setup</h1>
+        <p>Setting up passwordless authentication for <strong>{{deviceName}}</strong></p>
+    </div>
+
+    <div class="content">
+        <div class="info-box" id="instructionsBox">
+            <h4>Automatic steps:</h4>
+            <ol>
+                <li>Generate SSH key locally if missing (ed25519 preferred)</li>
+                <li>Copy the public key to your ZGX device (you will need your ZGX user password)</li>
+                <li>Set correct permissions on remote</li>
+                <li>Test passwordless SSH</li>
+            </ol>
+            <p>Click <strong>Run Setup</strong> to open the integrated terminal in VS Code's. Enter your password in that terminal when prompted. After it finishes, click <strong>Test Connection</strong> (which will appear below) to verify and continue.</p>
+        </div>
+
+        <div class="loading hidden" id="loading">Running automatic setup...</div>
+
+        <div class="button-group" id="actionButtons">
+            <button class="btn" id="runBtn">Run Setup</button>
+            <button class="btn btn-secondary" data-action="goBack">Back</button>
+        </div>
+    </div>
+
+    <div id="errorMessage" class="error-message hidden"></div>
+
+    <div class="footer-button-group hidden" id="footerActions">
+        <button class="btn" id="completeBtn">Test Connection</button>
+    </div>
+</div>

@@ -1,0 +1,20 @@
+/*
+ * Copyright ©2025 HP Development Company, L.P.
+ * Licensed under the X11 License. See LICENSE file in the project root for details.
+ */
+
+.loading-container {
+    min-height: 300px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.spinner-container {
+    margin-bottom: var(--spacing-lg);
+}
+
+.loading-message {
+    color: var(--vscode-descriptionForeground);
+    font-size: 1em;
+}

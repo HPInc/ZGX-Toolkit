@@ -1,0 +1,32 @@
+<!--
+  Copyright ©2025 HP Development Company, L.P.
+  Licensed under the X11 License. See LICENSE file in the project root for details.
+-->
+
+<div class="container">
+    <div class="header">
+        <h1>🔧 mDNS Service Registration</h1>
+        <p>Setting up mDNS service discovery for <strong>{{deviceName}}</strong></p>
+    </div>
+
+    <div class="description-section">
+        <p>To manage your ZGX device on your local network, we need to enable secure mDNS (multicast DNS) discovery. This allows the extension to locate the device if its IP address changes. This only affects your local network, never external DNS servers or the internet.</p>
+    </div>
+
+    <div class="password-section hidden" id="password-section">
+        <div class="password-prompt">
+            <p><strong>Sudo Password Required</strong></p>
+            <p>Admin privileges are required. To complete setup, please enter your password for <strong>{{deviceName}}</strong>.</p>
+            <div class="password-input-container">
+                <input type="password" id="password-input" class="password-input" placeholder="Enter your password for {{deviceName}}" />
+                <button id="password-submit-btn" class="btn btn-primary">Continue</button>
+            </div>
+            <p class="password-info"><span class="info-icon" title="Security notice">ℹ️</span> Your password is used locally, never stored or shared.</p>
+            <div class="password-feedback" id="password-feedback"></div>
+        </div>
+    </div>
+
+    <div class="status-container" id="status-container">
+        <div class="status-text" id="status-text">Performing mDNS registration...</div>
+    </div>
+</div>
