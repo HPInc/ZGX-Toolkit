@@ -199,6 +199,26 @@ export class ZgxToolkitProvider implements vscode.WebviewViewProvider {
     }
 
     /**
+     * Inject resource URIs into params for views to use
+     * @param params The original params
+     * @param webview The webview to generate URIs for
+     * @returns Params enriched with resource URIs
+     */
+    private injectResourceUris(params?: any, webview?: vscode.Webview): any {
+        if (!webview) {
+            return params || {};
+        }
+
+        const zgxNanoDiagramPath = vscode.Uri.joinPath(this.context.extensionUri, 'resources', 'ZGX_Nano_Diagram.png');
+        const zgxNanoDiagramUri = webview.asWebviewUri(zgxNanoDiagramPath).toString();
+
+        return {
+            ...params,
+            zgxNanoDiagramUri
+        };
+    }
+
+    /**
      * Navigate to a specific view
      * @param viewId The view identifier
      * @param params Optional parameters to pass to the view
@@ -252,20 +272,24 @@ export class ZgxToolkitProvider implements vscode.WebviewViewProvider {
 
             // Set refresh callback so view can update the webview HTML
             this.sidebarCurrentView.setRefreshCallback(async (params: any) => {
-                await this.sidebarCurrentView?.render(params, this.nonce).then(html => {
+                const enrichedParams = this.injectResourceUris(params, this.sidebarWebview);
+                await this.sidebarCurrentView?.render(enrichedParams, this.nonce).then(html => {
                     if (this.sidebarWebview) {
-                        this.sidebarWebview.html = this.getFullHtml(html);
+                        this.sidebarWebview.html = this.getFullHtml(html, this.sidebarWebview);
                         this.logger.trace('Sidebar webview HTML updated via refresh callback');
                     }
                 });
             });
 
+            // Inject resource URIs into params
+            const enrichedParams = this.injectResourceUris(params, this.sidebarWebview);
+
             // Render view with nonce
-            const html = await this.sidebarCurrentView.render(params, this.nonce);
+            const html = await this.sidebarCurrentView.render(enrichedParams, this.nonce);
 
             // Update webview
             if (this.sidebarWebview) {
-                this.sidebarWebview.html = this.getFullHtml(html);
+                this.sidebarWebview.html = this.getFullHtml(html, this.sidebarWebview);
             }
 
             this.logger.debug('Sidebar navigation completed', { viewId });
@@ -318,20 +342,24 @@ export class ZgxToolkitProvider implements vscode.WebviewViewProvider {
 
             // Set refresh callback so view can update the webview HTML
             this.editorCurrentView.setRefreshCallback(async (params: any) => {
-                await this.editorCurrentView?.render(params, this.nonce).then(html => {
+                const enrichedParams = this.injectResourceUris(params, this.editorWebview);
+                await this.editorCurrentView?.render(enrichedParams, this.nonce).then(html => {
                     if (this.editorWebview) {
-                        this.editorWebview.html = this.getFullHtml(html);
+                        this.editorWebview.html = this.getFullHtml(html, this.editorWebview);
                         this.logger.trace('Editor webview HTML updated via refresh callback');
                     }
                 });
             });
 
+            // Inject resource URIs into params
+            const enrichedParams = this.injectResourceUris(params, this.editorWebview);
+
             // Render view with nonce
-            const html = await this.editorCurrentView.render(params, this.nonce);
+            const html = await this.editorCurrentView.render(enrichedParams, this.nonce);
 
             // Update webview
             if (this.editorWebview) {
-                this.editorWebview.html = this.getFullHtml(html);
+                this.editorWebview.html = this.getFullHtml(html, this.editorWebview);
             }
             this.editorPanel.reveal();
 
@@ -391,12 +419,10 @@ export class ZgxToolkitProvider implements vscode.WebviewViewProvider {
     /**
      * Generate the full HTML document for the webview
      * @param bodyHtml The HTML content for the body
+     * @param webview The webview to generate URIs for
      * @returns Complete HTML document
      */
-    private getFullHtml(bodyHtml: string): string {
-        // Get the webview to use for generating URIs
-        const webview = this.editorWebview || this.sidebarWebview;
-        
+    private getFullHtml(bodyHtml: string, webview?: vscode.Webview): string {    
         // Generate URI for codicon resources
         let codiconCssUri = '';
         let codiconFontUri = '';
@@ -413,7 +439,7 @@ export class ZgxToolkitProvider implements vscode.WebviewViewProvider {
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src ${webview?.cspSource} 'nonce-${this.nonce}'; font-src ${webview?.cspSource}; script-src ${webview?.cspSource} 'nonce-${this.nonce}';">
+    <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src ${webview?.cspSource} 'nonce-${this.nonce}'; font-src ${webview?.cspSource}; img-src ${webview?.cspSource}; script-src ${webview?.cspSource} 'nonce-${this.nonce}';">
     <title>ZGX Toolkit</title>
     ${codiconCssUri ? `<link rel="stylesheet" href="${codiconCssUri}">` : ''}
 </head>
@@ -455,7 +481,7 @@ export class ZgxToolkitProvider implements vscode.WebviewViewProvider {
 
             const webview = target === 'sidebar' ? this.sidebarWebview : this.editorWebview;
             if (webview) {
-                webview.html = this.getFullHtml(html);
+                webview.html = this.getFullHtml(html, webview);
             }
         } catch (err) {
             this.logger.error('Failed to show error view', {

@@ -648,7 +648,15 @@
                 }
                 // Use the error overlay component
                 if (typeof window.showErrorOverlay === 'function') {
-                    window.showErrorOverlay(message.errorTitle, message.errorDetails, message.error);
+                    // Determine onClose behavior
+                    let onClose = message.onClose || null;
+                    window.showErrorOverlay(
+                        message.errorTitle, 
+                        message.errorDetails, 
+                        message.error,
+                        onClose,
+                        message.buttonText
+                    );
                 } else {
                     console.error('Error overlay component not loaded');
                 }

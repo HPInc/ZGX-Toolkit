@@ -1,0 +1,118 @@
+/*
+ * Copyright ©2025 HP Development Company, L.P.
+ * Licensed under the X11 License. See LICENSE file in the project root for details.
+ */
+
+/**
+ * Base overlay styles shared by all overlay types
+ */
+
+.overlay-backdrop {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background-color: rgba(0, 0, 0, 0.2);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 1000;
+    backdrop-filter: blur(8px);
+    pointer-events: auto;
+    overflow: hidden;
+}
+
+.overlay-widget {
+    position: relative;
+    background-color: var(--vscode-editor-background);
+    border-radius: 8px;
+    padding: 0;
+    max-width: 600px;
+    width: 90%;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.8);
+    animation: slideInWidget 0.3s ease-out;
+    pointer-events: auto;
+}
+
+@keyframes slideInWidget {
+    from {
+        opacity: 0;
+        transform: scale(0.95) translateY(-20px);
+    }
+    to {
+        opacity: 1;
+        transform: scale(1) translateY(0);
+    }
+}
+
+.overlay-header {
+    display: flex;
+    align-items: center;
+    padding: 20px 32px;
+    margin: 0;
+}
+
+.overlay-icon {
+    font-size: 36px !important;
+    width: 36px;
+    height: 36px;
+    margin-right: 12px;
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.overlay-title {
+    font-size: 20px;
+    font-weight: 600;
+    color: var(--vscode-foreground);
+    margin: 0;
+}
+
+.overlay-content {
+    margin: 0 32px 20px 32px;
+}
+
+.overlay-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 12px;
+    padding: 0 32px 24px 32px;
+    margin: 0;
+}
+
+.overlay-btn {
+    padding: 10px 20px;
+    border-radius: 4px;
+    font-size: 13px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.overlay-btn-primary {
+    background-color: var(--vscode-button-background);
+    color: var(--vscode-button-foreground);
+    border: none;
+}
+
+.overlay-btn-primary:hover {
+    background-color: var(--vscode-button-hoverBackground);
+}
+
+.overlay-btn-primary:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+.overlay-btn-secondary {
+    border: 1px solid var(--vscode-button-secondaryBackground, var(--vscode-button-background));
+    background-color: transparent;
+    color: var(--vscode-button-secondaryForeground, var(--vscode-foreground));
+}
+
+.overlay-btn-secondary:hover {
+    background-color: var(--vscode-button-secondaryHoverBackground, rgba(255, 255, 255, 0.1));
+}

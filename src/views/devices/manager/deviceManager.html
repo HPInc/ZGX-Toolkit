@@ -10,7 +10,16 @@
     </div>
 
     <div class="add-device-section">
-        <button class="show-form-btn {{#if hiddenFormButton}}hidden{{/if}}" id="showFormBtn">Add New Device</button>
+        <div class="device-actions-bar">
+            <button class="show-form-btn {{#if hiddenFormButton}}hidden{{/if}}" id="showFormBtn">
+                <i class="codicon codicon-plus"></i>
+                Add New Device
+            </button>
+            <button class="show-form-btn" id="pairDevicesBtn">
+                <i class="codicon codicon-link"></i>
+                Pair Devices
+            </button>
+        </div>
         
         <div class="add-device-form {{#if hiddenForm}}hidden{{/if}}" id="addDeviceForm" data-editing-id="{{editingDeviceId}}">
             <h2 id="formTitle">{{formTitle}}</h2>
@@ -65,8 +74,81 @@
     <div class="devices-section">
         <h2>Your Devices</h2>
         <div class="device-grid" id="deviceGrid">
-            {{#if devices}}
-            {{#each devices}}
+            {{#if pairedGroups}}
+            {{#each pairedGroups}}
+            <div class="paired-group-container" data-group-id="{{groupId}}">
+                <div class="paired-group-label">
+                    <span class="codicon codicon-link"></span>
+                    <span class="paired-label-text">Paired</span>
+                </div>
+                <div class="paired-group-content">
+                <div class="paired-group-devices">
+                    {{#each devices}}
+                    <div class="device-card paired" data-id="{{id}}" data-name="{{name}}" data-host="{{host}}" data-username="{{username}}" data-port="{{port}}" data-dns-instance-name="{{dnsInstanceName}}">
+                        <div class="device-card-icons">
+                            {{#if needsDnsRegistration}}
+                            <button class="device-card-icon dns-warning-icon" data-action="register-dns" data-id="{{id}}" title="mDNS service not registered. Click to register for device discovery.">
+                                <i class="codicon codicon-warning"></i>
+                            </button>
+                            {{/if}}
+                            <button class="device-card-icon edit-icon" data-id="{{id}}" title="Edit">
+                                <i class="codicon codicon-edit"></i>
+                            </button>
+                            <button class="device-card-icon remove-icon" data-id="{{id}}" title="Delete">
+                                <i class="codicon codicon-trash"></i>
+                            </button>
+                        </div>
+                        {{#if isPaired}}
+                        <div class="paired-badge-row">
+                            <i class="codicon codicon-link"></i>
+                            <span>Paired</span>
+                        </div>
+                        {{/if}}
+                        <h3>{{name}}</h3>
+                        <div class="device-details">
+                            <div><strong>Host:</strong> {{host}}:{{port}}</div>
+                            <div><strong>Username:</strong> {{username}}</div>
+                            <div><strong>Status:</strong> {{#if isSetup}}Ready{{else}}Not Setup{{/if}}</div>
+                            {{#if isSetup}}
+                            {{#unless useKeyAuth}}
+                            <div class="alert">
+                                <span class="codicon codicon-info"></span> You must setup this device again and use SSH key authentication.
+                            </div>
+                            {{/unless}}
+                            {{/if}}
+                        </div>
+                        <div class="device-actions">
+                            {{#if isSetup}}
+                            {{#if useKeyAuth}}
+                            <div class="split-button">
+                                <button class="split-button-main connect-btn" data-id="{{id}}">Connect</button>
+                                <button class="split-button-dropdown" data-id="{{id}}"></button>
+                                <div class="dropdown-content">
+                                    <button class="dropdown-item" data-action="current" data-id="{{id}}">Current Window</button>
+                                    <button class="dropdown-item" data-action="new" data-id="{{id}}">New Window</button>
+                                </div>
+                            </div>
+                            <button class="btn btn-secondary manage-apps-button" data-id="{{id}}">Manage Apps</button>
+                            {{else}}
+                            <button class="btn setup-btn" data-action="setup" data-id="{{id}}">Setup</button>
+                            {{/if}}
+                            {{else}}
+                            <button class="btn setup-btn" data-action="setup" data-id="{{id}}">Setup</button>
+                            {{/if}}
+                        </div>
+                    </div>
+                    {{/each}}
+                </div>
+                <div class="paired-group-actions">
+                    <button class="btn-link" data-action="pairing-details" data-group-id="{{groupId}}">Pairing Details</button>
+                    <button class="btn-link" data-action="unpair-devices" data-group-id="{{groupId}}">Unpair Devices</button>
+                </div>
+                </div>
+            </div>
+            {{/each}}
+            {{/if}}
+            {{#if unpairedDevices}}
+            {{#each unpairedDevices}}
             <div class="device-card" data-id="{{id}}" data-name="{{name}}" data-host="{{host}}" data-username="{{username}}" data-port="{{port}}" data-dns-instance-name="{{dnsInstanceName}}">
                 <div class="device-card-icons">
                     {{#if needsDnsRegistration}}

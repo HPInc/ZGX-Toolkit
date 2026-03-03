@@ -141,6 +141,24 @@ export interface RegisterDnsMessage {
 }
 
 /**
+ * Pairing details message to navigate to the pair details view.
+ */
+export interface PairingDetailsMessage {
+  type: 'pairing-details';
+  /** group identifier */
+  groupId: string;
+}
+
+/**
+ * Unpair devices message to navigate to the unpair devices view.
+ */
+export interface UnpairDevicesMessage {
+  type: 'unpair-devices';
+  /** group identifier */
+  groupId: string;
+}
+
+/**
  * Update apps message to modify installed applications.
  */
 export interface UpdateAppsMessage {
@@ -439,6 +457,76 @@ export interface ValidatePasswordMessage {
 }
 
 /**
+ * Pair devices message - create a ConnectX Group with selected devices.
+ */
+export interface PairDevicesMessage {
+  type: 'pair-devices';
+  /** Array of device IDs to pair */
+  deviceIds: string[];
+}
+
+/**
+ * Confirm unpair message - user confirmed unpairing a ConnectX Group.
+ */
+export interface ConfirmUnpairMessage {
+  type: 'confirm-unpair';
+}
+
+/**
+ * Password submitted message - contains sudo password for ConnectX configuration.
+ */
+export interface PasswordSubmittedMessage {
+  type: 'password-submitted';
+  /** Sudo password for configuration */
+  password: string;
+  /** Device IDs to be paired */
+  deviceIds: string[];
+  /** Device names for display purposes */
+  deviceNames: string[];
+}
+
+/**
+ * Password input cancelled message - user cancelled password input.
+ */
+export interface PasswordInputCancelledMessage {
+  type: 'password-input-cancelled';
+}
+
+/**
+ * Confirm delete paired device message - user confirmed deletion of a paired device
+ * from the warning overlay.
+ */
+export interface ConfirmDeletePairedDeviceMessage {
+  type: 'confirm-delete-paired-device';
+  /** device identifier */
+  id: string;
+  /** group identifier */
+  groupId: string;
+}
+
+/**
+ * Password submitted for delete message - contains sudo password for paired device deletion.
+ */
+export interface PasswordSubmittedForDeleteMessage {
+  type: 'password-submitted-for-delete';
+  /** Sudo password for unconfiguration */
+  password: string;
+  /** Device ID to delete */
+  deviceId: string;
+  /** Group ID to unconfigure */
+  groupId: string;
+}
+
+/**
+ * Password input cancelled for delete message - user cancelled password input during paired device deletion.
+ */
+export interface PasswordInputCancelledForDeleteMessage {
+  type: 'password-input-cancelled-for-delete';
+  /** Device ID that was being deleted */
+  deviceId: string;
+}
+
+/**
  * Discriminated union of all possible messages.
  * Use pattern matching to handle messages type-safely.
  */
@@ -456,6 +544,8 @@ export type Message =
   | SelectDeviceMessage
   | ManageAppsMessage
   | RegisterDnsMessage
+  | PairingDetailsMessage
+  | UnpairDevicesMessage
   | UpdateAppsMessage
   | SetupSshKeyMessage
   | TestConnectionMessage
@@ -489,6 +579,13 @@ export type Message =
   | ZgxPythonEnvStatusMessage
   | VerifyInstallationsMessage
   | ValidatePasswordMessage
+  | PairDevicesMessage
+  | ConfirmUnpairMessage
+  | PasswordSubmittedMessage
+  | PasswordInputCancelledMessage
+  | ConfirmDeletePairedDeviceMessage
+  | PasswordSubmittedForDeleteMessage
+  | PasswordInputCancelledForDeleteMessage
   | CloseErrorOverlayMessage;
 
 /**

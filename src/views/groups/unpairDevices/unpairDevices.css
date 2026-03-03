@@ -1,0 +1,91 @@
+/*
+ * Copyright ©2026 HP Development Company, L.P.
+ * Licensed under the X11 License. See LICENSE file in the project root for details.
+ */
+
+.unpair-devices-container {
+    padding: 40px;
+    max-width: 900px;
+    margin: 0 auto;
+    display: flex;
+    flex-direction: column;
+    min-height: 100vh;
+}
+
+.unpair-devices-header {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    margin-bottom: 32px;
+}
+
+.unpair-devices-header .codicon {
+    font-size: 32px;
+    color: var(--vscode-foreground);
+}
+
+.unpair-devices-header h1 {
+    margin: 0;
+    font-size: 28px;
+    font-weight: 600;
+    color: var(--vscode-foreground);
+}
+
+.unpair-devices-card {
+    background-color: var(--vscode-list-inactiveSelectionBackground);
+    border: 1px solid var(--vscode-panel-border);
+    border-radius: 8px;
+    margin-bottom: 24px;
+    overflow: hidden;
+}
+
+.unpair-devices-card .card-content {
+    padding: 24px;
+}
+
+.unpair-devices-card .card-content h2 {
+    margin: 0 0 8px 0;
+    font-size: 17px;
+    font-weight: 600;
+    color: var(--vscode-foreground);
+}
+
+.unpair-devices-card .card-description {
+    margin: 0 0 20px 0;
+    font-size: 13px;
+    color: var(--vscode-descriptionForeground);
+    line-height: 1.5;
+}
+
+.device-list-section {
+    margin-bottom: 20px;
+}
+
+.device-name-list {
+    background-color: var(--vscode-textCodeBlock-background);
+    border: 1px solid var(--vscode-panel-border);
+    border-radius: 4px;
+    overflow: hidden;
+}
+
+.device-name-item {
+    padding: 10px 16px;
+    font-size: 13px;
+    color: var(--vscode-foreground);
+    border-bottom: 1px solid var(--vscode-panel-border);
+}
+
+.device-name-item:last-child {
+    border-bottom: none;
+}
+
+.unpair-devices-actions {
+    display: flex;
+    justify-content: flex-end;
+    margin-top: 16px;
+}
+
+.action-buttons {
+    display: flex;
+    gap: 12px;
+}

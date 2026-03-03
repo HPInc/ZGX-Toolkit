@@ -17,4 +17,5 @@ export { AppInstallationService, InstallationErrorType } from './appInstallation
 export { PasswordService } from './passwordService';
 export { ExtensionStateService, extensionStateService } from './extensionStateService';
 export { DNSServiceRegistration, dnsServiceRegistration } from './dnsRegistrationService';
+export { ConnectXGroupService, connectxGroupService } from './connectxGroupService';
 export { DeviceHealthCheckService, deviceHealthCheckService } from './deviceHealthCheckService';

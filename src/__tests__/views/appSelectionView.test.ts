@@ -425,17 +425,13 @@ describe('AppSelectionView', () => {
     });
 
     describe('message handling', () => {
-        it('should handle close-error-overlay message', async () => {
-            const mockNavigationCallback = jest.fn() as any;
-            view.setNavigationCallback(mockNavigationCallback);
+        it('should handle close-error-overlay message without sending response', async () => {
+            const mockMessageCallback = jest.fn();
+            view.setMessageCallback(mockMessageCallback);
             
             await view.handleMessage({ type: 'close-error-overlay' } as any);
             
-            expect(mockNavigationCallback).toHaveBeenCalledWith(
-                'devices/manager',
-                undefined,
-                undefined
-            );
+            expect(mockMessageCallback).not.toHaveBeenCalled();
         });
 
         it('should handle verify-installations message with batched processing', async () => {

@@ -157,13 +157,42 @@ with st.sidebar:
 if st.session_state.vectorstore is None or st.session_state.qa_chain is None:
     st.warning("⚠️ Please process the PDF and load the vector store using the sidebar.")
 else:
+    # Initialize selected question in session state
+    if 'selected_question' not in st.session_state:
+        st.session_state.selected_question = ""
+    
+    # Sample questions section
+    st.markdown("### Sample Questions")
+    st.markdown("Here are some sample questions if you are using the provided PDF document \"Maintenance and Service Guide for the HP Z8 Fury G5 Workstation Desktop PC\":")
+    
+    # Create columns for sample question buttons
+    col1, col2, col3 = st.columns(3)
+    
+    with col1:
+        if st.button("How should I clean this computer?"):
+            st.session_state.selected_question = "How should I clean this computer?"
+    
+    with col2:
+        if st.button("Which button opens the setup screen during boot?"):
+            st.session_state.selected_question = "Which button opens the setup screen during boot?"
+    
+    with col3:
+        if st.button("What is the TPM?"):
+            st.session_state.selected_question = "What is the TPM?"
+    
+    st.markdown("---")
+    
     # Question input with form to enable Enter key submission
     with st.form(key="question_form", clear_on_submit=False):
         question = st.text_input("Ask a question about your document:", 
+                                value=st.session_state.selected_question,
                                 placeholder="What is this document about?")
         submit_button = st.form_submit_button("Get Answer", type="primary")
     
     if submit_button and question:
+        # Clear selected question after submission
+        st.session_state.selected_question = ""
+        
         with st.spinner("Processing..."):
             try:
                 qa_bundle = st.session_state.qa_chain

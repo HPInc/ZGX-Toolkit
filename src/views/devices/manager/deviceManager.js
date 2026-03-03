@@ -4,7 +4,8 @@
  */
 
 (function () {
-    const vscode = acquireVsCodeApi();
+    const vscode = window.vscodeApi || acquireVsCodeApi();
+    window.vscodeApi = vscode;
     let discoveredDevices = [];
 
     // Initialize editingDeviceId from data attribute if present
@@ -26,6 +27,18 @@
         const showFormBtn = document.getElementById('showFormBtn');
         if (showFormBtn) {
             showFormBtn.addEventListener('click', showAddForm);
+        }
+
+        // Pair Devices button
+        const pairDevicesBtn = document.getElementById('pairDevicesBtn');
+        if (pairDevicesBtn) {
+            pairDevicesBtn.addEventListener('click', function() {
+                vscode.postMessage({
+                    type: 'navigate',
+                    targetView: 'groups/pairDevices',
+                    panel: 'editor'
+                });
+            });
         }
 
         // Cancel button
@@ -143,6 +156,28 @@
                 vscode.postMessage({
                     type: 'setup-device',
                     id: deviceId
+                });
+            });
+        });
+
+        // Pairing details link buttons
+        document.querySelectorAll('[data-action="pairing-details"]').forEach(btn => {
+            btn.addEventListener('click', function () {
+                const groupId = this.getAttribute('data-group-id');
+                vscode.postMessage({
+                    type: 'pairing-details',
+                    groupId: groupId
+                });
+            });
+        });
+
+        // Unpair devices link buttons
+        document.querySelectorAll('[data-action="unpair-devices"]').forEach(btn => {
+            btn.addEventListener('click', function () {
+                const groupId = this.getAttribute('data-group-id');
+                vscode.postMessage({
+                    type: 'unpair-devices',
+                    groupId: groupId
                 });
             });
         });
@@ -472,7 +507,81 @@
                 // Show error message in form
                 showFormError(message.error || 'An error occurred');
                 break;
+
+            case 'show-paired-delete-warning':
+                showPairedDeleteWarning(message.deviceId, message.deviceName, message.groupId);
+                break;
+
+            case 'show-password-input-for-delete':
+                showPasswordInputForDelete(message.deviceId, message.groupId);
+                break;
         }
     });
+
+    /**
+     * Show warning overlay when user tries to delete a paired device.
+     * @param {string} deviceId - The ID of the device to delete.
+     * @param {string} deviceName - The display name of the device.
+     * @param {string} groupId - The ID of the paired group the device belongs to.
+     */
+    function showPairedDeleteWarning(deviceId, deviceName, groupId) {
+        if (!window.showWarningOverlay) {
+            // Fallback: send confirm message directly if warning overlay is not available
+            vscode.postMessage({ type: 'confirm-delete-paired-device', id: deviceId, groupId: groupId });
+            return;
+        }
+        window.showWarningOverlay(
+            'Unpair and Delete Device',
+            '**' + deviceName + '** is currently paired with another device.\nContinuing will result in:\n- both devices in the pair will be unpaired\n- the paired group will be removed from all of your views\n- **' + deviceName + '** will be permanently **deleted** from your HP ZGX Toolkit device list\n\nDo you want to continue?',
+            {
+                continueText: 'Unpair and Delete Device',
+                cancelText: 'Cancel',
+                iconColor: 'var(--vscode-errorForeground)',
+                hideMessageContainer: true,
+                listIndent: '32px',
+                firstLineFontSize: '17px',
+                colorWords: [{ word: 'deleted', color: 'var(--vscode-errorForeground)' }],
+                onContinue: function() {
+                    vscode.postMessage({ type: 'confirm-delete-paired-device', id: deviceId, groupId: groupId });
+                }
+            }
+        );
+    }
+
+    /**
+     * Show password input overlay to collect sudo password for paired device deletion.
+     * @param {string} deviceId - The ID of the device to delete.
+     * @param {string} groupId - The ID of the paired group the device belongs to.
+     */
+    function showPasswordInputForDelete(deviceId, groupId) {
+        if (!window.showPasswordInputOverlay) {
+            return;
+        }
+        window.showPasswordInputOverlay({
+            title: 'Sudo Password Required',
+            message: 'Enter your sudo password to unconfigure ConnectX network interfaces before deleting this device.',
+            icon: 'codicon-lock',
+            fieldLabel: 'Sudo Password:',
+            placeholder: 'Enter password...',
+            hint: 'This password is required to unconfigure ConnectX network settings on both paired devices before the device can be deleted.',
+            submitButtonText: 'Continue',
+            cancelButtonText: 'Cancel',
+            validationErrorMessage: 'Password is required',
+            onSubmit: function(password) {
+                vscode.postMessage({
+                    type: 'password-submitted-for-delete',
+                    password: password,
+                    deviceId: deviceId,
+                    groupId: groupId
+                });
+            },
+            onCancel: function() {
+                vscode.postMessage({
+                    type: 'password-input-cancelled-for-delete',
+                    deviceId: deviceId
+                });
+            }
+        });
+    }
 })();
 

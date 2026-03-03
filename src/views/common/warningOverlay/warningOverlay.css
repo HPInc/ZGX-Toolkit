@@ -1,0 +1,42 @@
+/*
+ * Copyright ©2025 HP Development Company, L.P.
+ * Licensed under the X11 License. See LICENSE file in the project root for details.
+ */
+
+/**
+ * Warning overlay styles for confirmation dialogs
+ * Extends base overlay styles with warning-specific presentation
+ */
+
+/* Warning-specific icon color override */
+.warning-overlay-icon {
+    color: var(--vscode-notificationsWarningIcon-foreground);
+}
+
+/* Warning message container with warning background */
+.warning-overlay-message-container {
+    display: flex;
+    align-items: flex-start;
+    margin: 0 32px 20px 32px;
+    padding: 14px 16px;
+    background-color: var(--vscode-inputValidation-warningBackground);
+    border-radius: 4px;
+}
+
+.warning-overlay-message-icon {
+    width: 20px;
+    height: 20px;
+    margin-right: 12px;
+    flex-shrink: 0;
+    color: var(--vscode-notificationsWarningIcon-foreground);
+}
+
+.warning-overlay-message {
+    font-size: 14px;
+    line-height: 1.5;
+    color: var(--vscode-foreground);
+    margin: 0;
+    padding: 0;
+    white-space: pre-wrap;
+    flex: 1;
+}

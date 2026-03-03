@@ -8,11 +8,9 @@
  * Handles device unique identifier generation and service file creation.
  */
 
-import { Client as SSHClient } from 'ssh2';
 import { Device } from '../types/devices';
-import { SSHCommandResult } from '../types/ssh';
 import { logger } from '../utils/logger';
-import { getSSHConfig } from '../utils/sshConfig';
+import { executeSSHCommand } from '../utils/sshConnection';
 import { NET_DNSSD_SERVICES, NET_PROTOCOLS } from '../constants/net';
 
 export enum RegistrationErrorType {
@@ -113,7 +111,12 @@ export class DNSServiceRegistration {
     private async calculateDeviceIdentifier(device: Device): Promise<string | null> {
         logger.debug('Calculating device unique identifier from MAC address hash');
         const identifierCommand = `ip route show default | awk '/default/ { print $5 }' | head -1 | xargs -I {} cat /sys/class/net/{}/address | tr -d ':' | sha256sum | cut -c1-8`;
-        const identifierResult = await this.executeSSHCommand(device, identifierCommand);
+        const identifierResult = await executeSSHCommand(
+            device,
+            identifierCommand,
+            { readyTimeout: 30000 },
+            { operationName: 'Calculate device identifier', timeoutSeconds: 30 }
+        );
         
         if (!identifierResult.success || !identifierResult.stdout.trim()) {
             logger.error('Failed to calculate device identifier', {
@@ -141,7 +144,12 @@ export class DNSServiceRegistration {
         
         const innerCommand = "echo '" + serviceFileContent + "' | tee " + DNSServiceRegistration.SERVICE_FILE_PATH + " > /dev/null";
         const createFileCommand = 'sudo -S bash -c ' + this.escapeShellArg(innerCommand);
-        const createResult = await this.executeSSHCommand(device, createFileCommand, 'Create service file', sudoPassword);
+        const createResult = await executeSSHCommand(
+            device,
+            createFileCommand,
+            { readyTimeout: 30000 },
+            { operationName: 'Create service file', sudoPassword, timeoutSeconds: 30 }
+        );
 
         if (!createResult.success) {
             logger.error('Failed to create service file', {
@@ -166,7 +174,12 @@ export class DNSServiceRegistration {
     private async restartAvahiDaemon(device: Device, deviceIdentifier: string, sudoPassword: string): Promise<DnsServiceRegistrationResult> {
         logger.debug('Restarting Avahi daemon');
         const restartCommand = 'sudo -S systemctl restart avahi-daemon';
-        const restartResult = await this.executeSSHCommand(device, restartCommand, 'Restart Avahi', sudoPassword);
+        const restartResult = await executeSSHCommand(
+            device,
+            restartCommand,
+            { readyTimeout: 30000 },
+            { operationName: 'Restart Avahi', sudoPassword, timeoutSeconds: 30 }
+        );
 
         if (!restartResult.success) {
             logger.warn('Failed to restart Avahi daemon', {
@@ -370,9 +383,11 @@ export class DNSServiceRegistration {
         logger.debug('Checking if hpzgx.service file already exists');
         
         try {
-            const checkResult = await this.executeSSHCommand(
-                device, 
-                `test -f ${DNSServiceRegistration.SERVICE_FILE_PATH} && echo "exists" || echo "not_exists"`
+            const checkResult = await executeSSHCommand(
+                device,
+                `test -f ${DNSServiceRegistration.SERVICE_FILE_PATH} && echo "exists" || echo "not_exists"`,
+                { readyTimeout: 30000 },
+                { operationName: 'Check service file exists', timeoutSeconds: 30 }
             );
 
             if (!checkResult.success) {
@@ -441,7 +456,12 @@ export class DNSServiceRegistration {
 
         // Use executeSSHCommand with a simple sudo test command
         const testCommand = 'sudo -S true';
-        const result = await this.executeSSHCommand(device, testCommand, 'sudo validation', password, 10);
+        const result = await executeSSHCommand(
+            device,
+            testCommand,
+            { readyTimeout: 30000 },
+            { operationName: 'sudo validation', sudoPassword: password, timeoutSeconds: 10 }
+        );
 
         if (!result.success) {
             const errorMessage = result.error?.message || result.stderr || '';
@@ -485,172 +505,7 @@ export class DNSServiceRegistration {
         return { valid: true, isConnectionError: false };
     }
 
-    /**
-     * Create and establish an SSH connection to a device.
-     * 
-     * @param device The device to connect to
-     * @returns Promise resolving to connected SSH client
-     */
-    private async createSSHConnection(device: Device): Promise<SSHClient> {
-        return new Promise((resolve, reject) => {
-            const client = new SSHClient();
-
-            client.on('ready', () => {
-                resolve(client);
-            });
-
-            client.on('error', (err) => {
-                reject(err);
-            });
-
-            // Get SSH configuration including credentials from ~/.ssh/config
-            const config = getSSHConfig(device, { readyTimeout: 30000 });
-
-            logger.debug('Connecting to SSH host', {
-                host: config.host,
-                port: config.port,
-                username: config.username,
-                hasPrivateKey: !!config.privateKey,
-                hasAgent: !!config.agent
-            });
-
-            client.connect(config);
-        });
-    }
-
-    /**
-     * Execute a command on the remote device via SSH.
-     * Creates SSH connection, executes command, and cleans up.
-     * 
-     * @param device The device to execute command on
-     * @param command The command to execute
-     * @param appName Name of the operation (for logging)
-     * @param sudoPassword Optional sudo password for commands starting with sudo -S
-     * @param timeoutSeconds Optional timeout in seconds
-     * @returns Promise resolving to command result
-     */
-    private async executeSSHCommand(
-        device: Device,
-        command: string,
-        appName: string = 'DNS operation',
-        sudoPassword?: string,
-        timeoutSeconds: number = 30
-    ): Promise<SSHCommandResult> {
-        let client: SSHClient | undefined;
-
-        try {
-            // Create SSH connection
-            client = await this.createSSHConnection(device);
-
-            // Execute command with timeout
-            const result = await new Promise<SSHCommandResult>((resolve, reject) => {
-                let timeoutHandle: NodeJS.Timeout | undefined;
-                let resolved = false;
-
-                const cleanup = () => {
-                    if (timeoutHandle) {
-                        clearTimeout(timeoutHandle);
-                    }
-                };
-
-                const safeResolve = (value: SSHCommandResult) => {
-                    if (!resolved) {
-                        resolved = true;
-                        cleanup();
-                        resolve(value);
-                    }
-                };
-
-                const safeReject = (error: Error) => {
-                    if (!resolved) {
-                        resolved = true;
-                        cleanup();
-                        reject(error);
-                    }
-                };
-
-                // Set up timeout
-                timeoutHandle = setTimeout(() => {
-                    safeReject(new Error(`SSH command timed out after ${timeoutSeconds} seconds`));
-                }, timeoutSeconds * 1000);
-
-                client!.exec(command, (err, stream) => {
-                    if (err) {
-                        safeResolve({
-                            success: false,
-                            exitCode: -1,
-                            stdout: '',
-                            stderr: err.message,
-                            error: err
-                        });
-                        return;
-                    }
-
-                    let stdout = '';
-                    let stderr = '';
-
-                    stream.on('data', (data: Buffer) => {
-                        stdout += data.toString();
-                    });
-
-                    stream.stderr.on('data', (data: Buffer) => {
-                        stderr += data.toString();
-                    });
-
-                    stream.on('close', (code: number | null) => {
-                        // Handle null/undefined exit codes - use 1 as default for failure
-                        safeResolve({
-                            success: (code ?? 1) === 0,
-                            exitCode: code ?? 1,
-                            stdout,
-                            stderr
-                        });
-                    });
-
-                    stream.on('error', (streamErr: Error) => {
-                        logger.error('SSH stream error', { error: streamErr.message });
-                        safeReject(streamErr);
-                    });
-
-                    // If password is provided and command is sudo, write it to stdin and close stdin
-                    if (sudoPassword && command.startsWith('sudo -S')) {
-                        stream.write(sudoPassword + '\n', (err) => {
-                            if (err) {
-                                logger.error(`Failed to write sudo password for ${appName}`, { error: err.message });
-                                safeReject(err);
-                                return;
-                            }
-                            stream.end();
-                        });
-                    } else {
-                        // No password needed, just close stdin
-                        stream.end();
-                    }
-                });
-            });
-
-            return result;
-
-        } catch (error) {
-            logger.error('SSH command execution failed', {
-                device: device.name,
-                error: error instanceof Error ? error.message : String(error)
-            });
-            
-            return {
-                success: false,
-                exitCode: -1,
-                stdout: '',
-                stderr: error instanceof Error ? error.message : String(error),
-                error: error instanceof Error ? error : new Error(String(error))
-            };
-        } finally {
-            // Clean up SSH connection
-            if (client) {
-                client.end();
-            }
-        }
-    }
 }
+
 
 export const dnsServiceRegistration = new DNSServiceRegistration();

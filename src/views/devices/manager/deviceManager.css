@@ -7,6 +7,23 @@
     margin-bottom: var(--spacing-xl);
 }
 
+.device-actions-bar {
+    display: flex;
+    gap: 12px;
+    align-items: center;
+    margin-bottom: 20px;
+}
+
+.device-actions-bar button {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.device-actions-bar button .codicon {
+    font-size: 14px;
+}
+
 .show-form-btn {
     background-color: var(--vscode-button-background);
     color: var(--vscode-button-foreground);
@@ -202,6 +219,102 @@
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
     gap: var(--spacing-lg);
+}
+
+/* Paired group container - spans full width */
+.paired-group-container {
+    grid-column: 1 / -1;
+    display: flex;
+    flex-direction: row;
+    background-color: var(--vscode-editor-background);
+    border: 2px solid var(--vscode-panel-border);
+    border-radius: var(--border-radius-lg);
+    padding: 0;
+    overflow: visible;
+}
+
+.paired-group-content {
+    display: flex;
+    flex-direction: column;
+    flex: 1;
+}
+
+.paired-group-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: var(--spacing-md);
+    padding: var(--spacing-xs) var(--spacing-lg) var(--spacing-md);
+}
+
+.btn-link {
+    background: none;
+    border: none;
+    cursor: pointer;
+    color: var(--vscode-textLink-foreground);
+    font-size: 0.9em;
+    padding: 2px var(--spacing-xs);
+    text-decoration: none;
+}
+
+.btn-link:hover {
+    color: var(--vscode-textLink-activeForeground);
+    text-decoration: underline;
+}
+
+.paired-group-label {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: var(--spacing-xs);
+    background-color: var(--vscode-panel-border);
+    padding: var(--spacing-md) var(--spacing-sm);
+    min-width: 32px;
+}
+
+.paired-group-label .codicon {
+    font-size: 14px;
+    color: var(--vscode-foreground);
+}
+
+.paired-label-text {
+    writing-mode: vertical-rl;
+    text-orientation: mixed;
+    transform: rotate(180deg);
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--vscode-foreground);
+    letter-spacing: 0.5px;
+}
+
+.paired-group-devices {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--spacing-lg);
+    padding: var(--spacing-lg);
+    flex: 1;
+}
+
+.paired-group-devices .device-card {
+    flex: 1;
+    min-width: 280px;
+    max-width: calc(50% - var(--spacing-lg) / 2);
+}
+
+/* Paired badge row below icons on device cards */
+.paired-badge-row {
+    position: absolute;
+    top: 40px;
+    right: 15px;
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    color: var(--vscode-descriptionForeground);
+    font-size: 13px;
+}
+
+.paired-badge-row .codicon {
+    font-size: 14px;
 }
 
 .device-card {

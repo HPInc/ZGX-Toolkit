@@ -9,3 +9,4 @@
  */
 
 export { deviceStore, DeviceStore } from './deviceStore';
+export { groupStore, GroupStore } from './groupStore';

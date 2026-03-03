@@ -128,6 +128,160 @@ html, body {
     padding: var(--spacing-md);
 }
 
+/* Section header styles */
+.section-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: var(--spacing-sm) var(--spacing-sm);
+    margin-top: var(--spacing-xs);
+    cursor: default;
+    user-select: none;
+}
+
+.section-header-left {
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-xs);
+}
+
+.section-header-icon {
+    font-size: 14px;
+    color: var(--vscode-descriptionForeground);
+}
+
+.section-header-title {
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.5px;
+    color: var(--vscode-descriptionForeground);
+}
+
+.section-toggle {
+    background: none;
+    border: none;
+    cursor: pointer;
+    padding: 2px var(--spacing-xs);
+    border-radius: var(--border-radius-sm);
+    color: var(--vscode-textLink-foreground);
+    font-size: 11px;
+}
+
+.section-toggle:hover {
+    color: var(--vscode-textLink-activeForeground);
+    text-decoration: underline;
+}
+
+.section-content {
+    overflow: visible;
+}
+
+.section-content.collapsed {
+    display: none;
+}
+
+.section-empty-state {
+    padding: var(--spacing-sm) var(--spacing-md);
+    color: var(--vscode-descriptionForeground);
+    font-size: 0.9em;
+    font-style: italic;
+}
+
+/* Sidebar paired group container */
+.sidebar-paired-group-container {
+    margin: var(--spacing-sm);
+    border: 2px solid var(--vscode-panel-border);
+    border-radius: var(--border-radius-lg);
+    background-color: var(--vscode-editor-background);
+    overflow: visible;
+    cursor: pointer;
+}
+
+.sidebar-paired-group-header {
+    padding: var(--spacing-xs) 0;
+    background-color: var(--vscode-editor-background);
+}
+
+/* Expandable content wrapper */
+.paired-group-content {
+    overflow: visible;
+}
+
+/*
+ * Collapsed state: stack cards like a deck, with the second card
+ * peeking out slightly behind and below the first card (3D stack).
+ */
+.sidebar-paired-group-container.collapsed .device-list {
+    position: relative;
+    padding-bottom: 10px;
+    overflow: visible;
+}
+
+.sidebar-paired-group-container.collapsed .device-item:first-child {
+    position: relative;
+    z-index: 2;
+    overflow: visible;
+}
+
+.sidebar-paired-group-container .device-item:has(.dropdown-content.show) {
+    z-index: 1000;
+}
+
+.sidebar-paired-group-container.collapsed .device-item:last-child {
+    position: absolute;
+    top: 6px;
+    left: calc(var(--spacing-sm) + 4px);
+    right: calc(var(--spacing-sm) - 4px);
+    z-index: 1;
+    opacity: 0.5;
+}
+
+/* Hide actions when collapsed */
+.sidebar-paired-group-container.collapsed .sidebar-paired-group-actions {
+    display: none;
+}
+
+/* Expanded state */
+.sidebar-paired-group-container:not(.collapsed) {
+    cursor: pointer;
+}
+
+.sidebar-paired-group-container .device-list {
+    padding: 0;
+    margin: 0;
+}
+
+.sidebar-paired-group-container .device-item {
+    margin: var(--spacing-xs) var(--spacing-sm);
+    border-left-color: var(--hp-electric-blue);
+}
+
+.sidebar-paired-group-actions {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: var(--spacing-xs);
+    padding: var(--spacing-xs) var(--spacing-sm) var(--spacing-sm);
+}
+
+.sidebar-paired-group-actions .btn-block {
+    width: 100%;
+}
+
+.btn-link {
+    background: none;
+    border: none;
+    cursor: pointer;
+    color: var(--vscode-textLink-foreground);
+    font-size: 0.85em;
+    padding: 2px var(--spacing-xs);
+}
+
+.btn-link:hover {
+    color: var(--vscode-textLink-activeForeground);
+    text-decoration: underline;
+}
+
 /* Quick Links styles */
 .quick-links-root {
     flex: 0 0 auto;

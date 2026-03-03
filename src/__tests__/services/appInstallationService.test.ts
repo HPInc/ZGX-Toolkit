@@ -217,7 +217,9 @@ Host 192.168.1.100
 
     describe('Password Handling in SSH Commands', () => {
         it('should pass password to sudo commands via stdin', async () => {
-            const mockWrite = jest.fn();
+            const mockWrite = jest.fn((data: string, callback: any) => {
+                callback(undefined);
+            });
             const mockStream: any = {
                 on: jest.fn((event: string, cb: any) => {
                     if (event === 'close') {
@@ -246,60 +248,14 @@ Host 192.168.1.100
             mockSSHClient.end = jest.fn() as any;
 
             const password = 'test-password';
-            await (service as any).executeSSHCommand(
-                mockDevice,
-                'sudo -S whoami',
-                'test-app',
-                password,
-                10
-            );
+            const result = await service.validatePassword(mockDevice, password);
 
             // Verify password was written to stdin
             expect(mockWrite).toHaveBeenCalledWith(
                 password + '\n',
                 expect.any(Function)
             );
-        });
-
-        it('should not write password for non-sudo commands', async () => {
-            const mockWrite = jest.fn();
-            const mockStream: any = {
-                on: jest.fn((event: string, cb: any) => {
-                    if (event === 'close') {
-                        setTimeout(() => cb(0), 0);
-                    }
-                    return mockStream;
-                }),
-                stderr: {
-                    on: jest.fn().mockReturnThis(),
-                },
-                write: mockWrite,
-                end: jest.fn(),
-            };
-
-            (mockSSHClient.on as any) = jest.fn((event: string, callback: any) => {
-                if (event === 'ready') {
-                    setTimeout(() => callback(), 0);
-                }
-                return mockSSHClient;
-            });
-
-            (mockSSHClient.exec as any) = jest.fn((command: string, callback: any) => {
-                callback(undefined, mockStream);
-            });
-
-            mockSSHClient.end = jest.fn() as any;
-
-            await (service as any).executeSSHCommand(
-                mockDevice,
-                'echo "hello"',
-                'test-app',
-                'test-password',
-                10
-            );
-
-            // Password should NOT be written for non-sudo commands
-            expect(mockWrite).not.toHaveBeenCalled();
+            expect(result).toBe(true);
         });
     });
 

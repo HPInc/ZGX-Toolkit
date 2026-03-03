@@ -6,23 +6,23 @@
 /**
  * Error overlay widget component
  * Provides a reusable error overlay that can be displayed on top of any view.
- * 
- * This script acquires the VS Code API and exposes it as window.vscodeApi for other scripts.
+ * Extends the BaseOverlay system for consistency with other overlays.
+ * Requires baseOverlay.js to be loaded first.
  */
 
 (function() {
-    // Acquire VS Code API if not already acquired
-    if (!window.vscodeApi) {
-        try {
-            window.vscodeApi = acquireVsCodeApi();
-        } catch (error) {
-            console.error('Failed to acquire VS Code API. It may have already been acquired by another script.', error);
-            throw new Error('VS Code API already acquired. Error overlay script must load first.');
-        }
+    if (!window.BaseOverlay) {
+        console.error('BaseOverlay not found. Make sure baseOverlay.js is loaded before errorOverlay.js.');
+        throw new Error('BaseOverlay is required for error overlay functionality.');
     }
+    
     const vscode = window.vscodeApi;
+    
+    const BACKDROP_ID = 'error-overlay-backdrop';
+    const TEMPLATE_ID = 'error-overlay-template';
 
     let closeCallback = null;
+    let secondaryCallback = null;
 
     /**
      * Show error overlay when device health check fails or other errors occur.
@@ -31,39 +31,54 @@
      * @param {string} errorTitle - The main error title
      * @param {string} errorDetails - Additional details about the error
      * @param {string} error - Optional technical error message
-     * @param {function} onClose - Optional callback to handle close action. If not provided, sends 'close-error-overlay' message.
+     * @param {function|string} onClose - Optional callback to handle close action. Can be a function or a message type string. If not provided, sends 'close-error-overlay' message.
+     * @param {string} buttonText - Optional custom text for the close button. Defaults to 'Return to Device Manager'.
+     * @param {object} secondaryButton - Optional secondary button config: { text: string, onClick: function|string }
      */
-    window.showErrorOverlay = function(errorTitle, errorDetails, error, onClose) {
-        // Remove any existing overlay first
-        const existingBackdrop = document.getElementById('error-overlay-backdrop');
-        if (existingBackdrop) {
-            existingBackdrop.remove();
-            // Clear any existing callback from previous overlay
-            closeCallback = null;
-        }
-        
-        // Store the close callback for this overlay
+    window.showErrorOverlay = function(errorTitle, errorDetails, error, onClose, buttonText, secondaryButton) {
+        // Store callbacks
         closeCallback = onClose;
+        secondaryCallback = secondaryButton ? secondaryButton.onClick : null;
 
-        // Get the template element
-        const template = document.getElementById('error-overlay-template');
-        if (!template) {
-            console.error('Error overlay template not found. Make sure errorOverlay.html is loaded.');
-            return;
-        }
+        // Use unified overlay system
+        window.BaseOverlay.show(TEMPLATE_ID, {
+            backdropId: BACKDROP_ID,
+            callbacks: { closeCallback, secondaryCallback },
+            
+            onSetupContent: function(overlayContent) {
+                setupErrorOverlayContent(overlayContent, errorTitle, errorDetails, error, buttonText, secondaryButton);
+            },
+            
+            onAttachEvents: function() {
+                attachErrorOverlayEvents();
+            }
+        });
+    };
 
-        // Clone the template content
-        const overlayContent = template.content.cloneNode(true);
-        
-        // Fill in the placeholders
-        const titleEl = overlayContent.getElementById('error-overlay-title');
-        const messageEl = overlayContent.getElementById('error-overlay-message');
-        const detailsTextEl = overlayContent.getElementById('error-overlay-details-text');
-        const detailsEl = overlayContent.getElementById('error-overlay-details');
+    /**
+     * Setup error overlay content
+     */
+    function setupErrorOverlayContent(overlayContent, errorTitle, errorDetails, error, buttonText, secondaryButton) {
+        const titleEl = overlayContent.querySelector('#error-overlay-title');
+        const messageEl = overlayContent.querySelector('#error-overlay-message');
+        const detailsTextEl = overlayContent.querySelector('#error-overlay-details-text');
+        const detailsEl = overlayContent.querySelector('#error-overlay-details');
+        const closeBtnEl = overlayContent.querySelector('#error-overlay-close-btn');
+        const secondaryBtnEl = overlayContent.querySelector('#error-overlay-secondary-btn');
         
         if (titleEl) {
             titleEl.textContent = errorTitle;
         }
+        if (closeBtnEl && buttonText) {
+            closeBtnEl.textContent = buttonText;
+        }
+        
+        // Configure secondary button if provided
+        if (secondaryButton && secondaryButton.text && secondaryButton.onClick && secondaryBtnEl) {
+            secondaryBtnEl.textContent = secondaryButton.text;
+            secondaryBtnEl.style.display = 'inline-block';
+        }
+        
         if (messageEl) {
             // Safely format markdown-style syntax while preventing XSS
             let formattedMessage = errorDetails
@@ -83,76 +98,98 @@
         if (detailsEl && !error) {
             detailsEl.style.display = 'none';
         }
+    }
 
-        // Append to body
-        document.body.appendChild(overlayContent);
-
-        // Attach event listeners to the actual DOM elements
-        const backdrop = document.getElementById('error-overlay-backdrop');
+    /**
+     * Attach error overlay event listeners
+     */
+    function attachErrorOverlayEvents() {
+        const backdrop = document.getElementById(BACKDROP_ID);
         const closeBtn = document.getElementById('error-overlay-close-btn');
+        const secondaryBtn = document.getElementById('error-overlay-secondary-btn');
 
         if (closeBtn) {
             closeBtn.addEventListener('click', handleErrorOverlayClose);
         }
         
-        // Prevent backdrop clicks from doing anything
-        if (backdrop) {
-            backdrop.addEventListener('click', preventBackdropClick);
-            backdrop.addEventListener('mousedown', stopEventPropagation);
-            backdrop.addEventListener('mouseup', stopEventPropagation);
-            backdrop.addEventListener('touchstart', stopEventPropagation);
-            backdrop.addEventListener('touchend', stopEventPropagation);
+        if (secondaryBtn && secondaryCallback) {
+            secondaryBtn.addEventListener('click', handleSecondaryButtonClick);
         }
-    };
+        
+        // Prevent backdrop clicks from closing
+        if (backdrop) {
+            backdrop.addEventListener('click', (e) => 
+                window.BaseOverlay.preventBackdropClick(e, BACKDROP_ID));
+            backdrop.addEventListener('mousedown', window.BaseOverlay.stopEventPropagation);
+            backdrop.addEventListener('mouseup', window.BaseOverlay.stopEventPropagation);
+            backdrop.addEventListener('touchstart', window.BaseOverlay.stopEventPropagation);
+            backdrop.addEventListener('touchend', window.BaseOverlay.stopEventPropagation);
+        }
+    }
 
     /**
      * Hide/remove the error overlay
      */
     window.hideErrorOverlay = function() {
-        const backdrop = document.getElementById('error-overlay-backdrop');
-        if (backdrop) {
-            backdrop.remove();
-        }
-        document.body.style.overflow = '';
+        window.BaseOverlay.hide(BACKDROP_ID);
         closeCallback = null;
+        secondaryCallback = null;
     };
 
     /**
-     * Prevent backdrop clicks from closing the overlay
-     */
-    function preventBackdropClick(event) {
-        if (event.target.id === 'error-overlay-backdrop') {
-            event.preventDefault();
-            event.stopPropagation();
-        }
-    }
-
-    /**
-     * Stop event propagation through the backdrop
-     */
-    function stopEventPropagation(event) {
-        event.stopPropagation();
-    }
-
-    /**
-     * Handle error overlay close action
+     * Handle error overlay close action (primary button)
      * Calls custom callback if provided, otherwise sends default 'close-error-overlay' message
      */
     function handleErrorOverlayClose() {
-        // Restore body scrolling before navigating away
-        document.body.style.overflow = '';
+        const shouldHideOverlay = !closeCallback || typeof closeCallback !== 'string' || closeCallback === 'close-error-overlay';
         
-        // Call custom close callback if provided, otherwise send default message
-        if (closeCallback && typeof closeCallback === 'function') {
-            closeCallback();
+        if (shouldHideOverlay) {
+            window.BaseOverlay.hide(BACKDROP_ID);
+        }
+        
+        // Handle close action based on callback type
+        if (closeCallback) {
+            if (typeof closeCallback === 'function') {
+                // Custom callback function
+                closeCallback();
+            } else if (typeof closeCallback === 'string') {
+                // Message type string - send directly
+                vscode.postMessage({ type: closeCallback });
+            }
         } else {
-            // Default behavior: navigate back to device manager
+            // Default behavior: send close message to backend
             vscode.postMessage({
                 type: 'close-error-overlay'
             });
         }
         
-        // Clear the callback
+        // Clear the callbacks
         closeCallback = null;
+        secondaryCallback = null;
+    }
+
+    /**
+     * Handle secondary button click
+     * Calls the secondary callback if provided
+     */
+    function handleSecondaryButtonClick() {
+        const shouldHideOverlay = typeof secondaryCallback === 'function';
+        
+        if (shouldHideOverlay) {
+            window.BaseOverlay.hide(BACKDROP_ID);
+        }
+        
+        if (secondaryCallback) {
+            if (typeof secondaryCallback === 'function') {
+                secondaryCallback();
+            } else if (typeof secondaryCallback === 'string') {
+                // Message type string - send directly for navigation
+                vscode.postMessage({ type: secondaryCallback });
+            }
+        }
+        
+        // Clear the callbacks
+        closeCallback = null;
+        secondaryCallback = null;
     }
 })();

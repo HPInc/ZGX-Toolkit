@@ -1,0 +1,58 @@
+<!--
+  Copyright ©2025 HP Development Company, L.P.
+  Licensed under the X11 License. See LICENSE file in the project root for details.
+-->
+
+<div class="pair-devices-container">
+    <div class="pair-devices-header">
+        <i class="codicon codicon-link"></i>
+        <h1>Pair Devices</h1>
+    </div>
+
+    <div class="pair-devices-card">
+        <div class="card-content">
+            <h2>Pair 2 Devices to Enable NVIDIA ConnectX Networking</h2>
+            <p class="card-description">Select any two available devices below to create the pairing. You'll need to connect them with a cable using the dedicated NVIDIA ConnectX QSFP port.</p>
+
+            {{#if noDevices}}
+            <div class="no-devices-message">
+                <p>No devices available for pairing.</p>
+                <p>No devices have been added yet.</p>
+            </div>
+            {{else}}
+            <div class="device-selection-section">
+                <div class="device-list" id="deviceList">
+                    {{#each devices}}
+                    <div class="device-item{{#if isPaired}} paired{{/if}}">
+                        <input type="checkbox" id="device-{{id}}" class="device-checkbox" value="{{id}}" data-device-name="{{name}}"{{#if isPaired}} disabled{{/if}}>
+                        <label for="device-{{id}}" class="device-label">
+                            <span class="device-name">{{name}}</span>
+                        </label>
+                        {{#if isPaired}}
+                        <span class="paired-badge" title="Unavailable for pairing. Device is already paired">
+                            <span class="paired-badge-text">Paired</span>
+                            <i class="codicon codicon-info"></i>
+                        </span>
+                        {{/if}}
+                    </div>
+                    {{/each}}
+                </div>
+            </div>
+            {{/if}}
+
+            <div class="diagram-section">
+                <img src="{{zgxNanoDiagramUri}}" alt="ZGX Nano ConnectX Port Diagram" class="zgx-diagram" />
+            </div>
+
+            <div class="pair-devices-actions">
+                <div class="tip-section">
+                    <span class="tip-text"><strong>💡</strong>Tip: Each device can only belong to <strong>one</strong> pairing.</span>
+                </div>
+                <div class="action-buttons">
+                    <button class="btn btn-secondary" id="cancelBtn">Cancel</button>
+                    <button class="btn btn-primary" id="pairBtn" disabled>Pair Devices</button>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>

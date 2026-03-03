@@ -66,9 +66,21 @@ export abstract class BaseViewController implements IView {
     private static errorOverlayJs: string = '';
     private static errorOverlayHtml: string = '';
     
+    private static baseOverlayCss: string = '';
+    private static baseOverlayJs: string = '';
+    
+    private static passwordInputOverlayCss: string = '';
+    private static passwordInputOverlayJs: string = '';
+    private static passwordInputOverlayHtml: string = '';
+    
+    private static warningOverlayCss: string = '';
+    private static warningOverlayJs: string = '';
+    private static warningOverlayHtml: string = '';
+    
     private messageCallback?: (message: any) => void;
     private navigationCallback?: (viewId: string, params?: any, panel?: 'sidebar' | 'editor') => Promise<void>;
     private refreshCallback?: (params: any) => void;
+    private baseOverlayEnabled: boolean = false;
 
     public static viewId(): string {
         throw new Error('Subclasses must implement static viewId() method');
@@ -89,11 +101,31 @@ export abstract class BaseViewController implements IView {
             BaseViewController.commonCss = this.loadTemplate('./common/common.css', __dirname);
         }
         
+        // Load base overlay assets once for all views
+        if (!BaseViewController.baseOverlayCss) {
+            BaseViewController.baseOverlayCss = this.loadTemplate('./common/overlay/baseOverlay.css', __dirname);
+            BaseViewController.baseOverlayJs = this.loadTemplate('./common/overlay/baseOverlay.js', __dirname);
+        }
+        
         // Load error overlay assets once for all views
         if (!BaseViewController.errorOverlayCss) {
             BaseViewController.errorOverlayCss = this.loadTemplate('./common/errorOverlay/errorOverlay.css', __dirname);
             BaseViewController.errorOverlayJs = this.loadTemplate('./common/errorOverlay/errorOverlay.js', __dirname);
             BaseViewController.errorOverlayHtml = this.loadTemplate('./common/errorOverlay/errorOverlay.html', __dirname);
+        }
+        
+        // Load password input overlay assets once for all views
+        if (!BaseViewController.passwordInputOverlayCss) {
+            BaseViewController.passwordInputOverlayCss = this.loadTemplate('./common/passwordInputOverlay/passwordInputOverlay.css', __dirname);
+            BaseViewController.passwordInputOverlayJs = this.loadTemplate('./common/passwordInputOverlay/passwordInputOverlay.js', __dirname);
+            BaseViewController.passwordInputOverlayHtml = this.loadTemplate('./common/passwordInputOverlay/passwordInputOverlay.html', __dirname);
+        }
+        
+        // Load warning overlay assets once for all views
+        if (!BaseViewController.warningOverlayCss) {
+            BaseViewController.warningOverlayCss = this.loadTemplate('./common/warningOverlay/warningOverlay.css', __dirname);
+            BaseViewController.warningOverlayJs = this.loadTemplate('./common/warningOverlay/warningOverlay.js', __dirname);
+            BaseViewController.warningOverlayHtml = this.loadTemplate('./common/warningOverlay/warningOverlay.html', __dirname);
         }
     }
 
@@ -207,13 +239,15 @@ export abstract class BaseViewController implements IView {
      * @param title - The error title displayed in the overlay header
      * @param details - The error details/message displayed in the overlay body
      * @param error - The original error object or message
+     * @param buttonText - Optional custom text for the close button
      */
-    protected showErrorOverlay(title: string, details: string, error: string): void {
+    protected showErrorOverlay(title: string, details: string, error: string, buttonText?: string): void {
         this.sendMessageToWebview({
             type: 'show-error-overlay',
             errorTitle: title,
             errorDetails: details,
-            error: error
+            error: error,
+            buttonText: buttonText
         });
     }
 
@@ -243,16 +277,83 @@ export abstract class BaseViewController implements IView {
     }
 
     /**
+     * Ensure base overlay support is enabled for this view.
+     * Base overlay must be loaded before any specific overlay (error, password input, etc.)
+     * This method is idempotent - it will only add base overlay assets once.
+     */
+    protected ensureBaseOverlay(): void {
+        if (this.baseOverlayEnabled) {
+            return;
+        }
+        
+        this.styles = this.styles + '\n' + BaseViewController.baseOverlayCss;
+        this.clientScript = BaseViewController.baseOverlayJs + '\n' + this.clientScript;
+        
+        this.baseOverlayEnabled = true;
+    }
+
+    /**
      * Enable error overlay support for this view.
      * Call this in constructor after setting up template, styles, and clientScript.
      * This will append error overlay CSS/JS and the view should include getErrorOverlayHtml() in render output.
      */
     protected enableErrorOverlay(): void {
+        // Ensure base overlay is loaded first
+        this.ensureBaseOverlay();
+        
         // Append error overlay CSS to styles
         this.styles = this.styles + '\n' + BaseViewController.errorOverlayCss;
         
-        // Prepend error overlay JS (must load first to acquire VS Code API)
-        this.clientScript = BaseViewController.errorOverlayJs + '\n' + this.clientScript;
+        // Append error overlay JS (after base overlay)
+        this.clientScript = this.clientScript + '\n' + BaseViewController.errorOverlayJs;
+    }
+
+    /**
+     * Enable password input overlay support for this view.
+     * Call this in constructor after setting up template, styles, and clientScript.
+     * This will append password input overlay CSS/JS and the view should include getPasswordInputOverlayHtml() in render output.
+     */
+    protected enablePasswordInputOverlay(): void {
+        // Ensure base overlay is loaded first
+        this.ensureBaseOverlay();
+        
+        // Append password input overlay CSS to styles
+        this.styles = this.styles + '\n' + BaseViewController.passwordInputOverlayCss;
+        
+        // Append password input overlay JS
+        this.clientScript = this.clientScript + '\n' + BaseViewController.passwordInputOverlayJs;
+    }
+
+    /**
+     * Get password input overlay HTML template to include in rendered output.
+     * Views that want password input overlay support should include this in their render output.
+     */
+    protected getPasswordInputOverlayHtml(): string {
+        return BaseViewController.passwordInputOverlayHtml;
+    }
+
+    /**
+     * Enable warning overlay support for this view.
+     * Call this in constructor after setting up template, styles, and clientScript.
+     * This will append warning overlay CSS/JS and the view should include getWarningOverlayHtml() in render output.
+     */
+    protected enableWarningOverlay(): void {
+        // Ensure base overlay is loaded first
+        this.ensureBaseOverlay();
+        
+        // Append warning overlay CSS to styles
+        this.styles = this.styles + '\n' + BaseViewController.warningOverlayCss;
+        
+        // Append warning overlay JS (after base overlay)
+        this.clientScript = this.clientScript + '\n' + BaseViewController.warningOverlayJs;
+    }
+
+    /**
+     * Get warning overlay HTML template to include in rendered output.
+     * Views that want warning overlay support should include this in their render output.
+     */
+    protected getWarningOverlayHtml(): string {
+        return BaseViewController.warningOverlayHtml;
     }
 
     /**

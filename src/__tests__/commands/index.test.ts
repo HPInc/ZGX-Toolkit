@@ -12,18 +12,23 @@ import { registerCommands, setCommandContext } from '../../commands/index';
 import { logger, Logger } from '../../utils/logger';
 import { telemetryService } from '../../services/telemetryService';
 import { configService } from '../../services/configService';
+import { connectxGroupService } from '../../services/connectxGroupService';
 import { COMMANDS } from '../../constants/commands';
 import { LogLevel } from '../../types/logger';
 import { TelemetryEventType } from '../../types/telemetry';
+import { ZgxToolkitProvider } from '../../providers';
 
 // Mock VS Code API
 jest.mock('vscode');
 jest.mock('../../utils/logger');
 jest.mock('../../services/telemetryService');
 jest.mock('../../services/configService');
+jest.mock('../../services/connectxGroupService');
+jest.mock('../../providers');
 
 describe('Command Handlers', () => {
   let mockContext: vscode.ExtensionContext;
+  let mockProvider: ZgxToolkitProvider;
   let commandHandlers: Map<string, (...args: any[]) => any>;
 
   beforeEach(() => {
@@ -34,6 +39,11 @@ describe('Command Handlers', () => {
     mockContext = {
       subscriptions: [],
       extensionUri: vscode.Uri.file('/mock/extension/path'),
+    } as any;
+
+    // Create mock provider
+    mockProvider = {
+      openInEditor: jest.fn().mockResolvedValue(undefined),
     } as any;
 
     // Mock registerCommand to capture handlers
@@ -90,6 +100,18 @@ describe('Command Handlers', () => {
 
     // Mock executeCommand
     (vscode.commands.executeCommand as jest.Mock).mockResolvedValue(undefined);
+
+    // Mock connectxGroupService methods
+    (connectxGroupService.getAllGroups as jest.Mock).mockResolvedValue([]);
+    (connectxGroupService.getGroupInfo as jest.Mock).mockResolvedValue(undefined);
+    (connectxGroupService.removeGroupAndUnconfigureNICs as jest.Mock).mockResolvedValue({ success: true });
+
+    // Mock showInputBox
+    if (!vscode.window.showInputBox) {
+      (vscode.window as any).showInputBox = jest.fn().mockResolvedValue(undefined);
+    } else {
+      (vscode.window.showInputBox as jest.Mock).mockResolvedValue(undefined);
+    }
   });
 
   afterEach(() => {
@@ -98,7 +120,7 @@ describe('Command Handlers', () => {
 
   describe('registerCommands', () => {
     it('should register all commands', () => {
-      registerCommands(mockContext);
+      registerCommands(mockContext, mockProvider);
 
       expect(vscode.commands.registerCommand).toHaveBeenCalledWith(
         COMMANDS.SET_LOG_LEVEL,
@@ -123,20 +145,20 @@ describe('Command Handlers', () => {
     });
 
     it('should add command disposables to subscriptions', () => {
-      registerCommands(mockContext);
+      registerCommands(mockContext, mockProvider);
 
       expect(mockContext.subscriptions.length).toBeGreaterThan(0);
     });
 
     it('should set command context', () => {
-      registerCommands(mockContext);
+      registerCommands(mockContext, mockProvider);
       expect(logger.debug).toHaveBeenCalledWith('Registering extension commands');
     });
   });
 
   describe('setLogLevelCommand', () => {
     beforeEach(() => {
-      registerCommands(mockContext);
+      registerCommands(mockContext, mockProvider);
     });
 
     it('should show QuickPick with log level options', async () => {
@@ -293,7 +315,7 @@ describe('Command Handlers', () => {
 
   describe('toggleTelemetryCommand', () => {
     beforeEach(() => {
-      registerCommands(mockContext);
+      registerCommands(mockContext, mockProvider);
     });
 
     it('should track command invocation', async () => {
@@ -403,7 +425,7 @@ describe('Command Handlers', () => {
 
   describe('showTelemetryStatusCommand', () => {
     beforeEach(() => {
-      registerCommands(mockContext);
+      registerCommands(mockContext, mockProvider);
     });
 
     it('should track command invocation', async () => {
@@ -582,7 +604,7 @@ describe('Command Handlers', () => {
 
   describe('openLog', () => {
     beforeEach(() => {
-      registerCommands(mockContext);
+      registerCommands(mockContext, mockProvider);
     });
 
     it('should open log file when path is available', async () => {
@@ -638,7 +660,7 @@ describe('Command Handlers', () => {
 
   describe('showLogLocation', () => {
     beforeEach(() => {
-      registerCommands(mockContext);
+      registerCommands(mockContext, mockProvider);
     });
 
     it('should show information message with log file location', async () => {
@@ -724,10 +746,423 @@ describe('Command Handlers', () => {
       setCommandContext(testContext);
       
       // Register commands after setting context
-      registerCommands(testContext);
+      registerCommands(testContext, mockProvider);
 
       // Verify context was set by checking that commands were registered
       expect(vscode.commands.registerCommand).toHaveBeenCalled();
+    });
+  });
+
+  describe('unpairDevicesCommand', () => {
+    const mockGroups = [
+      { id: 'group-1', deviceIds: ['dev-1', 'dev-2'], createdAt: '2025-01-01', updatedAt: '2025-01-01' },
+      { id: 'group-2', deviceIds: ['dev-3', 'dev-4'], createdAt: '2025-01-02', updatedAt: '2025-01-02' },
+    ];
+
+    const mockGroupInfos = [
+      {
+        group: mockGroups[0],
+        devices: [
+          { id: 'dev-1', name: 'Device A' },
+          { id: 'dev-2', name: 'Device B' },
+        ],
+      },
+      {
+        group: mockGroups[1],
+        devices: [
+          { id: 'dev-3', name: 'Device C' },
+          { id: 'dev-4', name: 'Device D' },
+        ],
+      },
+    ];
+
+    beforeEach(() => {
+      registerCommands(mockContext, mockProvider);
+    });
+
+    it('should track command invocation', async () => {
+      const handler = commandHandlers.get(COMMANDS.UNPAIR_DEVICES);
+      await handler?.();
+
+      expect(telemetryService.trackEvent).toHaveBeenCalledWith({
+        eventType: TelemetryEventType.Command,
+        action: 'execute',
+        properties: {
+          commandId: COMMANDS.UNPAIR_DEVICES,
+        },
+      });
+      expect(logger.debug).toHaveBeenCalledWith('unpairDevices command invoked');
+    });
+
+    it('should show info message when no groups exist', async () => {
+      (connectxGroupService.getAllGroups as jest.Mock).mockResolvedValue([]);
+
+      const handler = commandHandlers.get(COMMANDS.UNPAIR_DEVICES);
+      await handler?.();
+
+      expect(vscode.window.showInformationMessage).toHaveBeenCalledWith(
+        'ZGX Toolkit: No paired device groups found.'
+      );
+    });
+
+    it('should show info message when allGroups is null', async () => {
+      (connectxGroupService.getAllGroups as jest.Mock).mockResolvedValue(null);
+
+      const handler = commandHandlers.get(COMMANDS.UNPAIR_DEVICES);
+      await handler?.();
+
+      expect(vscode.window.showInformationMessage).toHaveBeenCalledWith(
+        'ZGX Toolkit: No paired device groups found.'
+      );
+    });
+
+    it('should show info message when all group infos are invalid', async () => {
+      (connectxGroupService.getAllGroups as jest.Mock).mockResolvedValue(mockGroups);
+      (connectxGroupService.getGroupInfo as jest.Mock).mockResolvedValue(undefined);
+
+      const handler = commandHandlers.get(COMMANDS.UNPAIR_DEVICES);
+      await handler?.();
+
+      expect(vscode.window.showInformationMessage).toHaveBeenCalledWith(
+        'ZGX Toolkit: No valid paired device groups found.'
+      );
+    });
+
+    it('should show QuickPick with group device names', async () => {
+      (connectxGroupService.getAllGroups as jest.Mock).mockResolvedValue(mockGroups);
+      (connectxGroupService.getGroupInfo as jest.Mock)
+        .mockResolvedValueOnce(mockGroupInfos[0])
+        .mockResolvedValueOnce(mockGroupInfos[1]);
+
+      const handler = commandHandlers.get(COMMANDS.UNPAIR_DEVICES);
+      await handler?.();
+
+      expect(vscode.window.showQuickPick).toHaveBeenCalledWith(
+        [
+          { label: '[Device A, Device B]', groupId: 'group-1' },
+          { label: '[Device C, Device D]', groupId: 'group-2' },
+        ],
+        {
+          placeHolder: 'Select a device group to unpair',
+          title: 'ZGX Toolkit: Unpair Devices',
+        }
+      );
+    });
+
+    it('should do nothing when group selection is cancelled', async () => {
+      (connectxGroupService.getAllGroups as jest.Mock).mockResolvedValue(mockGroups);
+      (connectxGroupService.getGroupInfo as jest.Mock)
+        .mockResolvedValueOnce(mockGroupInfos[0])
+        .mockResolvedValueOnce(mockGroupInfos[1]);
+      (vscode.window.showQuickPick as jest.Mock).mockResolvedValue(undefined);
+
+      const handler = commandHandlers.get(COMMANDS.UNPAIR_DEVICES);
+      await handler?.();
+
+      expect(logger.debug).toHaveBeenCalledWith('Unpair devices selection cancelled');
+      expect(mockProvider.openInEditor).not.toHaveBeenCalled();
+    });
+
+    it('should open unpair devices view in editor after group selection', async () => {
+      (connectxGroupService.getAllGroups as jest.Mock).mockResolvedValue([mockGroups[0]]);
+      (connectxGroupService.getGroupInfo as jest.Mock).mockResolvedValue(mockGroupInfos[0]);
+      (vscode.window.showQuickPick as jest.Mock).mockResolvedValue({
+        label: '[Device A, Device B]',
+        groupId: 'group-1',
+      });
+
+      const handler = commandHandlers.get(COMMANDS.UNPAIR_DEVICES);
+      await handler?.();
+
+      expect(mockProvider.openInEditor).toHaveBeenCalledWith(
+        'groups/unpairDevices',
+        { groupId: 'group-1' }
+      );
+      expect(logger.info).toHaveBeenCalledWith('Navigated to unpair devices view', { groupId: 'group-1' });
+    });
+
+    it('should handle errors gracefully', async () => {
+      const error = new Error('Service unavailable');
+      (connectxGroupService.getAllGroups as jest.Mock).mockRejectedValue(error);
+
+      const handler = commandHandlers.get(COMMANDS.UNPAIR_DEVICES);
+      await handler?.();
+
+      expect(logger.error).toHaveBeenCalledWith('Failed to unpair devices', { error });
+      expect(vscode.window.showErrorMessage).toHaveBeenCalledWith(
+        'Failed to unpair devices: Service unavailable'
+      );
+      expect(telemetryService.trackError).toHaveBeenCalledWith({
+        eventType: 'error',
+        error,
+        context: 'unpair-devices',
+      });
+    });
+
+    it('should handle non-Error exceptions', async () => {
+      (connectxGroupService.getAllGroups as jest.Mock).mockRejectedValue('string error');
+
+      const handler = commandHandlers.get(COMMANDS.UNPAIR_DEVICES);
+      await handler?.();
+
+      expect(vscode.window.showErrorMessage).toHaveBeenCalledWith(
+        'Failed to unpair devices: Unknown error'
+      );
+    });
+
+    it('should handle openInEditor failure', async () => {
+      const error = new Error('Editor panel failed');
+      (connectxGroupService.getAllGroups as jest.Mock).mockResolvedValue([mockGroups[0]]);
+      (connectxGroupService.getGroupInfo as jest.Mock).mockResolvedValue(mockGroupInfos[0]);
+      (vscode.window.showQuickPick as jest.Mock).mockResolvedValue({
+        label: '[Device A, Device B]',
+        groupId: 'group-1',
+      });
+      (mockProvider.openInEditor as jest.Mock).mockRejectedValue(error);
+
+      const handler = commandHandlers.get(COMMANDS.UNPAIR_DEVICES);
+      await handler?.();
+
+      expect(logger.error).toHaveBeenCalledWith('Failed to unpair devices', { error });
+      expect(vscode.window.showErrorMessage).toHaveBeenCalledWith(
+        'Failed to unpair devices: Editor panel failed'
+      );
+      expect(telemetryService.trackError).toHaveBeenCalledWith({
+        eventType: 'error',
+        error,
+        context: 'unpair-devices',
+      });
+    });
+
+    it('should filter out undefined group infos from the list', async () => {
+      (connectxGroupService.getAllGroups as jest.Mock).mockResolvedValue(mockGroups);
+      (connectxGroupService.getGroupInfo as jest.Mock)
+        .mockResolvedValueOnce(mockGroupInfos[0])
+        .mockResolvedValueOnce(undefined);
+
+      const handler = commandHandlers.get(COMMANDS.UNPAIR_DEVICES);
+      await handler?.();
+
+      expect(vscode.window.showQuickPick).toHaveBeenCalledWith(
+        [{ label: '[Device A, Device B]', groupId: 'group-1' }],
+        expect.any(Object)
+      );
+    });
+  });
+
+  describe('pairDetailsCommand', () => {
+    const mockGroups = [
+      { id: 'group-1', deviceIds: ['dev-1', 'dev-2'], createdAt: '2026-01-01', updatedAt: '2026-01-01' },
+      { id: 'group-2', deviceIds: ['dev-3', 'dev-4'], createdAt: '2026-01-02', updatedAt: '2026-01-02' },
+    ];
+
+    const mockGroupInfos = [
+      {
+        group: mockGroups[0],
+        devices: [
+          { id: 'dev-1', name: 'Device A' },
+          { id: 'dev-2', name: 'Device B' },
+        ],
+      },
+      {
+        group: mockGroups[1],
+        devices: [
+          { id: 'dev-3', name: 'Device C' },
+          { id: 'dev-4', name: 'Device D' },
+        ],
+      },
+    ];
+
+    beforeEach(() => {
+      registerCommands(mockContext, mockProvider);
+    });
+
+    it('should track command invocation', async () => {
+      const handler = commandHandlers.get(COMMANDS.PAIR_DETAILS);
+      await handler?.();
+
+      expect(telemetryService.trackEvent).toHaveBeenCalledWith({
+        eventType: TelemetryEventType.Command,
+        action: 'execute',
+        properties: {
+          commandId: COMMANDS.PAIR_DETAILS,
+        },
+      });
+      expect(logger.debug).toHaveBeenCalledWith('pairDetails command invoked');
+    });
+
+    it('should show info message when no groups exist', async () => {
+      (connectxGroupService.getAllGroups as jest.Mock).mockResolvedValue([]);
+
+      const handler = commandHandlers.get(COMMANDS.PAIR_DETAILS);
+      await handler?.();
+
+      expect(vscode.window.showInformationMessage).toHaveBeenCalledWith(
+        'ZGX Toolkit: No paired device groups found.'
+      );
+    });
+
+    it('should show info message when allGroups is null', async () => {
+      (connectxGroupService.getAllGroups as jest.Mock).mockResolvedValue(null);
+
+      const handler = commandHandlers.get(COMMANDS.PAIR_DETAILS);
+      await handler?.();
+
+      expect(vscode.window.showInformationMessage).toHaveBeenCalledWith(
+        'ZGX Toolkit: No paired device groups found.'
+      );
+    });
+
+    it('should show info message when all group infos are invalid', async () => {
+      (connectxGroupService.getAllGroups as jest.Mock).mockResolvedValue(mockGroups);
+      (connectxGroupService.getGroupInfo as jest.Mock).mockResolvedValue(undefined);
+
+      const handler = commandHandlers.get(COMMANDS.PAIR_DETAILS);
+      await handler?.();
+
+      expect(vscode.window.showInformationMessage).toHaveBeenCalledWith(
+        'ZGX Toolkit: No valid paired device groups found.'
+      );
+    });
+
+    it('should show QuickPick with group device names', async () => {
+      (connectxGroupService.getAllGroups as jest.Mock).mockResolvedValue(mockGroups);
+      (connectxGroupService.getGroupInfo as jest.Mock)
+        .mockResolvedValueOnce(mockGroupInfos[0])
+        .mockResolvedValueOnce(mockGroupInfos[1]);
+
+      const handler = commandHandlers.get(COMMANDS.PAIR_DETAILS);
+      await handler?.();
+
+      expect(vscode.window.showQuickPick).toHaveBeenCalledWith(
+        [
+          { label: '[Device A, Device B]', groupId: 'group-1' },
+          { label: '[Device C, Device D]', groupId: 'group-2' },
+        ],
+        {
+          placeHolder: 'Select a device group to view details',
+          title: 'ZGX Toolkit: Pairing Details',
+        }
+      );
+    });
+
+    it('should do nothing when group selection is cancelled', async () => {
+      (connectxGroupService.getAllGroups as jest.Mock).mockResolvedValue(mockGroups);
+      (connectxGroupService.getGroupInfo as jest.Mock)
+        .mockResolvedValueOnce(mockGroupInfos[0])
+        .mockResolvedValueOnce(mockGroupInfos[1]);
+      (vscode.window.showQuickPick as jest.Mock).mockResolvedValue(undefined);
+
+      const handler = commandHandlers.get(COMMANDS.PAIR_DETAILS);
+      await handler?.();
+
+      expect(logger.debug).toHaveBeenCalledWith('Pair details selection cancelled');
+      expect(mockProvider.openInEditor).not.toHaveBeenCalled();
+    });
+
+    it('should open pair details view in editor after group selection', async () => {
+      (connectxGroupService.getAllGroups as jest.Mock).mockResolvedValue([mockGroups[0]]);
+      (connectxGroupService.getGroupInfo as jest.Mock).mockResolvedValue(mockGroupInfos[0]);
+      (vscode.window.showQuickPick as jest.Mock).mockResolvedValue({
+        label: '[Device A, Device B]',
+        groupId: 'group-1',
+      });
+
+      const handler = commandHandlers.get(COMMANDS.PAIR_DETAILS);
+      await handler?.();
+
+      expect(mockProvider.openInEditor).toHaveBeenCalledWith(
+        'groups/pairDetails',
+        { groupId: 'group-1' }
+      );
+      expect(logger.info).toHaveBeenCalledWith('Navigated to pair details view', { groupId: 'group-1' });
+    });
+
+    it('should filter out undefined group infos from the list', async () => {
+      (connectxGroupService.getAllGroups as jest.Mock).mockResolvedValue(mockGroups);
+      (connectxGroupService.getGroupInfo as jest.Mock)
+        .mockResolvedValueOnce(mockGroupInfos[0])
+        .mockResolvedValueOnce(undefined);
+
+      const handler = commandHandlers.get(COMMANDS.PAIR_DETAILS);
+      await handler?.();
+
+      expect(vscode.window.showQuickPick).toHaveBeenCalledWith(
+        [{ label: '[Device A, Device B]', groupId: 'group-1' }],
+        expect.any(Object)
+      );
+    });
+
+    it('should handle errors gracefully', async () => {
+      const error = new Error('Service unavailable');
+      (connectxGroupService.getAllGroups as jest.Mock).mockRejectedValue(error);
+
+      const handler = commandHandlers.get(COMMANDS.PAIR_DETAILS);
+      await handler?.();
+
+      expect(logger.error).toHaveBeenCalledWith('Failed to show pair details', { error });
+      expect(vscode.window.showErrorMessage).toHaveBeenCalledWith(
+        'Failed to show pairing details: Service unavailable'
+      );
+      expect(telemetryService.trackError).toHaveBeenCalledWith({
+        eventType: 'error',
+        error,
+        context: 'pair-details',
+      });
+    });
+
+    it('should handle non-Error exceptions', async () => {
+      (connectxGroupService.getAllGroups as jest.Mock).mockRejectedValue('string error');
+
+      const handler = commandHandlers.get(COMMANDS.PAIR_DETAILS);
+      await handler?.();
+
+      expect(vscode.window.showErrorMessage).toHaveBeenCalledWith(
+        'Failed to show pairing details: Unknown error'
+      );
+    });
+
+    it('should handle openInEditor failure', async () => {
+      const error = new Error('Editor panel failed');
+      (connectxGroupService.getAllGroups as jest.Mock).mockResolvedValue([mockGroups[0]]);
+      (connectxGroupService.getGroupInfo as jest.Mock).mockResolvedValue(mockGroupInfos[0]);
+      (vscode.window.showQuickPick as jest.Mock).mockResolvedValue({
+        label: '[Device A, Device B]',
+        groupId: 'group-1',
+      });
+      (mockProvider.openInEditor as jest.Mock).mockRejectedValue(error);
+
+      const handler = commandHandlers.get(COMMANDS.PAIR_DETAILS);
+      await handler?.();
+
+      expect(logger.error).toHaveBeenCalledWith('Failed to show pair details', { error });
+      expect(vscode.window.showErrorMessage).toHaveBeenCalledWith(
+        'Failed to show pairing details: Editor panel failed'
+      );
+      expect(telemetryService.trackError).toHaveBeenCalledWith({
+        eventType: 'error',
+        error,
+        context: 'pair-details',
+      });
+    });
+
+    it('should work with a single group without showing QuickPick ambiguity', async () => {
+      (connectxGroupService.getAllGroups as jest.Mock).mockResolvedValue([mockGroups[0]]);
+      (connectxGroupService.getGroupInfo as jest.Mock).mockResolvedValue(mockGroupInfos[0]);
+      (vscode.window.showQuickPick as jest.Mock).mockResolvedValue({
+        label: '[Device A, Device B]',
+        groupId: 'group-1',
+      });
+
+      const handler = commandHandlers.get(COMMANDS.PAIR_DETAILS);
+      await handler?.();
+
+      expect(vscode.window.showQuickPick).toHaveBeenCalledWith(
+        [{ label: '[Device A, Device B]', groupId: 'group-1' }],
+        expect.objectContaining({
+          placeHolder: 'Select a device group to view details',
+        })
+      );
     });
   });
 });

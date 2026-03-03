@@ -13,18 +13,20 @@
  * Combines legacy and new commands for easy access.
  */
 export const COMMANDS = {
-  /** Test device discovery functionality */
-  TEST_DISCOVERY: 'zgxToolkit.testDiscovery',
-  /** Open the log file in an editor */
-  OPEN_LOG: 'zgxToolkit.openLog',
-  /** Show the log file location in file explorer */
-  SHOW_LOG_LOCATION: 'zgxToolkit.showLogLocation',
-  /** Set the log level for the extension */
-  SET_LOG_LEVEL: 'zgxToolkit.setLogLevel',
-  /** Toggle telemetry on/off */
-  TOGGLE_TELEMETRY: 'zgxToolkit.toggleTelemetry',
-  /** Show current telemetry status */
-  SHOW_TELEMETRY_STATUS: 'zgxToolkit.showTelemetryStatus',
+    /** Open the log file in an editor */
+    OPEN_LOG: 'zgxToolkit.openLog',
+    /** Show the log file location in file explorer */
+    SHOW_LOG_LOCATION: 'zgxToolkit.showLogLocation',
+    /** Set the log level for the extension */
+    SET_LOG_LEVEL: 'zgxToolkit.setLogLevel',
+    /** Toggle telemetry on/off */
+    TOGGLE_TELEMETRY: 'zgxToolkit.toggleTelemetry',
+    /** Show current telemetry status */
+    SHOW_TELEMETRY_STATUS: 'zgxToolkit.showTelemetryStatus',
+    /** Unpair devices by removing a ConnectX group */
+    UNPAIR_DEVICES: 'zgxToolkit.unpairDevices',
+    /** Show details of paired devices and their ConnectX NICs */
+    PAIR_DETAILS: 'zgxToolkit.pairDetails',
 } as const;
 
 /**

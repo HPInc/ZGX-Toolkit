@@ -9,9 +9,11 @@ import { Logger } from '../../../utils/logger';
 import { ITelemetryService, TelemetryEventType } from '../../../types/telemetry';
 import { Message } from '../../../types/messages';
 import { Device } from '../../../types/devices';
+import { ConnectXGroup } from '../../../types/connectxGroup';
 import { SetupOptionsViewController } from '../../setup/options/setupOptionsViewController';
 import { AppSelectionViewController } from '../../apps/selection/appSelectionViewController';
-import { DeviceDiscoveryService, DeviceService } from '../../../services';
+import { DeviceDiscoveryService, DeviceService, ConnectXGroupService } from '../../../services';
+import { PairDetailsViewController } from '../../groups/pairDetails/pairDetailsViewController';
 
 /**
  * device Manager View - Full editor view for managing devices.
@@ -19,7 +21,8 @@ import { DeviceDiscoveryService, DeviceService } from '../../../services';
  * Subscribes to device store updates to automatically refresh when devices change.
  */
 export class DeviceManagerViewController extends BaseViewController {
-    private unsubscribe?: () => void;
+    private deviceUnsubscribe?: () => void;
+    private groupUnsubscribe?: () => void;
     private editingDeviceId?: string;
     private showForm: boolean = false;
     private lastRenderParams?: { showAddForm?: boolean; editDeviceId?: string };
@@ -33,39 +36,65 @@ export class DeviceManagerViewController extends BaseViewController {
         telemetry: ITelemetryService;
         deviceService: DeviceService;
         deviceDiscoveryService: DeviceDiscoveryService;
+        connectxGroupService: ConnectXGroupService;
     }) {
         super(deps.logger, deps.telemetry);
 
         this.deviceService = deps.deviceService;
         this.deviceDiscoveryService = deps.deviceDiscoveryService;
+        this.connectxGroupService = deps.connectxGroupService;
 
         this.template = this.loadTemplate('./deviceManager.html', __dirname);
         this.styles = this.loadTemplate('./deviceManager.css', __dirname);
         this.clientScript = this.loadTemplate('./deviceManager.js', __dirname);
 
+        // Enable warning overlay support for paired device deletion warnings
+        this.enableWarningOverlay();
+
+        // Enable password input overlay for sudo password prompt during paired device deletion
+        this.enablePasswordInputOverlay();
+
         // Subscribe to device updates
-        this.unsubscribe = this.deviceService.subscribe(() => {
+        this.deviceUnsubscribe = this.deviceService.subscribe(() => {
             this.logger.trace('Device store updated, refreshing device manager view');
             // Call refresh with last render params to update the webview
             this.refresh(this.lastRenderParams).catch(error => {
                 this.logger.error('Failed to refresh device manager view after store update', { error });
             });
         });
+
+        // Subscribe to group updates
+        this.groupUnsubscribe = this.connectxGroupService.subscribe(() => {
+            this.logger.trace('Group store updated, refreshing device manager view');
+            this.refresh(this.lastRenderParams).catch(error => {
+                this.logger.error('Failed to refresh device manager view after group store update', { error });
+            });
+        });
     }
 
     private deviceService: DeviceService;
     private deviceDiscoveryService: DeviceDiscoveryService;
+    private connectxGroupService: ConnectXGroupService;
 
-    async render(params?: { showAddForm?: boolean; editDeviceId?: string }, nonce?: string): Promise<string> {
+    async render(params?: { showAddForm?: boolean; editDeviceId?: string; showDeleteWarningForDeviceId?: string; deleteWarningDeviceName?: string; deleteWarningGroupId?: string }, nonce?: string): Promise<string> {
         this.logger.debug('Rendering device manager view', params);
 
-        // Store params for later use in refresh
-        this.lastRenderParams = params;
+        const { showDeleteWarningForDeviceId, deleteWarningDeviceName, deleteWarningGroupId, ...persistParams } = params || {};
+        this.lastRenderParams = persistParams;
 
-        const devices = await this.deviceService.getAllDevices();  
+        const devices = await this.deviceService.getAllDevices();
+        const groups = await this.connectxGroupService.getAllGroups();
 
-        // Add DNS registration status to each device based on dnsInstanceName property
-        const devicesWithDnsStatus = devices.map((device) => {
+        // Create a map of device IDs to their group for quick lookup
+        const deviceToGroupMap = new Map<string, ConnectXGroup>();
+        for (const group of groups) {
+            for (const deviceId of group.deviceIds) {
+                deviceToGroupMap.set(deviceId, group);
+            }
+        }
+
+        // Add DNS registration status and pairing info to each device
+        const devicesWithStatus = devices.map((device) => {
             const needsDnsRegistration = device.isSetup && 
                                         device.useKeyAuth && 
                                         device.keySetup?.connectionTested &&
@@ -73,11 +102,36 @@ export class DeviceManagerViewController extends BaseViewController {
                                          device.dnsInstanceName === null ||
                                          device.dnsInstanceName.trim().length === 0);
             
+            const group = deviceToGroupMap.get(device.id);
+            
             return {
                 ...device,
-                needsDnsRegistration
+                needsDnsRegistration,
+                isPaired: !!group,
+                groupId: group?.id
             };
         });
+
+        // Separate devices into paired groups and unpaired devices
+        const groupMap = new Map<string, typeof devicesWithStatus>();
+        const unpairedDevices: typeof devicesWithStatus = [];
+
+        for (const device of devicesWithStatus) {
+            if (device.isPaired && device.groupId) {
+                if (!groupMap.has(device.groupId)) {
+                    groupMap.set(device.groupId, []);
+                }
+                groupMap.get(device.groupId)!.push(device);
+            } else {
+                unpairedDevices.push(device);
+            }
+        }
+
+        // Convert map to array
+        const pairedGroups = Array.from(groupMap.entries()).map(([groupId, devices]) => ({
+            groupId,
+            devices
+        }));
         
         this.showForm = params?.showAddForm || devices.length === 0 || !!params?.editDeviceId;
         this.editingDeviceId = params?.editDeviceId;
@@ -88,7 +142,10 @@ export class DeviceManagerViewController extends BaseViewController {
         }
 
         const data = {
-            devices: devicesWithDnsStatus.length > 0 ? devicesWithDnsStatus : null,
+            devices: devicesWithStatus.length > 0 ? devicesWithStatus : null,
+            pairedGroups: pairedGroups.length > 0 ? pairedGroups : null,
+            unpairedDevices: unpairedDevices.length > 0 ? unpairedDevices : null,
+            hasPairedGroups: pairedGroups.length > 0,
             noDevices: devices.length === 0,
             hiddenFormButton: this.showForm,
             hiddenForm: !this.showForm,
@@ -116,7 +173,27 @@ export class DeviceManagerViewController extends BaseViewController {
             }
         });
 
-        return this.wrapHtml(html, nonce);
+        const result = this.wrapHtml(html + this.getWarningOverlayHtml() + this.getPasswordInputOverlayHtml(), nonce);
+
+        // If navigated here from sidebar to show delete warning, schedule the overlay message
+        // after the webview HTML is set (using setTimeout to allow DOM to render first)
+        if (showDeleteWarningForDeviceId && deleteWarningDeviceName && deleteWarningGroupId) {
+            this.logger.info('Scheduling paired delete warning overlay from sidebar delegation', {
+                deviceId: showDeleteWarningForDeviceId,
+                deviceName: deleteWarningDeviceName,
+                groupId: deleteWarningGroupId
+            });
+            setTimeout(() => {
+                this.sendMessageToWebview({
+                    type: 'show-paired-delete-warning',
+                    deviceId: showDeleteWarningForDeviceId,
+                    deviceName: deleteWarningDeviceName,
+                    groupId: deleteWarningGroupId
+                });
+            }, 100);
+        }
+
+        return result;
     }
 
     async handleMessage(message: Message): Promise<void> {
@@ -150,12 +227,38 @@ export class DeviceManagerViewController extends BaseViewController {
             case 'rediscover-device':
                 await this.rediscoverDevice(message.deviceId, message.dnsInstanceName, message.timeoutMs);
                 break;
+            case 'confirm-delete-paired-device':
+                await this.handleDeletePairedDevice(message.id, message.groupId);
+                break;
+            case 'password-submitted-for-delete':
+                await this.handlePasswordSubmittedForDelete(message.password, message.deviceId, message.groupId);
+                break;
+            case 'password-input-cancelled-for-delete':
+                this.logger.debug('Paired device deletion cancelled - password input dismissed', { id: message.deviceId });
+                break;
+            case 'pairing-details':
+                await this.viewPairingDetails(message.groupId);
+                break;
+            case 'unpair-devices':
+                await this.navigateToUnpairDevices(message.groupId);
+                break;
             case 'refresh':
                 this.refresh(this.lastRenderParams).catch(error => {
                     this.logger.error('Failed to refresh device manager view', { error });
                 });
                 break;
         }
+    }
+
+    private async viewPairingDetails(groupId: string): Promise<void> {
+        this.logger.debug('Navigating to pair details view', { groupId });
+        await this.navigateTo(PairDetailsViewController.viewId(), { groupId });
+    }
+
+    private async navigateToUnpairDevices(groupId: string): Promise<void> {
+        this.logger.debug('Navigating to unpair devices view', { groupId });
+        const { UnpairDevicesViewController } = await import('../../groups/unpairDevices/unpairDevicesViewController');
+        await this.navigateTo(UnpairDevicesViewController.viewId(), { groupId });
     }
 
     private async createDevice(data: any): Promise<void> {
@@ -204,6 +307,10 @@ export class DeviceManagerViewController extends BaseViewController {
         }
     }
 
+    /**
+     * Delete a device. If the device is part of a paired group, shows a warning overlay
+     * before proceeding. Otherwise, shows a standard confirmation dialog.
+     */
     private async deleteDevice(id: string): Promise<void> {
         this.logger.info('Deleting device', { id });
 
@@ -215,7 +322,20 @@ export class DeviceManagerViewController extends BaseViewController {
                 throw new Error(`device not found: ${id}`);
             }
 
-            // Show VS Code confirmation dialog
+            // Check if device is part of a paired group
+            const group = await this.connectxGroupService.getGroupForDevice(id);
+            if (group) {
+                this.logger.info('Device is part of a paired group, showing warning overlay', { id, groupId: group.id });
+                this.sendMessageToWebview({
+                    type: 'show-paired-delete-warning',
+                    deviceId: id,
+                    deviceName: device.name,
+                    groupId: group.id
+                });
+                return;
+            }
+
+            // Standard deletion: Show VS Code confirmation dialog
             const deviceName = device.name;
             const confirmation = await vscode.window.showWarningMessage(
                 `Are you sure you want to delete ${deviceName}?`,
@@ -237,6 +357,68 @@ export class DeviceManagerViewController extends BaseViewController {
         }
     }
 
+    /**
+     * Handle confirmed deletion of a paired device.
+     * Shows the password input overlay to prompt for sudo password before proceeding.
+     */
+    private async handleDeletePairedDevice(id: string, groupId: string): Promise<void> {
+        this.logger.info('User confirmed paired device deletion, prompting for password', { id, groupId });
+
+        // Send message to webview to show password input overlay
+        this.sendMessageToWebview({
+            type: 'show-password-input-for-delete',
+            deviceId: id,
+            groupId: groupId
+        });
+    }
+
+    /**
+     * Handle password submission for paired device deletion.
+     * Unconfigures ConnectX NICs for all devices in the group, removes the group,
+     * then deletes the device.
+     */
+    private async handlePasswordSubmittedForDelete(password: string, deviceId: string, groupId: string): Promise<void> {
+        this.logger.info('Password submitted for paired device deletion', { deviceId, groupId });
+
+        try {
+            const device = await this.deviceService.getDevice(deviceId);
+            if (!device) {
+                this.logger.error('device not found for paired deletion', { id: deviceId });
+                throw new Error(`device not found: ${deviceId}`);
+            }
+
+            // Unconfigure ConnectX NICs and remove the group
+            const unconfigureResult = await this.connectxGroupService.removeGroupAndUnconfigureNICs(groupId, password);
+            if (!unconfigureResult.success) {
+                // Abort device deletion — the group still exists in the store.
+                // Proceeding would leave an orphaned group referencing a deleted device.
+                this.logger.error('Failed to remove group during paired device deletion; aborting device delete to prevent orphaned group', { 
+                    id: deviceId, groupId, error: unconfigureResult.error 
+                });
+                throw new Error(unconfigureResult.error ?? 'Failed to remove pairing group');
+            }
+
+            this.logger.debug('Group unconfigured and removed', { id: deviceId, groupId });
+
+            // Notify the user if NIC unconfiguration had issues (e.g. wrong sudo password)
+            if (unconfigureResult.nonFatalError) {
+                this.logger.warn('NIC unconfiguration had issues during paired device deletion', {
+                    id: deviceId, groupId, error: unconfigureResult.nonFatalError
+                });
+                vscode.window.showWarningMessage(
+                    `Device "${device.name}" was deleted and the pairing was removed, but the ConnectX network configuration could not be removed from one or more devices due to an unexpected error.`
+                );
+            }
+
+            // Delete the device
+            await this.deviceService.deleteDevice(deviceId);
+            this.logger.debug('Paired device deleted', { id: deviceId, deviceName: device.name, groupId });
+        } catch (error) {
+            this.logger.error('Failed to delete paired device', { error, id: deviceId, groupId });
+            throw error;
+        }
+    }
+
     private async connectDevice(id: string, newWindow?: boolean): Promise<void> {
         this.logger.info('Connecting to device', { id, newWindow });
 
@@ -244,7 +426,6 @@ export class DeviceManagerViewController extends BaseViewController {
             await this.deviceService.connectToDevice(id, newWindow);
             this.logger.debug('Connection initiated', { id });
         } catch (error) {
-            // Import DeviceNeedsSetupError type
             const { DeviceNeedsSetupError } = await import('../../../services/deviceService');
             
             // If device needs setup, navigate to setup flow
@@ -371,8 +552,11 @@ export class DeviceManagerViewController extends BaseViewController {
     }
 
     dispose(): void {
-        if (this.unsubscribe) {
-            this.unsubscribe();
+        if (this.deviceUnsubscribe) {
+            this.deviceUnsubscribe();
+        }
+        if (this.groupUnsubscribe) {
+            this.groupUnsubscribe();
         }
         super.dispose();
     }

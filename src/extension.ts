@@ -11,8 +11,8 @@ import { logger } from './utils/logger';
 import { telemetryService } from './services/telemetryService';
 import { TelemetryEventType } from './types/telemetry';
 import { configService } from './services/configService';
-import { deviceStore } from './store';
-import { deviceService, AppInstallationService, PasswordService, deviceDiscoveryService, extensionStateService, dnsServiceRegistration } from './services';
+import { deviceStore, groupStore } from './store';
+import { deviceService, AppInstallationService, PasswordService, deviceDiscoveryService, extensionStateService, dnsServiceRegistration, connectxGroupService, deviceHealthCheckService } from './services';
 import { ConnectionService } from './services/connectionService';
 import { registerCommands, setCommandContext } from './commands';
 import { createGlobalStatePersistenceService } from './services/globalStatePersistenceService';
@@ -72,11 +72,11 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
         const messageRouter = new MessageRouter(logger);
 
         // Initialize global state persistence service (subscribes to store changes and persists them)
-        const storageService = await createGlobalStatePersistenceService(context, deviceStore);
+        const storageService = await createGlobalStatePersistenceService(context, deviceStore, groupStore);
         context.subscriptions.push({
             dispose: () => storageService.dispose()
         });
-        logger.debug('Storage service initialized');
+        logger.debug('Storage service initialized (devices and groups)');
 
         // Run DNS service migration for existing devices (backwards compatibility)
         // This runs asynchronously and doesn't block extension activation
@@ -88,6 +88,9 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
         const viewFactory = new ViewFactory(logger, telemetryService, {
             deviceService,
             deviceStore,
+            groupStore,
+            connectxGroupService,
+            deviceHealthCheckService,
             configService,
             deviceDiscoveryService,
             connectionService,
@@ -113,8 +116,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
         logger.debug('ZGX Toolkit provider registered');
 
         // Register all commands
-        setCommandContext(context);
-        registerCommands(context);
+        registerCommands(context, provider);
 
         // Start background updater for device discovery (non-blocking)
         deviceService.startBackgroundUpdater()

@@ -1,0 +1,32 @@
+<!--
+  Copyright ©2025 HP Development Company, L.P.
+  Licensed under the X11 License. See LICENSE file in the project root for details.
+  
+  Warning overlay template - Reusable warning dialog with Continue and Cancel buttons.
+  Uses base overlay classes with warning-specific overrides.
+-->
+
+<template id="warning-overlay-template">
+    <div class="overlay-backdrop" id="warning-overlay-backdrop">
+        <div class="overlay-widget" id="warning-overlay-widget">
+            <div class="overlay-header">
+                <i class="codicon codicon-warning overlay-icon warning-overlay-icon"></i>
+                <h2 class="overlay-title" id="warning-overlay-title">Warning</h2>
+            </div>
+            
+            <div class="warning-overlay-message-container">
+                <svg class="warning-overlay-message-icon" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+                    <path d="M7.56 1.1a.5.5 0 0 1 .88 0l6.5 12A.5.5 0 0 1 14.5 14h-13a.5.5 0 0 1-.44-.74l6.5-12Z" fill="currentColor"/>
+                    <path d="M8 5v4" stroke="var(--vscode-editor-background)" stroke-width="1.5" stroke-linecap="round"/>
+                    <circle cx="8" cy="11" r="0.75" fill="var(--vscode-editor-background)"/>
+                </svg>
+                <div class="warning-overlay-message" id="warning-overlay-message"></div>
+            </div>
+            
+            <div class="overlay-actions">
+                <button class="overlay-btn overlay-btn-secondary" id="warning-overlay-cancel-btn">Cancel</button>
+                <button class="overlay-btn overlay-btn-primary" id="warning-overlay-continue-btn">Continue</button>
+            </div>
+        </div>
+    </div>
+</template>

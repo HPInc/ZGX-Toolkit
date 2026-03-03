@@ -3,14 +3,15 @@
   Licensed under the X11 License. See LICENSE file in the project root for details.
   
   Error overlay template - The template is cloned and populated with error data at runtime.
+  Uses base overlay classes with error-specific overrides.
 -->
 
 <template id="error-overlay-template">
-    <div class="error-overlay-backdrop" id="error-overlay-backdrop">
-        <div class="error-overlay-widget" id="error-overlay-widget">
-            <div class="error-overlay-header">
-                <i class="codicon codicon-warning error-overlay-icon"></i>
-                <h2 class="error-overlay-title" id="error-overlay-title">Error</h2>
+    <div class="overlay-backdrop" id="error-overlay-backdrop">
+        <div class="overlay-widget" id="error-overlay-widget">
+            <div class="overlay-header">
+                <i class="codicon codicon-warning overlay-icon error-overlay-icon"></i>
+                <h2 class="overlay-title" id="error-overlay-title">Error</h2>
             </div>
             
             <div class="error-overlay-message-container">
@@ -26,8 +27,9 @@
                 <div class="error-overlay-details-text" id="error-overlay-details-text"></div>
             </div>
             
-            <div class="error-overlay-actions">
-                <button class="error-overlay-close-btn" id="error-overlay-close-btn">Return to Device Manager</button>
+            <div class="overlay-actions">
+                <button class="overlay-btn overlay-btn-secondary" id="error-overlay-secondary-btn" style="display: none;">Secondary Action</button>
+                <button class="overlay-btn overlay-btn-primary" id="error-overlay-close-btn">Return to Device Manager</button>
             </div>
         </div>
     </div>

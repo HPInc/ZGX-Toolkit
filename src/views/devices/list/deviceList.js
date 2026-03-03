@@ -4,7 +4,8 @@
  */
 
 (function() {
-    const vscode = acquireVsCodeApi();
+    const vscode = window.vscodeApi || acquireVsCodeApi();
+    window.vscodeApi = vscode;
 
     // Set up event listeners instead of inline onclick
     document.addEventListener('DOMContentLoaded', function() {
@@ -101,6 +102,58 @@
                 setupDevice(id);
             });
         });
+
+        // Section toggle buttons
+        document.querySelectorAll('.section-toggle').forEach(btn => {
+            btn.addEventListener('click', function() {
+                const section = this.getAttribute('data-section');
+                toggleSection(section);
+            });
+        });
+
+        // Section header click (also toggles)
+        document.querySelectorAll('.section-header').forEach(header => {
+            header.addEventListener('click', function(e) {
+                // Don't double-toggle if the toggle button itself was clicked
+                if (e.target.closest('.section-toggle')) { return; }
+                const section = this.getAttribute('data-section');
+                toggleSection(section);
+            });
+        });
+
+        // Paired group container toggle (collapse/expand)
+        document.querySelectorAll('.sidebar-paired-group-container').forEach(container => {
+            container.addEventListener('click', function(e) {
+                // Don't toggle when clicking interactive elements inside the container
+                const target = e.target;
+                if (target.closest('button') || target.closest('a') || target.closest('.split-button')) {
+                    return;
+                }
+                this.classList.toggle('collapsed');
+            });
+        });
+
+        // Pairing details buttons
+        document.querySelectorAll('[data-action="pairing-details"]').forEach(btn => {
+            btn.addEventListener('click', function() {
+                const groupId = this.getAttribute('data-group-id');
+                vscode.postMessage({
+                    type: 'pairing-details',
+                    groupId: groupId
+                });
+            });
+        });
+
+        // Unpair devices buttons
+        document.querySelectorAll('[data-action="unpair-devices"]').forEach(btn => {
+            btn.addEventListener('click', function() {
+                const groupId = this.getAttribute('data-group-id');
+                vscode.postMessage({
+                    type: 'unpair-devices',
+                    groupId: groupId
+                });
+            });
+        });
     });
 
     function showAddForm() {
@@ -187,6 +240,23 @@
             type: 'setup-device',
             id: id
         });
+    }
+
+    /**
+     * Toggles a section's visibility and updates the toggle text.
+     * @param {string} sectionName - The section identifier ('paired' or 'unpaired').
+     */
+    function toggleSection(sectionName) {
+        const content = document.getElementById('section-' + sectionName);
+        const header = document.querySelector('.section-header[data-section="' + sectionName + '"]');
+        if (!content || !header) { return; }
+
+        const isCollapsed = content.classList.toggle('collapsed');
+        const toggleText = header.querySelector('.section-toggle-text');
+        if (toggleText) {
+            toggleText.textContent = isCollapsed ? 'Show more' : 'Show less';
+        }
+        header.setAttribute('aria-expanded', String(!isCollapsed));
     }
 
     // Toggle dropdown

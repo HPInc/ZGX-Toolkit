@@ -3,13 +3,12 @@
  * Licensed under the X11 License. See LICENSE file in the project root for details.
  */
 
-import { Client as SSHClient } from 'ssh2';
 import { Device } from '../types/devices';
 import { SSHCommandResult } from '../types/ssh';
 import { AppDefinition, getAllApps, getAppById } from '../constants/apps';
 import { logger } from '../utils/logger';
 import { getLastChars } from '../utils/string';
-import { getSSHConfig } from '../utils/sshConfig';
+import { executeSSHCommand } from '../utils/sshConnection';
 
 /**
  * Error types for installation/uninstallation operations.
@@ -84,46 +83,6 @@ export class AppInstallationService {
 
     private readonly zgxPythonEnvId = 'zgx-python-env';
     public static readonly invalidPasswordMessage = "Invalid password. Please try again.";
-
-    /**
-     * Read SSH private key from file.
-     */
-    /**
-     * Create and connect an SSH client to the device.
-     */
-    private async createSSHConnection(device: Device): Promise<SSHClient> {
-        return new Promise((resolve, reject) => {
-            const client = new SSHClient();
-
-            client.on('ready', () => {
-                resolve(client);
-            });
-
-            client.on('error', (err) => {
-                reject(err);
-            });
-
-            // Get SSH configuration including credentials from ~/.ssh/config
-            const config = getSSHConfig(device, {
-                timeout: 30000,
-                readyTimeout: 30000
-            });
-
-            // Add keepalive settings for long-running operations
-            config.keepaliveInterval = 10000; // Send keepalive every 10 seconds
-            config.keepaliveCountMax = 3; // Allow 3 missed keepalives before disconnecting
-
-            logger.debug('Connecting to SSH host', {
-                host: config.host,
-                port: config.port,
-                username: config.username,
-                hasPrivateKey: !!config.privateKey,
-                hasAgent: !!config.agent
-            });
-
-            client.connect(config);
-        });
-    }
 
     /**
      * Install selected applications on a device.
@@ -366,18 +325,18 @@ export class AppInstallationService {
                 const commandWithoutSudo = installCommand.replace(/sudo\s+/g, '');
                 const sudoCommand = `sudo -S bash -c ${this.escapeShellArg(commandWithoutSudo)}`;
 
-                result = await this.executeSSHCommand(
+                result = await executeSSHCommand(
                     device,
                     sudoCommand,
-                    app.name,
-                    sudoPassword
+                    { timeout: 30000, readyTimeout: 30000, keepaliveInterval: 10000, keepaliveCountMax: 3 },
+                    { operationName: app.name, sudoPassword, retries: 3 }
                 );
             } else {
-                result = await this.executeSSHCommand(
+                result = await executeSSHCommand(
                     device,
                     installCommand,
-                    app.name,
-                    sudoPassword
+                    { timeout: 30000, readyTimeout: 30000, keepaliveInterval: 10000, keepaliveCountMax: 3 },
+                    { operationName: app.name, sudoPassword, retries: 3 }
                 );
             }
 
@@ -433,7 +392,12 @@ export class AppInstallationService {
 
         try {
             // We should never need sudo for verification commands
-            const result = await this.executeSSHCommand(device, app.verifyCommand, app.name, undefined, 7);
+            const result = await executeSSHCommand(
+                device,
+                app.verifyCommand,
+                { timeout: 30000, readyTimeout: 30000, keepaliveInterval: 10000, keepaliveCountMax: 3 },
+                { operationName: app.name, timeoutSeconds: 7, retries: 3 }
+            );
             if (!result.success && result.error) {
                 logger.error('App verification failed', { device: device.name, error: result.error.message, stderr: result.stderr, stdout: result.stdout });
             }
@@ -447,192 +411,6 @@ export class AppInstallationService {
     }
 
     /**
-     * Execute SSH command and return detailed result.
-     */
-    private async executeSSHCommand(
-        device: Device,
-        command: string,
-        appName: string,
-        sudoPassword?: string,
-        timeoutSeconds?: number,
-        numRetries: number = 3
-    ): Promise<SSHCommandResult> {
-        let lastError: Error | undefined;
-
-        for (let attempt = 1; attempt <= numRetries; attempt++) {
-            let client: SSHClient | undefined;
-
-            try {
-                const attemptText = timeoutSeconds && attempt > 1 ? ` (attempt ${attempt}/${numRetries})` : '';
-                logger.debug(`Executing SSH command for ${appName}${attemptText}`);
-
-                // Connect to device
-                client = await this.createSSHConnection(device);
-
-                const result = await new Promise<SSHCommandResult>((resolve, reject) => {
-                    let timeoutHandle: NodeJS.Timeout | undefined;
-                    let resolved = false;
-
-                    const cleanup = () => {
-                        if (timeoutHandle) {
-                            clearTimeout(timeoutHandle);
-                        }
-                    };
-
-                    const safeResolve = (value: SSHCommandResult) => {
-                        if (!resolved) {
-                            resolved = true;
-                            cleanup();
-                            resolve(value);
-                        }
-                    };
-
-                    const safeReject = (error: Error) => {
-                        if (!resolved) {
-                            resolved = true;
-                            cleanup();
-                            reject(error);
-                        }
-                    };
-
-                    // Set up timeout if specified
-                    if (timeoutSeconds) {
-                        timeoutHandle = setTimeout(() => {
-                            safeReject(new Error(`SSH command timed out after ${timeoutSeconds} seconds`));
-                        }, timeoutSeconds * 1000);
-                    }
-
-                    client!.exec(command, (err, stream) => {
-                        if (err) {
-                            safeReject(err);
-                            return;
-                        }
-
-                        let stdout = '';
-                        let stderr = '';
-
-                        stream.on('data', (data: Buffer) => {
-                            stdout += data.toString();
-                        });
-
-                        stream.stderr.on('data', (data: Buffer) => {
-                            stderr += data.toString();
-                        });
-
-                        stream.on('close', (code: number, signal?: string) => {
-                            let exitCode: number;
-                            if (code === null || code === undefined) {
-                                logger.warn(`Stream closed without providing an exit code for ${appName}. Defaulting to exit code 1.`, {
-                                    signal,
-                                    stdout: getLastChars(stdout),
-                                    stderr: getLastChars(stderr)
-                                });
-                                exitCode = 1;
-                            } else {
-                                exitCode = code;
-                            }
-                            logger.debug(`Command completed for ${appName}`, {
-                                exitCode,
-                                signal,
-                                stdout: getLastChars(stdout),
-                                stderr: getLastChars(stderr)
-                            });
-
-                            safeResolve({
-                                success: exitCode === 0,
-                                exitCode,
-                                stdout,
-                                stderr
-                            });
-                        });
-
-                        stream.on('error', (err: Error) => {
-                            logger.error(`Stream error for ${appName}`, { error: err.message });
-                            safeReject(err);
-                        });
-
-                        // If password is provided and command is sudo, write it to stdin and close stdin
-                        if (sudoPassword && command.startsWith('sudo -S')) {
-                            stream.write(sudoPassword + '\n', (err) => {
-                                if (err) {
-                                    logger.error(`Failed to write sudo password for ${appName}`, { error: err.message });
-                                    safeReject(err);
-                                    return;
-                                }
-                                stream.end();
-                            });
-                        } else {
-                            // No password needed, just close stdin
-                            stream.end();
-                        }
-                    });
-                });
-
-                return result;
-
-            } catch (error) {
-                lastError = error instanceof Error ? error : new Error(String(error));
-
-                if (error instanceof Error && (error.message.includes('timed out') || error.message.includes('ECONNRESET'))) {
-                    logger.warn(`Command error for ${appName} (attempt ${attempt}/${numRetries})`, {
-                        error: error.message
-                    });
-
-                    // Retry on timeout or connection reset
-                    if (attempt < numRetries) {
-                        logger.info(`Retrying command for ${appName}...`);
-                        // Add a small delay before retry
-                        await new Promise(resolve => setTimeout(resolve, 1000));
-                        continue;
-                    }
-                }
-
-                // For non-retryable errors, don't retry
-                logger.error(`Command exception for ${appName}`, {
-                    error: error instanceof Error ? error.message : String(error)
-                });
-
-                // Return error result - SSH connection itself failed
-                return {
-                    success: false,
-                    exitCode: -1,
-                    stdout: '',
-                    stderr: '',
-                    error: lastError
-                };
-            } finally {
-                // Always close the client connection with a small delay
-                if (client) {
-                    try {
-                        client.end();
-                    } catch (err) {
-                        logger.debug(`Error closing SSH client for ${appName}`, {
-                            error: err instanceof Error ? err.message : String(err)
-                        });
-                    }
-                }
-            }
-        }
-
-        // All retries exhausted
-        logger.error(`Command failed for ${appName} after ${numRetries} attempts`, {
-            lastError: lastError?.message
-        });
-
-        return {
-            success: false,
-            exitCode: -1,
-            stdout: '',
-            stderr: '',
-            error: lastError
-        };
-    }
-
-    /**
-     * Validate sudo password by executing a simple sudo command.
-     * Uses executeSSHCommand internally.
-     */
-    /**
      * Validate a sudo password by attempting to run a test command
      */
     public async validatePassword(device: Device, password: string): Promise<boolean> {
@@ -640,7 +418,12 @@ export class AppInstallationService {
 
         // Use executeSSHCommand with a simple sudo test command
         const testCommand = 'sudo -S true';
-        const result = await this.executeSSHCommand(device, testCommand, 'sudo validation', password, 10, 1);
+        const result = await executeSSHCommand(
+            device,
+            testCommand,
+            { timeout: 30000, readyTimeout: 30000, keepaliveInterval: 10000, keepaliveCountMax: 3 },
+            { operationName: 'sudo validation', sudoPassword: password, timeoutSeconds: 10, retries: 0 }
+        );
 
         if (!result.success) {
             logger.error('Sudo password validation failed', { device: device.name, error: result.error?.message, stderr: result.stderr, stdout: result.stdout });
@@ -797,11 +580,11 @@ export class AppInstallationService {
                     });
                 }
 
-                const condaEnvResult = await this.executeSSHCommand(
+                const condaEnvResult = await executeSSHCommand(
                     device,
                     'if [ -d "$HOME/miniforge3" ]; then $HOME/miniforge3/bin/conda env remove -n zgx -y 2>/dev/null || true; fi',
-                    'Remove zgx conda env',
-                    password
+                    { timeout: 30000, readyTimeout: 30000, keepaliveInterval: 10000, keepaliveCountMax: 3 },
+                    { operationName: 'Remove zgx conda env', sudoPassword: password, retries: 3 }
                 );
 
                 if (condaEnvResult.success) {
@@ -959,18 +742,18 @@ export class AppInstallationService {
                 const commandWithoutSudo = app.uninstallCommand.replace(/sudo\s+/g, '');
                 const sudoCommand = `sudo -S bash -c ${this.escapeShellArg(commandWithoutSudo)}`;
 
-                result = await this.executeSSHCommand(
+                result = await executeSSHCommand(
                     device,
                     sudoCommand,
-                    app.name,
-                    sudoPassword
+                    { timeout: 30000, readyTimeout: 30000, keepaliveInterval: 10000, keepaliveCountMax: 3 },
+                    { operationName: app.name, sudoPassword, retries: 3 }
                 );
             } else {
-                result = await this.executeSSHCommand(
+                result = await executeSSHCommand(
                     device,
                     app.uninstallCommand,
-                    app.name,
-                    sudoPassword
+                    { timeout: 30000, readyTimeout: 30000, keepaliveInterval: 10000, keepaliveCountMax: 3 },
+                    { operationName: app.name, sudoPassword, retries: 3 }
                 );
             }
 

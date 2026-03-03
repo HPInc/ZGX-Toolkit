@@ -22,6 +22,8 @@ export enum TelemetryEventType {
     Error = 'error',
     /** Device events */
     Device = 'device',
+    /** Group events */
+    Group = 'group',
 }
 
 /**
@@ -130,6 +132,14 @@ export interface DeviceDiscoveryEvent extends TelemetryEvent {
 }
 
 /**
+ * Group lifecycle event data.
+ */
+export interface GroupLifecycleEvent extends TelemetryEvent {
+    eventType: TelemetryEventType.Group;
+    action: 'create' | 'update' | 'remove' | 'add-device' | 'remove-device';
+}
+
+/**
  * Union type of all telemetry events.
  */
 export type AnyTelemetryEvent =
@@ -137,7 +147,8 @@ export type AnyTelemetryEvent =
     | ViewNavigationEvent
     | CommandExecutionEvent
     | DeviceLifecycleEvent
-    | DeviceDiscoveryEvent;
+    | DeviceDiscoveryEvent
+    | GroupLifecycleEvent;
 
 /**
  * Union type for telemetry error events.

@@ -380,6 +380,36 @@ describe('BaseView', () => {
         });
     });
 
+    describe('base overlay', () => {
+        it('should ensure base overlay is added only once', () => {
+            const originalStyles = view['styles'];
+            const originalScript = view['clientScript'];
+
+            // First call should add base overlay
+            view['ensureBaseOverlay']();
+            
+            const stylesAfterFirst = view['styles'];
+            const scriptAfterFirst = view['clientScript'];
+            
+            expect(stylesAfterFirst.length).toBeGreaterThan(originalStyles.length);
+            expect(scriptAfterFirst.length).toBeGreaterThan(originalScript.length);
+
+            // Second call should not add base overlay again (idempotent)
+            view['ensureBaseOverlay']();
+            
+            expect(view['styles']).toBe(stylesAfterFirst);
+            expect(view['clientScript']).toBe(scriptAfterFirst);
+        });
+
+        it('should track base overlay enabled state', () => {
+            expect(view['baseOverlayEnabled']).toBe(false);
+            
+            view['ensureBaseOverlay']();
+            
+            expect(view['baseOverlayEnabled']).toBe(true);
+        });
+    });
+
     describe('error overlay', () => {
         it('should enable error overlay support', () => {
             const originalStyles = view['styles'];
@@ -394,6 +424,17 @@ describe('BaseView', () => {
             // Should prepend JS to clientScript
             expect(view['clientScript']).not.toBe(originalScript);
             expect(view['clientScript'].length).toBeGreaterThan(originalScript.length);
+            
+            // Should enable base overlay
+            expect(view['baseOverlayEnabled']).toBe(true);
+        });
+
+        it('should include base overlay when enabling error overlay', () => {
+            view['enableErrorOverlay']();
+            
+            // Base overlay should be present
+            expect(view['styles']).toContain('.overlay-backdrop');
+            expect(view['clientScript']).toContain('BaseOverlay');
         });
 
         it('should get error overlay CSS', () => {
@@ -421,8 +462,124 @@ describe('BaseView', () => {
                 type: 'show-error-overlay',
                 errorTitle: 'Error Title',
                 errorDetails: 'Error Details',
-                error: 'Error message'
+                error: 'Error message',
+                buttonText: undefined
             });
+        });
+
+        it('should show error overlay with custom button text', () => {
+            const messageCallback = jest.fn();
+            view.setMessageCallback(messageCallback);
+
+            view['showErrorOverlay']('Error Title', 'Error Details', 'Error message', 'Retry Now');
+
+            expect(messageCallback).toHaveBeenCalledWith({
+                type: 'show-error-overlay',
+                errorTitle: 'Error Title',
+                errorDetails: 'Error Details',
+                error: 'Error message',
+                buttonText: 'Retry Now'
+            });
+        });
+    });
+
+    describe('password input overlay', () => {
+        it('should enable password input overlay support', () => {
+            const originalStyles = view['styles'];
+            const originalScript = view['clientScript'];
+
+            view['enablePasswordInputOverlay']();
+
+            // Should append CSS to styles
+            expect(view['styles']).not.toBe(originalStyles);
+            expect(view['styles'].length).toBeGreaterThan(originalStyles.length);
+
+            // Should append JS to clientScript
+            expect(view['clientScript']).not.toBe(originalScript);
+            expect(view['clientScript'].length).toBeGreaterThan(originalScript.length);
+            
+            // Should enable base overlay
+            expect(view['baseOverlayEnabled']).toBe(true);
+        });
+
+        it('should include base overlay when enabling password input overlay', () => {
+            view['enablePasswordInputOverlay']();
+            
+            // Base overlay should be present
+            expect(view['styles']).toContain('.overlay-backdrop');
+            expect(view['clientScript']).toContain('BaseOverlay');
+        });
+
+        it('should get password input overlay HTML', () => {
+            const html = view['getPasswordInputOverlayHtml']();
+            expect(typeof html).toBe('string');
+            expect(html.length).toBeGreaterThan(0);
+        });
+    });
+
+    describe('multiple overlay support', () => {
+        it('should enable both error and password overlays without duplicating base overlay', () => {
+            const originalStyles = view['styles'];
+            const originalScript = view['clientScript'];
+
+            // Enable error overlay first
+            view['enableErrorOverlay']();
+            
+            const stylesAfterError = view['styles'];
+            const scriptAfterError = view['clientScript'];
+
+            // Enable password input overlay second
+            view['enablePasswordInputOverlay']();
+            
+            const stylesAfterBoth = view['styles'];
+            const scriptAfterBoth = view['clientScript'];
+
+            // Base overlay should be enabled
+            expect(view['baseOverlayEnabled']).toBe(true);
+
+            // Both overlays should be present
+            expect(stylesAfterBoth).toContain('error-overlay');
+            expect(stylesAfterBoth).toContain('password-input-overlay');
+            expect(scriptAfterBoth).toContain('ErrorOverlay');
+            expect(scriptAfterBoth).toContain('PasswordInputOverlay');
+
+            // Base overlay should appear only once in scripts
+            // Check that base overlay script is present
+            expect(scriptAfterBoth).toContain('window.BaseOverlay');
+            
+            // Count occurrences of the base overlay object definition
+            const baseOverlayDefCount = (scriptAfterBoth.match(/window\.BaseOverlay\s*=\s*{/g) || []).length;
+            expect(baseOverlayDefCount).toBe(1); // Should be defined only once
+        });
+
+        it('should work in reverse order (password overlay then error overlay)', () => {
+            // Enable password input overlay first
+            view['enablePasswordInputOverlay']();
+            
+            // Enable error overlay second
+            view['enableErrorOverlay']();
+
+            // Base overlay should be enabled
+            expect(view['baseOverlayEnabled']).toBe(true);
+
+            // Both overlays should be present
+            expect(view['styles']).toContain('error-overlay');
+            expect(view['styles']).toContain('password-input-overlay');
+            expect(view['clientScript']).toContain('ErrorOverlay');
+            expect(view['clientScript']).toContain('PasswordInputOverlay');
+        });
+
+        it('should not duplicate base overlay when called multiple times', () => {
+            view['enableErrorOverlay']();
+            view['enablePasswordInputOverlay']();
+            view['enableErrorOverlay'](); // Call again
+            
+            const styles = view['styles'];
+            const script = view['clientScript'];
+
+            // Count occurrences of base overlay CSS class
+            const baseStyleMatches = (styles.match(/\.overlay-backdrop/g) || []).length;
+            expect(baseStyleMatches).toBe(1); // Should appear only once
         });
     });
 

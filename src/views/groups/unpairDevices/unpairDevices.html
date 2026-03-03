@@ -1,0 +1,41 @@
+<!--
+  Copyright ©2026 HP Development Company, L.P.
+  Licensed under the X11 License. See LICENSE file in the project root for details.
+-->
+
+<div class="unpair-devices-container">
+    <div class="unpair-devices-header">
+        <i class="codicon codicon-debug-disconnect"></i>
+        <h1>Unpair Devices</h1>
+    </div>
+
+    <div class="unpair-devices-card">
+        <div class="card-content">
+            <h2>The following devices will be unpaired.</h2>
+            <p class="card-description">Are you sure you want to continue?</p>
+
+            {{#if devices}}
+            <div class="device-list-section">
+                <div class="device-name-list">
+                    {{#each devices}}
+                    <div class="device-name-item">
+                        {{name}}
+                    </div>
+                    {{/each}}
+                </div>
+            </div>
+            {{else}}
+            <div class="no-devices-message">
+                <p>No devices found in this group.</p>
+            </div>
+            {{/if}}
+
+            <div class="unpair-devices-actions">
+                <div class="action-buttons">
+                    <button class="btn btn-secondary" id="cancelBtn">Cancel</button>
+                    <button class="btn" id="confirmUnpairBtn"{{#unless devices}} disabled{{/unless}}>Confirm Unpair</button>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>

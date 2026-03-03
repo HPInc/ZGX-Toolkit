@@ -6,8 +6,9 @@
 import { DeviceListViewController } from '../../views/devices/list/deviceListViewController';
 import { Logger } from '../../utils/logger';
 import { ITelemetryService, TelemetryEventType } from '../../types/telemetry';
-import { DeviceService } from '../../services';
+import { DeviceService, ConnectXGroupService } from '../../services';
 import { Device } from '../../types/devices';
+import { ConnectXGroup } from '../../types/connectxGroup';
 import { Message } from '../../types/messages';
 import * as vscode from 'vscode';
 
@@ -19,7 +20,9 @@ describe('DeviceListViewController', () => {
     let mockLogger: jest.Mocked<Logger>;
     let mockTelemetry: jest.Mocked<ITelemetryService>;
     let mockDeviceService: jest.Mocked<DeviceService>;
+    let mockConnectxGroupService: jest.Mocked<ConnectXGroupService>;
     let mockUnsubscribe: jest.Mock;
+    let mockGroupUnsubscribe: jest.Mock;
 
     const mockDevice: Device = {
         id: 'device-1',
@@ -53,6 +56,45 @@ describe('DeviceListViewController', () => {
         createdAt: '2025-01-02T00:00:00Z',
     };
 
+    const mockDevice3: Device = {
+        id: 'device-3',
+        name: 'Third Device',
+        host: '192.168.1.102',
+        username: 'zgx',
+        port: 22,
+        isSetup: true,
+        useKeyAuth: true,
+        keySetup: {
+            keyGenerated: true,
+            keyCopied: true,
+            connectionTested: true
+        },
+        createdAt: '2025-01-03T00:00:00Z',
+    };
+
+    const mockDevice4: Device = {
+        id: 'device-4',
+        name: 'Fourth Device',
+        host: '192.168.1.103',
+        username: 'zgx',
+        port: 22,
+        isSetup: true,
+        useKeyAuth: true,
+        keySetup: {
+            keyGenerated: true,
+            keyCopied: true,
+            connectionTested: true
+        },
+        createdAt: '2025-01-04T00:00:00Z',
+    };
+
+    const mockGroup: ConnectXGroup = {
+        id: 'group-1',
+        deviceIds: ['device-1', 'device-2'],
+        createdAt: '2025-01-01T00:00:00Z',
+        updatedAt: '2025-01-01T00:00:00Z'
+    };
+
     beforeEach(() => {
         // Create mock logger
         mockLogger = {
@@ -72,8 +114,9 @@ describe('DeviceListViewController', () => {
             dispose: jest.fn().mockResolvedValue(undefined),
         } as any;
 
-        // Create mock unsubscribe function
+        // Create mock unsubscribe functions
         mockUnsubscribe = jest.fn();
+        mockGroupUnsubscribe = jest.fn();
 
         // Create mock device service
         mockDeviceService = {
@@ -86,10 +129,19 @@ describe('DeviceListViewController', () => {
             subscribe: jest.fn().mockReturnValue(mockUnsubscribe),
         } as any;
 
+        // Create mock connectx group service
+        mockConnectxGroupService = {
+            getAllGroups: jest.fn().mockResolvedValue([]),
+            getGroupForDevice: jest.fn().mockResolvedValue(undefined),
+            removeGroupAndUnconfigureNICs: jest.fn().mockResolvedValue({ success: true }),
+            subscribe: jest.fn().mockReturnValue(mockGroupUnsubscribe),
+        } as any;
+
         controller = new DeviceListViewController({
             logger: mockLogger,
             telemetry: mockTelemetry,
             deviceService: mockDeviceService,
+            connectxGroupService: mockConnectxGroupService,
         });
     });
 
@@ -139,6 +191,33 @@ describe('DeviceListViewController', () => {
                 { error: refreshError }
             );
         });
+
+        it('should subscribe to group store updates', () => {
+            expect(mockConnectxGroupService.subscribe).toHaveBeenCalled();
+        });
+
+        it('should call refresh when group store updates', async () => {
+            const subscribeCallback = mockConnectxGroupService.subscribe.mock.calls[0][0];
+            const refreshSpy = jest.spyOn(controller as any, 'refresh').mockResolvedValue(undefined);
+
+            await subscribeCallback([]);
+
+            expect(mockLogger.trace).toHaveBeenCalledWith('Group store updated, refreshing device list view');
+            expect(refreshSpy).toHaveBeenCalled();
+        });
+
+        it('should handle refresh errors in group subscription callback', async () => {
+            const subscribeCallback = mockConnectxGroupService.subscribe.mock.calls[0][0];
+            const refreshError = new Error('Group refresh failed');
+            jest.spyOn(controller as any, 'refresh').mockRejectedValue(refreshError);
+
+            await subscribeCallback([]);
+
+            expect(mockLogger.error).toHaveBeenCalledWith(
+                'Failed to refresh device list view after group store update',
+                { error: refreshError }
+            );
+        });
     });
 
     describe('render', () => {
@@ -157,6 +236,8 @@ describe('DeviceListViewController', () => {
                     },
                     measurements: {
                         deviceCount: 2,
+                        pairedGroupCount: 0,
+                        unpairedDeviceCount: 2
                     }
                 })
             );
@@ -172,6 +253,8 @@ describe('DeviceListViewController', () => {
                 expect.objectContaining({
                     measurements: {
                         deviceCount: 0,
+                        pairedGroupCount: 0,
+                        unpairedDeviceCount: 0
                     }
                 })
             );
@@ -182,6 +265,184 @@ describe('DeviceListViewController', () => {
             await controller.render(params);
 
             expect((controller as any).lastRenderParams).toEqual(params);
+        });
+
+        it('should fetch groups from connectxGroupService', async () => {
+            await controller.render();
+
+            expect(mockConnectxGroupService.getAllGroups).toHaveBeenCalled();
+        });
+
+        it('should separate paired devices from unpaired devices', async () => {
+            mockConnectxGroupService.getAllGroups.mockResolvedValue([mockGroup]);
+
+            const html = await controller.render();
+
+            // Both devices should still be rendered
+            expect(html).toContain('Test Device');
+            expect(html).toContain('Second Device');
+            // Paired group container should be present
+            expect(html).toContain('sidebar-paired-group-container');
+            expect(html).toContain('data-group-id="group-1"');
+            // Telemetry should reflect the grouping
+            expect(mockTelemetry.trackEvent).toHaveBeenCalledWith(
+                expect.objectContaining({
+                    measurements: {
+                        deviceCount: 2,
+                        pairedGroupCount: 1,
+                        unpairedDeviceCount: 0
+                    }
+                })
+            );
+        });
+
+        it('should render mixed paired and unpaired devices', async () => {
+            mockDeviceService.getAllDevices.mockResolvedValue([mockDevice, mockDevice2, mockDevice3]);
+            const groupWithFirstTwo: ConnectXGroup = {
+                id: 'group-1',
+                deviceIds: ['device-1', 'device-2'],
+                createdAt: '2025-01-01T00:00:00Z',
+                updatedAt: '2025-01-01T00:00:00Z'
+            };
+            mockConnectxGroupService.getAllGroups.mockResolvedValue([groupWithFirstTwo]);
+
+            const html = await controller.render();
+
+            expect(html).toContain('Test Device');
+            expect(html).toContain('Second Device');
+            expect(html).toContain('Third Device');
+            expect(html).toContain('sidebar-paired-group-container');
+            expect(mockTelemetry.trackEvent).toHaveBeenCalledWith(
+                expect.objectContaining({
+                    measurements: {
+                        deviceCount: 3,
+                        pairedGroupCount: 1,
+                        unpairedDeviceCount: 1
+                    }
+                })
+            );
+        });
+
+        it('should render multiple paired groups', async () => {
+            mockDeviceService.getAllDevices.mockResolvedValue([mockDevice, mockDevice2, mockDevice3, mockDevice4]);
+            const group1: ConnectXGroup = {
+                id: 'group-1',
+                deviceIds: ['device-1', 'device-2'],
+                createdAt: '2025-01-01T00:00:00Z',
+                updatedAt: '2025-01-01T00:00:00Z'
+            };
+            const group2: ConnectXGroup = {
+                id: 'group-2',
+                deviceIds: ['device-3', 'device-4'],
+                createdAt: '2025-01-02T00:00:00Z',
+                updatedAt: '2025-01-02T00:00:00Z'
+            };
+            mockConnectxGroupService.getAllGroups.mockResolvedValue([group1, group2]);
+
+            const html = await controller.render();
+
+            expect(html).toContain('data-group-id="group-1"');
+            expect(html).toContain('data-group-id="group-2"');
+            expect(mockTelemetry.trackEvent).toHaveBeenCalledWith(
+                expect.objectContaining({
+                    measurements: {
+                        deviceCount: 4,
+                        pairedGroupCount: 2,
+                        unpairedDeviceCount: 0
+                    }
+                })
+            );
+        });
+
+        it('should render flat device list when no groups exist', async () => {
+            mockConnectxGroupService.getAllGroups.mockResolvedValue([]);
+
+            const html = await controller.render();
+
+            expect(html).not.toContain('data-group-id="');
+            expect(html).not.toContain('Paired Devices');
+            expect(html).not.toContain('Unpaired Devices');
+            expect(html).toContain('Test Device');
+            expect(html).toContain('Second Device');
+            expect(mockTelemetry.trackEvent).toHaveBeenCalledWith(
+                expect.objectContaining({
+                    measurements: {
+                        deviceCount: 2,
+                        pairedGroupCount: 0,
+                        unpairedDeviceCount: 2
+                    }
+                })
+            );
+        });
+
+        it('should render paired group action buttons', async () => {
+            mockConnectxGroupService.getAllGroups.mockResolvedValue([mockGroup]);
+
+            const html = await controller.render();
+
+            expect(html).toContain('data-action="pairing-details"');
+            expect(html).toContain('data-action="unpair-devices"');
+            expect(html).toContain('Pairing Details');
+            expect(html).toContain('Unpair Devices');
+        });
+
+        it('should render section headers with correct counts', async () => {
+            mockDeviceService.getAllDevices.mockResolvedValue([mockDevice, mockDevice2, mockDevice3]);
+            const group: ConnectXGroup = {
+                id: 'group-1',
+                deviceIds: ['device-1', 'device-2'],
+                createdAt: '2025-01-01T00:00:00Z',
+                updatedAt: '2025-01-01T00:00:00Z'
+            };
+            mockConnectxGroupService.getAllGroups.mockResolvedValue([group]);
+
+            const html = await controller.render();
+
+            expect(html).toContain('Paired Devices (2)');
+            expect(html).toContain('Unpaired Devices (1)');
+        });
+
+        it('should handle group referencing non-existent device ids', async () => {
+            const groupWithBadId: ConnectXGroup = {
+                id: 'group-bad',
+                deviceIds: ['device-1', 'non-existent-device'],
+                createdAt: '2025-01-01T00:00:00Z',
+                updatedAt: '2025-01-01T00:00:00Z'
+            };
+            mockConnectxGroupService.getAllGroups.mockResolvedValue([groupWithBadId]);
+
+            const html = await controller.render();
+
+            // device-1 is paired, device-2 is unpaired, non-existent is ignored
+            expect(html).toContain('sidebar-paired-group-container');
+            expect(mockTelemetry.trackEvent).toHaveBeenCalledWith(
+                expect.objectContaining({
+                    measurements: {
+                        deviceCount: 2,
+                        pairedGroupCount: 1,
+                        unpairedDeviceCount: 1
+                    }
+                })
+            );
+        });
+
+        it('should render section toggle buttons when paired groups exist', async () => {
+            mockConnectxGroupService.getAllGroups.mockResolvedValue([mockGroup]);
+
+            const html = await controller.render();
+
+            expect(html).toContain('data-section="paired"');
+            expect(html).toContain('data-section="unpaired"');
+            expect(html).toContain('Show less');
+        });
+
+        it('should not render section headers when no paired groups exist', async () => {
+            mockConnectxGroupService.getAllGroups.mockResolvedValue([]);
+
+            const html = await controller.render();
+
+            expect(html).not.toContain('data-section="paired"');
+            expect(html).not.toContain('data-section="unpaired"');
         });
     });
 
@@ -409,6 +670,41 @@ describe('DeviceListViewController', () => {
                     id: 'device-1' 
                 });
             });
+
+            it('should navigate to device manager when deleting a paired device', async () => {
+                const navigateToSpy = jest.spyOn(controller as any, 'navigateTo').mockResolvedValue(undefined);
+                mockConnectxGroupService.getGroupForDevice.mockResolvedValue(mockGroup);
+
+                await controller.handleMessage({
+                    type: 'delete-device',
+                    id: 'device-1'
+                } as Message);
+
+                expect(mockConnectxGroupService.getGroupForDevice).toHaveBeenCalledWith('device-1');
+                expect(navigateToSpy).toHaveBeenCalledWith('devices/manager', {
+                    showDeleteWarningForDeviceId: 'device-1',
+                    deleteWarningDeviceName: 'Test Device',
+                    deleteWarningGroupId: 'group-1'
+                }, 'editor');
+                // Should NOT show the standard confirmation dialog
+                expect(vscode.window.showWarningMessage).not.toHaveBeenCalled();
+                // Should NOT delete the device yet
+                expect(mockDeviceService.deleteDevice).not.toHaveBeenCalled();
+            });
+
+            it('should use standard confirmation for unpaired device', async () => {
+                (vscode.window as any).showWarningMessage = jest.fn().mockResolvedValue('Delete');
+                mockConnectxGroupService.getGroupForDevice.mockResolvedValue(undefined);
+
+                await controller.handleMessage({
+                    type: 'delete-device',
+                    id: 'device-1'
+                } as Message);
+
+                expect(mockConnectxGroupService.getGroupForDevice).toHaveBeenCalledWith('device-1');
+                expect(vscode.window.showWarningMessage).toHaveBeenCalled();
+                expect(mockDeviceService.deleteDevice).toHaveBeenCalledWith('device-1');
+            });
         });
 
         describe('manage-apps', () => {
@@ -436,6 +732,91 @@ describe('DeviceListViewController', () => {
             });
         });
 
+        describe('register-dns', () => {
+            it('should navigate to DNS registration', async () => {
+                const navigateToSpy = jest.spyOn(controller as any, 'navigateTo').mockResolvedValue(undefined);
+
+                await controller.handleMessage({
+                    type: 'register-dns',
+                    id: 'device-1'
+                } as Message);
+
+                expect(mockDeviceService.getDevice).toHaveBeenCalledWith('device-1');
+                expect(navigateToSpy).toHaveBeenCalledWith(
+                    'setup/dnsRegistration',
+                    { device: mockDevice, setupType: 'migration' },
+                    'editor'
+                );
+            });
+
+            it('should throw error when device not found for DNS registration', async () => {
+                mockDeviceService.getDevice.mockResolvedValue(undefined);
+
+                await expect(controller.handleMessage({
+                    type: 'register-dns',
+                    id: 'device-1'
+                } as Message)).rejects.toThrow('device not found: device-1');
+
+                expect(mockLogger.error).toHaveBeenCalledWith(
+                    'device not found for mDNS registration',
+                    { id: 'device-1' }
+                );
+            });
+        });
+
+        describe('pairing-details', () => {
+            it('should navigate to pair details view with groupId', async () => {
+                const navigateToSpy = jest.spyOn(controller as any, 'navigateTo').mockResolvedValue(undefined);
+
+                await controller.handleMessage({
+                    type: 'pairing-details',
+                    groupId: 'group-1'
+                } as Message);
+
+                expect(navigateToSpy).toHaveBeenCalledWith(
+                    'groups/pairDetails',
+                    { groupId: 'group-1' },
+                    'editor'
+                );
+            });
+        });
+
+        describe('unpair-devices', () => {
+            it('should navigate to unpair devices view with groupId', async () => {
+                const navigateToSpy = jest.spyOn(controller as any, 'navigateTo').mockResolvedValue(undefined);
+
+                await controller.handleMessage({
+                    type: 'unpair-devices',
+                    groupId: 'group-1'
+                } as Message);
+
+                expect(navigateToSpy).toHaveBeenCalledWith(
+                    'groups/unpairDevices',
+                    { groupId: 'group-1' },
+                    'editor'
+                );
+                expect(mockLogger.info).toHaveBeenCalledWith(
+                    'Navigating to unpair devices view',
+                    { groupId: 'group-1' }
+                );
+            });
+
+            it('should navigate with a different groupId', async () => {
+                const navigateToSpy = jest.spyOn(controller as any, 'navigateTo').mockResolvedValue(undefined);
+
+                await controller.handleMessage({
+                    type: 'unpair-devices',
+                    groupId: 'group-xyz-456'
+                } as Message);
+
+                expect(navigateToSpy).toHaveBeenCalledWith(
+                    'groups/unpairDevices',
+                    { groupId: 'group-xyz-456' },
+                    'editor'
+                );
+            });
+        });
+
         describe('unknown message types', () => {
             it('should handle unknown message types gracefully', async () => {
                 await controller.handleMessage({ 
@@ -449,19 +830,22 @@ describe('DeviceListViewController', () => {
     });
 
     describe('dispose', () => {
-        it('should unsubscribe from device service', () => {
+        it('should unsubscribe from device service and group service', () => {
             controller.dispose();
 
             expect(mockUnsubscribe).toHaveBeenCalled();
+            expect(mockGroupUnsubscribe).toHaveBeenCalled();
         });
 
         it('should handle dispose when no subscription exists', () => {
             // Create controller without subscription
             mockDeviceService.subscribe.mockReturnValue(undefined as any);
+            mockConnectxGroupService.subscribe.mockReturnValue(undefined as any);
             const controller2 = new DeviceListViewController({
                 logger: mockLogger,
                 telemetry: mockTelemetry,
                 deviceService: mockDeviceService,
+                connectxGroupService: mockConnectxGroupService,
             });
 
             expect(() => controller2.dispose()).not.toThrow();

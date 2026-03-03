@@ -24,6 +24,9 @@ import { InferenceInstructionsViewController } from './instructions/inference/in
 import { FineTuningInstructionsViewController } from './instructions/finetuning/fineTuningInstructionsViewController';
 import { RagInstructionsViewController } from './instructions/rag/ragInstructionsViewController';
 import { TemplateListViewController } from './templates/templateListViewController';
+import { PairDevicesViewController } from './groups/pairDevices/pairDevicesViewController';
+import { PairDetailsViewController } from './groups/pairDetails/pairDetailsViewController';
+import { UnpairDevicesViewController } from './groups/unpairDevices/unpairDevicesViewController';
 
 /**
  * Type for view constructor functions
@@ -77,6 +80,12 @@ export class ViewFactory {
 
         // Template views
         this.register(TemplateListViewController.viewId(), TemplateListViewController);
+        
+        // Group views
+        this.register(PairDevicesViewController.viewId(), PairDevicesViewController);
+        this.register(PairDetailsViewController.viewId(), PairDetailsViewController);
+        this.register(UnpairDevicesViewController.viewId(), UnpairDevicesViewController);
+        
         this.logger.debug('View registry initialized', { 
             viewCount: this.registry.size 
         });

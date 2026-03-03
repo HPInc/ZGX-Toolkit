@@ -3,27 +3,31 @@
  * Licensed under the X11 License. See LICENSE file in the project root for details.
  */
 
+import Handlebars from 'handlebars';
 import { BaseViewController } from '../../baseViewController';
 import { Logger } from '../../../utils/logger';
 import { ITelemetryService, TelemetryEventType } from '../../../types/telemetry';
 import { Message } from '../../../types/messages';
-import { Device } from '../../../types/devices';
+import { ConnectXGroup } from '../../../types/connectxGroup';
 import { URLS } from '../../../constants/config';
 import * as vscode from 'vscode';
 import { SetupOptionsViewController } from '../../setup/options/setupOptionsViewController';
 import { AppSelectionViewController } from '../../apps/selection/appSelectionViewController';
-import { DeviceService } from '../../../services';
+import { DeviceService, ConnectXGroupService } from '../../../services';
 import { TemplateListViewController } from '../../templates/templateListViewController';
 import { DnsRegistrationViewController } from '../../setup/dnsRegistration/dnsRegistrationViewController';
+import { DeviceManagerViewController } from '../manager/deviceManagerViewController';
+import { PairDetailsViewController } from '../../groups/pairDetails/pairDetailsViewController';
 
 /**
- * device list view for the sidebar.
+ * Device list view for the sidebar.
  * Displays a compact list of devices with quick actions.
- * Subscribes to device store updates to automatically refresh when devices change.
+ * Subscribes to device store and group store updates to automatically refresh when devices or groups change.
  */
 export class DeviceListViewController extends BaseViewController {
-    private readonly unsubscribe?: () => void;
-    private deviceService: DeviceService;
+    private readonly unsubscribes: (() => void)[] = [];
+    private readonly connectxGroupService: ConnectXGroupService;
+    private readonly deviceService: DeviceService;
     private lastRenderParams?: any;
 
     public static viewId(): string {
@@ -34,23 +38,36 @@ export class DeviceListViewController extends BaseViewController {
         logger: Logger; 
         telemetry: ITelemetryService;
         deviceService: DeviceService;
+        connectxGroupService: ConnectXGroupService;
     }) {
         super(deps.logger, deps.telemetry);
         this.deviceService = deps.deviceService;
+        this.connectxGroupService = deps.connectxGroupService;
         
         // Load templates
         this.template = this.loadTemplate('./deviceList.html', __dirname);
         this.styles = this.loadTemplate('./deviceList.css', __dirname);
         this.clientScript = this.loadTemplate('./deviceList.js', __dirname);
 
+        // Register device list item partial for template reuse
+        const deviceListItemPartial = this.loadTemplate('./deviceListItem.html', __dirname);
+        Handlebars.registerPartial('deviceListItem', deviceListItemPartial);
+
         // Subscribe to device updates
-        this.unsubscribe = this.deviceService.subscribe(() => {
+        this.unsubscribes.push(this.deviceService.subscribe(() => {
             this.logger.trace('Device store updated, refreshing device list view');
-            // Call refresh with last render params to update the webview
             this.refresh(this.lastRenderParams).catch(error => {
                 this.logger.error('Failed to refresh device list view after store update', { error });
             });
-        });
+        }));
+
+        // Subscribe to group store updates
+        this.unsubscribes.push(this.connectxGroupService.subscribe(() => {
+            this.logger.trace('Group store updated, refreshing device list view');
+            this.refresh(this.lastRenderParams).catch(error => {
+                this.logger.error('Failed to refresh device list view after group store update', { error });
+            });
+        }));
     }
 
     async render(params?: any, nonce?: string): Promise<string> {
@@ -60,10 +77,18 @@ export class DeviceListViewController extends BaseViewController {
         this.lastRenderParams = params;
 
         const devices = await this.deviceService.getAllDevices();
+        const groups = await this.connectxGroupService.getAllGroups();
+
+        // Create a map of device IDs to their group for quick lookup
+        const deviceToGroupMap = new Map<string, ConnectXGroup>();
+        for (const group of groups) {
+            for (const deviceId of group.deviceIds) {
+                deviceToGroupMap.set(deviceId, group);
+            }
+        }
         
-        // Determine DNS registration status from dnsInstanceName property
-        // Device needs registration if it's set up but has no DNS instance name
-        const devicesWithDnsStatus = devices.map((device) => {
+        // Add DNS registration status and pairing info to each device
+        const devicesWithStatus = devices.map((device) => {
             const needsDnsRegistration = device.isSetup && 
                                         device.useKeyAuth && 
                                         device.keySetup?.connectionTested &&
@@ -71,15 +96,44 @@ export class DeviceListViewController extends BaseViewController {
                                          device.dnsInstanceName === null ||
                                          device.dnsInstanceName.trim().length === 0);
             
+            const group = deviceToGroupMap.get(device.id);
+
             return {
                 ...device,
-                needsDnsRegistration
+                needsDnsRegistration,
+                isPaired: !!group,
+                groupId: group?.id
             };
         });
+
+        // Separate devices into paired groups and unpaired devices
+        const groupMap = new Map<string, typeof devicesWithStatus>();
+        const unpairedDevices: typeof devicesWithStatus = [];
+
+        for (const device of devicesWithStatus) {
+            if (device.isPaired && device.groupId) {
+                if (!groupMap.has(device.groupId)) {
+                    groupMap.set(device.groupId, []);
+                }
+                groupMap.get(device.groupId)!.push(device);
+            } else {
+                unpairedDevices.push(device);
+            }
+        }
+
+        // Convert map to array
+        const pairedGroups = Array.from(groupMap.entries()).map(([groupId, groupDevices]) => ({
+            groupId,
+            devices: groupDevices
+        }));
         
         // Prepare data for template
         const templateData = {
-            devices: devicesWithDnsStatus,
+            devices: devicesWithStatus,
+            pairedGroups: pairedGroups.length > 0 ? pairedGroups : null,
+            unpairedDevices: unpairedDevices.length > 0 ? unpairedDevices : null,
+            pairedDeviceCount: pairedGroups.reduce((sum, g) => sum + g.devices.length, 0),
+            unpairedDeviceCount: unpairedDevices.length,
             noDevices: devices.length === 0
         };
 
@@ -94,6 +148,8 @@ export class DeviceListViewController extends BaseViewController {
             },
             measurements: {
                 deviceCount: devices.length,
+                pairedGroupCount: pairedGroups.length,
+                unpairedDeviceCount: unpairedDevices.length
             }
         });
         
@@ -134,6 +190,14 @@ export class DeviceListViewController extends BaseViewController {
             
             case 'register-dns':
                 await this.registerDns(message.id);
+                break;
+            
+            case 'pairing-details':
+                await this.viewPairingDetails(message.groupId);
+                break;
+
+            case 'unpair-devices':
+                await this.navigateToUnpairDevices(message.groupId);
                 break;
             
             // Other message types are handled by the provider or services
@@ -242,7 +306,8 @@ export class DeviceListViewController extends BaseViewController {
     }
 
     /**
-     * Delete a device
+     * Delete a device. If the device is part of a paired group, shows a warning overlay
+     * before proceeding. Otherwise, shows a standard confirmation dialog.
      */
     private async deleteDevice(id: string): Promise<void> {
         this.logger.info('Deleting device', { id });
@@ -255,7 +320,20 @@ export class DeviceListViewController extends BaseViewController {
                 throw new Error(`device not found: ${id}`);
             }
 
-            // Show VS Code confirmation dialog
+            // Check if device is part of a paired group
+            const group = await this.connectxGroupService.getGroupForDevice(id);
+            if (group) {
+                this.logger.info('Device is part of a paired group, delegating to device manager', { id, groupId: group.id });
+                // Navigate to the device manager editor panel which will show the warning overlay centered on screen
+                await this.navigateTo(DeviceManagerViewController.viewId(), {
+                    showDeleteWarningForDeviceId: id,
+                    deleteWarningDeviceName: device.name,
+                    deleteWarningGroupId: group.id
+                }, 'editor');
+                return;
+            }
+
+            // Standard deletion: Show VS Code confirmation dialog
             const deviceName = device.name;
             const confirmation = await vscode.window.showWarningMessage(
                 `Are you sure you want to delete ${deviceName}?`,
@@ -275,6 +353,23 @@ export class DeviceListViewController extends BaseViewController {
             this.logger.error('Failed to delete device', { error, id });
             throw error;
         }
+    }
+
+    /**
+     * Navigate to pairing details view for a group
+     */
+    private async viewPairingDetails(groupId: string): Promise<void> {
+        this.logger.info('Navigating to pairing details', { groupId });
+        await this.navigateTo(PairDetailsViewController.viewId(), { groupId }, 'editor');
+    }
+
+    /**
+     * Navigate to unpair devices view for a group
+     */
+    private async navigateToUnpairDevices(groupId: string): Promise<void> {
+        this.logger.info('Navigating to unpair devices view', { groupId });
+        const { UnpairDevicesViewController } = await import('../../groups/unpairDevices/unpairDevicesViewController');
+        await this.navigateTo(UnpairDevicesViewController.viewId(), { groupId }, 'editor');
     }
 
     /**
@@ -304,8 +399,10 @@ export class DeviceListViewController extends BaseViewController {
     }
 
     dispose(): void {
-        if (this.unsubscribe) {
-            this.unsubscribe();
+        for (const unsubscribe of this.unsubscribes) {
+            if (typeof unsubscribe === 'function') {
+                unsubscribe();
+            }
         }
         super.dispose();
     }

@@ -1,0 +1,277 @@
+/*
+ * Copyright ©2025 HP Development Company, L.P.
+ * Licensed under the X11 License. See LICENSE file in the project root for details.
+ */
+
+.pair-devices-container {
+    padding: 40px;
+    max-width: 900px;
+    margin: 0 auto;
+    display: flex;
+    flex-direction: column;
+    min-height: 100vh;
+}
+
+.pair-devices-header {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    margin-bottom: 32px;
+}
+
+.pair-devices-header .codicon {
+    font-size: 32px;
+    color: var(--vscode-foreground);
+}
+
+.pair-devices-header h1 {
+    margin: 0;
+    font-size: 28px;
+    font-weight: 600;
+    color: var(--vscode-foreground);
+}
+
+.pair-devices-card {
+    background-color: var(--vscode-list-inactiveSelectionBackground);
+    border: 1px solid var(--vscode-panel-border);
+    border-radius: 8px;
+    margin-bottom: 24px;
+    overflow: hidden;
+}
+
+.card-content {
+    padding: 24px;
+}
+
+.card-content h2 {
+    margin: 0 0 12px 0;
+    font-size: 17px;
+    font-weight: 600;
+    color: var(--vscode-foreground);
+}
+
+.card-description {
+    margin: 0 0 20px 0;
+    font-size: 13px;
+    color: var(--vscode-descriptionForeground);
+    line-height: 1.5;
+}
+
+.device-selection-section {
+    margin-bottom: 20px;
+}
+
+.no-devices-message {
+    text-align: center;
+    padding: 40px 20px;
+    color: var(--vscode-descriptionForeground);
+}
+
+.no-devices-message p {
+    margin: 8px 0;
+    font-size: 13px;
+}
+
+.device-list {
+    background-color: var(--vscode-textCodeBlock-background);
+    border: 1px solid var(--vscode-panel-border);
+    border-radius: 4px;
+    max-height: 220px;
+    overflow-y: auto;
+}
+
+.device-item {
+    display: flex;
+    align-items: center;
+    padding: 10px 14px;
+    border-bottom: 1px solid var(--vscode-panel-border);
+    transition: all 0.15s ease;
+    background-color: transparent;
+}
+
+.device-item:last-child {
+    border-bottom: none;
+}
+
+.device-item:has(.device-checkbox:checked) {
+    background-color: #1e5a8e;
+}
+
+.device-item:hover:not(.disabled) {
+    background-color: var(--vscode-list-hoverBackground);
+}
+
+.device-item:has(.device-checkbox:checked):hover:not(.disabled) {
+    background-color: #2565a0;
+}
+
+.device-item.disabled {
+    opacity: 0.4;
+    pointer-events: none;
+    cursor: not-allowed;
+}
+
+.device-item.paired {
+    opacity: 0.5;
+    pointer-events: none;
+    cursor: not-allowed;
+}
+
+.device-item.paired .device-checkbox {
+    cursor: not-allowed;
+}
+
+.device-item.paired .device-label {
+    cursor: default;
+}
+
+.paired-badge {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    padding: 4px 8px;
+    background-color: var(--vscode-badge-background);
+    color: var(--vscode-badge-foreground);
+    border-radius: 4px;
+    font-size: 11px;
+    font-weight: 500;
+    margin-left: auto;
+    pointer-events: auto;
+    cursor: default;
+}
+
+.paired-badge .codicon {
+    font-size: 12px;
+    opacity: 0.8;
+}
+
+.device-checkbox {
+    margin: 0 12px 0 0;
+    cursor: pointer;
+    width: 18px;
+    height: 18px;
+    flex-shrink: 0;
+    appearance: none;
+    -webkit-appearance: none;
+    -moz-appearance: none;
+    border: 2px solid #6e6e6e;
+    border-radius: 3px;
+    background-color: transparent;
+    position: relative;
+    outline: none;
+}
+
+.device-checkbox:hover:not(:disabled) {
+    border-color: #8e8e8e;
+}
+
+.device-checkbox:checked {
+    background-color: var(--vscode-button-background);
+    border-color: var(--vscode-button-background);
+}
+
+.device-checkbox:checked::after {
+    content: '';
+    position: absolute;
+    left: 5px;
+    top: 2px;
+    width: 4px;
+    height: 8px;
+    border: solid white;
+    border-width: 0 2px 2px 0;
+    transform: rotate(45deg);
+}
+
+.device-label {
+    cursor: pointer;
+    display: flex;
+    flex-direction: column;
+    gap: 0;
+    flex: 1;
+}
+
+.device-name {
+    font-size: 13px;
+    font-weight: 400;
+    color: var(--vscode-foreground);
+}
+
+.tip-section {
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+    padding: 0;
+    margin: 15px 0 0 0;
+    font-size: 0.95em;
+    color: var(--vscode-foreground);
+}
+
+.tip-section .codicon {
+    font-size: 14px;
+    color: var(--vscode-foreground);
+    flex-shrink: 0;
+    margin-top: 1px;
+}
+
+.tip-text {
+    font-size: 12px;
+    color: var(--vscode-foreground);
+    line-height: 1.5;
+}
+
+.tip-text code {
+    background-color: var(--vscode-textCodeBlock-background);
+    padding: 2px 6px;
+    border-radius: 3px;
+    font-family: var(--vscode-editor-font-family);
+    font-size: 11px;
+    color: var(--vscode-foreground);
+}
+
+.diagram-section {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    margin: 20px 0;
+}
+
+.zgx-diagram {
+    max-width: 100%;
+    height: auto;
+    max-height: 250px;
+    object-fit: contain;
+}
+
+.pair-devices-actions {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 12px;
+    margin-top: 20px;
+    padding-top: 0;
+    border-top: none;
+}
+
+.action-buttons {
+    display: flex;
+    gap: 12px;
+    margin-left: auto;
+}
+
+/* Scrollbar styling for device list */
+.device-list::-webkit-scrollbar {
+    width: 10px;
+}
+
+.device-list::-webkit-scrollbar-track {
+    background: var(--vscode-scrollbarSlider-background);
+}
+
+.device-list::-webkit-scrollbar-thumb {
+    background: var(--vscode-scrollbarSlider-hoverBackground);
+    border-radius: 5px;
+}
+
+.device-list::-webkit-scrollbar-thumb:hover {
+    background: var(--vscode-scrollbarSlider-activeBackground);
+}

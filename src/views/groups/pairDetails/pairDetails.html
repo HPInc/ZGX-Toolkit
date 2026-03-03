@@ -1,0 +1,51 @@
+<!--
+  Copyright ©2026 HP Development Company, L.P.
+  Licensed under the X11 License. See LICENSE file in the project root for details.
+-->
+
+<div class="pair-details-container">
+    <div class="pair-details-header">
+        <i class="codicon codicon-info"></i>
+        <h1>Pairing Details</h1>
+    </div>
+
+    <div class="pair-details-card">
+        <div class="card-content">
+            <h2>Network Information</h2>
+            <p class="card-description">Use the network interfaces and IP addresses in the table when writing your code to take advantage of the high-speed NVIDIA ConnectX cable connecting the two devices.</p>
+
+            {{#if hasData}}
+            <div class="network-table-container">
+                <table class="network-table">
+                    <thead>
+                        <tr>
+                            <th>Device Name</th>
+                            <th>NVIDIA ConnectX Network Interface</th>
+                            <th>IP Address</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {{#each networkEntries}}
+                        <tr>
+                            <td>{{#if showDeviceName}}{{deviceName}}{{/if}}</td>
+                            <td>{{nicName}}</td>
+                            <td>{{ipAddress}}</td>
+                        </tr>
+                        {{/each}}
+                    </tbody>
+                </table>
+            </div>
+            {{else}}
+            <div class="no-data-message">
+                <p>No network information available for this pairing.</p>
+            </div>
+            {{/if}}
+
+            <div class="pair-details-actions">
+                <div class="action-buttons">
+                    <button class="btn" id="closeBtn">Close</button>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>

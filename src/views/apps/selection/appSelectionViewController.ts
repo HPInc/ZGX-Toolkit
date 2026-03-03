@@ -112,8 +112,7 @@ export class AppSelectionViewController extends BaseViewController {
     async handleMessage(message: Message): Promise<void> {
         // Handle error overlay close message
         if (message.type === 'close-error-overlay') {
-            this.logger.info('Error overlay closed, returning to device manager');
-            await this.navigateTo(DeviceManagerViewController.viewId());
+            this.logger.info('Error overlay closed');
             return;
         }
 
@@ -461,11 +460,15 @@ export class AppSelectionViewController extends BaseViewController {
                 return;
             }
             
-            this.showErrorOverlay(
-                'Application installation status cannot be verified at this time',
-                `Failed to establish an SSH connection to device **${device.name}**.\n*Please ensure the device is powered on, connected to the network, and that SSH key-based authentication is properly configured.*`,
-                healthCheckResult.error || 'Connection could not be established to the device.'
-            );
+            
+            this.sendMessageToWebview({
+                type: 'show-error-overlay',
+                errorTitle: 'Application installation status cannot be verified at this time',
+                errorDetails: `Failed to establish an SSH connection to device **${device.name}**.\n*Please ensure the device is powered on, connected to the network, and that SSH key-based authentication is properly configured.*`,
+                error: healthCheckResult.error || 'Connection could not be established to the device.',
+                buttonText: 'Return to Device Manager',
+                onClose: 'cancel'
+            });
         } catch (error) {
             this.logger.error('Error during device health check', {
                 device: device.name,
@@ -473,11 +476,14 @@ export class AppSelectionViewController extends BaseViewController {
             });
 
             // Show error overlay for unexpected errors
-            this.showErrorOverlay(
-                'Device Health Check Failed',
-                `An unexpected error occurred during health check for device **${device.name}**.`,
-                `${error instanceof Error ? error.message : String(error)}`
-            );
+            this.sendMessageToWebview({
+                type: 'show-error-overlay',
+                errorTitle: 'Device Health Check Failed',
+                errorDetails: `An unexpected error occurred during health check for device **${device.name}**.`,
+                error: `${error instanceof Error ? error.message : String(error)}`,
+                buttonText: 'Return to Device Manager',
+                onClose: 'cancel'
+            });
         }
     }
 }

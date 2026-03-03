@@ -19,6 +19,9 @@ export * from './logger';
 // device types
 export * from './devices';
 
+// ConnectX Group types
+export * from './connectxGroup';
+
 // Message types
 export * from './messages';
 

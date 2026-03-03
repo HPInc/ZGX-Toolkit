@@ -547,36 +547,6 @@ export class ConnectionService {
     }
 
     /**
-     * Check if SSH is available on the system.
-     * 
-     * @returns True if SSH is available
-     */
-    public async isSSHAvailable(): Promise<boolean> {
-        try {
-            await new Promise<void>((resolve, reject) => {
-                const sshProcess = spawn('ssh', ['-V']);
-
-                sshProcess.on('close', (code) => {
-                    // ssh -V returns 0 on success (or sometimes outputs to stderr but exits 0)
-                    if (code === 0 || code === null) {
-                        resolve();
-                    } else {
-                        reject(new Error(`ssh -V failed with exit code ${code}`));
-                    }
-                });
-
-                sshProcess.on('error', (err) => {
-                    reject(err);
-                });
-            });
-            return true;
-        } catch (error) {
-            logger.warn('SSH not available', { error });
-            return false;
-        }
-    }
-
-    /**
      * Generate platform-specific commands for manual SSH setup.
      * 
      * @param device The device to generate commands for

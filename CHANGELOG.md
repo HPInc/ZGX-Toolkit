@@ -1,3 +1,37 @@
+# Version v1.13.6 → v1.21.3 (March 2026)
+
+## What's New
+This release introduces **ConnectX device pairing**, enabling two ZGX Nano devices to be linked together for high-performance networking over ConnectX NICs - all managed directly from VS Code. It also delivers UX polish, a more capable RAG sample, and a collection of bug fixes.
+
+## Major Features
+
+### ConnectX Device Pairing
+You can now pair two ZGX Nano devices to form a high-bandwidth ConnectX network link. The entire pairing workflow—selecting devices, entering credentials, configuring NICs, and monitoring the result—is handled within the extension.
+
+#### What's included:
+- **ConnectX NIC Configuration** - SSH-based configuration and unconfiguration of ConnectX NICs is wired into the group service, with centralized SSH connection utilities shared across the application.
+- **Pair Devices View** - A dedicated view and controller guide the user through selecting two devices, entering the sudo password, and completing ConnectX pairing. Error paths include overlay messaging and group/NIC rollback on failure.
+- **Pairing Details View** - Shows the ConnectX network interfaces and their assigned IP addresses for each device in the pair. Accessible via the Sidebar, Device Manager, and the "Show Pairing Details" command palette entry.
+- **Unpair Devices View** - A dedicated view to list the devices in a pair, collect the sudo password, unconfigure the ConnectX NICs, and remove the group.
+- **Sidebar Pairing Integration** - The sidebar device list now separates devices into "Paired" and "Unpaired" collapsible sections. Paired devices are grouped in expandable pair containers that include Pair Details and Unpair action buttons.
+- **Device Manager Pairing Integration** - Pair containers with Pairing Details and Unpair Devices buttons are surfaced in the Device Manager.
+- **Deleting a Paired Device** - Attempting to delete a paired device shows a warning overlay, prompts for the sudo password, and proceeds with unpairing before deletion. Unpairing will succeed even if one (or both) of the devices are not reachable on the network.
+
+#### Getting started:
+1. Open the Device Manager
+2. Click **Pair Devices** button to open the Pair Devices View
+3. Select two set up ZGX devices and click **Pair Devices**
+4. Enter the sudo password when prompted; the extension will configure ConnectX and report the result
+5. Use the **Pair Details** button to inspect ConnectX IP addresses, or **Unpair** to remove the link
+
+### RAG Sample: Sample Questions
+The RAG quick-start sample now ships with pre-defined sample questions. This makes it faster to explore the application's capabilities and understand RAG workflows on your ZGX device without having to craft your own queries first.
+
+### Other Changes
+- Small bug fixes and improvements.
+
+---
+
 # Version v1.13.3 → v1.13.6 January 2026
 
 ## What's New
