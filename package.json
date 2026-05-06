@@ -114,8 +114,8 @@
                 },
                 "zgxToolkit.telemetry.enabled": {
                     "type": "boolean",
-                    "default": false,
-                    "description": "Enable telemetry for the ZGX Toolkit extension. Telemetry data helps to improve the extension by providing insights into usage patterns and potential issues. No personal or sensitive data is collected."
+                    "default": true,
+                    "description": "Enable telemetry for the ZGX Toolkit extension. This setting is enabled by default; set it to false to opt out. Telemetry is collected only when both this setting and VS Code's global telemetry setting allow it. Telemetry data helps improve the extension by providing insights into usage patterns and potential issues. No personal or sensitive data is collected."
                 }
             }
         }

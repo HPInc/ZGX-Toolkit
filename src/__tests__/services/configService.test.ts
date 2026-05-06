@@ -8,6 +8,7 @@
  */
 
 import { ConfigService } from '../../services/configService';
+import { CONFIG_DEFAULTS } from '../../constants/config';
 import { LogLevel } from '../../types/logger';
 import { logger } from '../../utils/logger';
 import * as vscode from 'vscode';
@@ -209,6 +210,12 @@ describe('ConfigService', () => {
       configService.get('test');
       
       expect(vscode.workspace.getConfiguration).toHaveBeenCalledWith('zgxToolkit');
+    });
+  });
+
+  describe('Default Values', () => {
+    it('zgxToolkit.telemetry.enabled should default to true', () => {
+      expect(CONFIG_DEFAULTS.TELEMETRY_ENABLED).toBe(true);
     });
   });
 });

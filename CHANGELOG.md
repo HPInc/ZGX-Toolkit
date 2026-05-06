@@ -1,3 +1,10 @@
+# Version v1.21.3 → v1.21.5 (May 2026)
+
+## What's New
+
+### Telemetry Enabled by Default
+Telemetry is now enabled by default to help improve the extension. If you had previously disabled telemetry, your preference is preserved and will not be overridden. To change this at any time, update the [Telemetry Enabled](vscode://settings/zgxToolkit.telemetry.enabled) setting in VS Code Settings (`File > Preferences > Settings`, then search for "ZGX Toolkit").
+
 # Version v1.13.6 → v1.21.3 (March 2026)
 
 ## What's New
