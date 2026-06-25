@@ -6,6 +6,14 @@
 import { ConnectionService } from "../../services";
 import { Device } from "../../types";
 import * as path from 'path';
+import { EventEmitter } from 'events';
+import * as os from 'os'; // NOSONAR S4731
+
+jest.mock('node:child_process', () => ({
+    spawn: jest.fn(),
+}));
+
+const { spawn: spawnMock } = require('node:child_process');
 
 // Mock the DNS service registration module
 jest.mock('../../services/dnsRegistrationService', () => ({
@@ -492,4 +500,218 @@ describe('validatePasswordForDNS', () => {
             expect(result.valid).toBe(true);
             expect(result.isConnectionError).toBe(false);
         });
+});
+
+describe('testSSHKeyConnectivity', () => {
+    let service: ConnectionService;
+    let fsMock: any;
+    let mockProcess: any;
+
+    const testDevice: Device = {
+        id: 'conn-1',
+        name: 'ConnDevice',
+        host: '192.168.1.50', // NOSONAR S1313
+        username: 'zgx',
+        port: 22,
+        isSetup: true,
+        useKeyAuth: true,
+        keySetup: { keyGenerated: true, keyCopied: true, connectionTested: false },
+        createdAt: new Date().toISOString(),
+    };
+
+    beforeEach(() => {
+        fsMock = require('fs'); // NOSONAR S4731
+        jest.clearAllMocks();
+
+        // Make the trusted binary appear to exist on the current platform
+        fsMock.existsSync.mockImplementation((p: string) =>
+            p.includes('OpenSSH') || p.includes('/usr/bin/ssh') || p.includes('/bin/ssh')
+        );
+
+        // Minimal mock child process — just needs EventEmitter interface + kill
+        mockProcess = new EventEmitter() as any;
+        mockProcess.exitCode = null;
+        mockProcess.signalCode = null;
+        mockProcess.kill = jest.fn();
+        mockProcess.stdout = new EventEmitter();
+        mockProcess.stderr = new EventEmitter();
+
+        spawnMock.mockReturnValue(mockProcess);
+
+        service = new ConnectionService();
+    });
+
+    it('resolves true when SSH exits with code 0', async () => {
+        const promise = service.testSSHKeyConnectivity(testDevice);
+        mockProcess.emit('close', 0, null);
+        expect(await promise).toBe(true);
+    });
+
+    it('resolves false when SSH exits with non-zero code', async () => {
+        const promise = service.testSSHKeyConnectivity(testDevice);
+        mockProcess.emit('close', 255, null);
+        expect(await promise).toBe(false);
+    });
+
+    it('resolves false on spawn error event', async () => {
+        const promise = service.testSSHKeyConnectivity(testDevice);
+        mockProcess.emit('error', new Error('ECONNREFUSED'));
+        expect(await promise).toBe(false);
+    });
+
+    it('includes -n flag in SSH args (stdin regression guard)', async () => {
+        const promise = service.testSSHKeyConnectivity(testDevice);
+        mockProcess.emit('close', 0, null);
+        await promise;
+        const args: string[] = spawnMock.mock.calls[0][1];
+        expect(args).toContain('-n');
+    });
+
+    it('includes -T flag in SSH args', async () => {
+        const promise = service.testSSHKeyConnectivity(testDevice);
+        mockProcess.emit('close', 0, null);
+        await promise;
+        const args: string[] = spawnMock.mock.calls[0][1];
+        expect(args).toContain('-T');
+    });
+
+    it('spawns with stdin set to ignore', async () => {
+        const promise = service.testSSHKeyConnectivity(testDevice);
+        mockProcess.emit('close', 0, null);
+        await promise;
+        const options = spawnMock.mock.calls[0][2];
+        expect(options.stdio[0]).toBe('ignore');
+    });
+
+    it('spawns an absolute trusted binary path, not bare "ssh"', async () => {
+        const promise = service.testSSHKeyConnectivity(testDevice);
+        mockProcess.emit('close', 0, null);
+        await promise;
+        const binaryPath: string = spawnMock.mock.calls[0][0];
+        expect(path.isAbsolute(binaryPath)).toBe(true);
+        expect(binaryPath).not.toBe('ssh');
+    });
+
+    it('includes -p and port for non-standard port', async () => {
+        const deviceWithPort = { ...testDevice, port: 33556 };
+        const promise = service.testSSHKeyConnectivity(deviceWithPort);
+        mockProcess.emit('close', 0, null);
+        await promise;
+        const args: string[] = spawnMock.mock.calls[0][1];
+        expect(args).toContain('-p');
+        expect(args).toContain('33556');
+    });
+
+    it('resolves false and kills process on timeout', async () => {
+        jest.useFakeTimers();
+        const promise = service.testSSHKeyConnectivity(testDevice, 5000);
+        jest.advanceTimersByTime(5001);
+        expect(await promise).toBe(false);
+        expect(mockProcess.kill).toHaveBeenCalled();
+        jest.useRealTimers();
+    });
+
+    it('resolves false without spawning when trusted binary is not found', async () => {
+        fsMock.existsSync.mockReturnValue(false); // no binary at any candidate path
+        const result = await service.testSSHKeyConnectivity(testDevice);
+        expect(result).toBe(false);
+        expect(spawnMock).not.toHaveBeenCalled();
+    });
+
+    it('handles existsSync throwing during binary resolution', async () => {
+        fsMock.existsSync.mockImplementation(() => { throw new Error('permission denied'); });
+        const result = await service.testSSHKeyConnectivity(testDevice);
+        expect(result).toBe(false);
+        expect(spawnMock).not.toHaveBeenCalled();
+    });
+    
+    it('falls back to /bin/ssh when /usr/bin/ssh does not exist', async () => {
+        const platformSpy = jest.spyOn(os, 'platform').mockReturnValue('linux');
+
+        fsMock.existsSync.mockImplementation((p: string) =>
+            p.includes('/bin/ssh') && !p.includes('/usr/bin/ssh')
+        );
+
+        const promise = service.testSSHKeyConnectivity(testDevice);
+        mockProcess.emit('close', 0, null);
+        await promise;
+
+        const binaryPath: string = spawnMock.mock.calls[0][0];
+        expect(binaryPath).toContain('/bin/ssh');
+        expect(binaryPath).not.toContain('/usr/bin/ssh');
+
+        platformSpy.mockRestore();
+    });
+});
+
+describe('getTrustedBinaryCandidates', () => {
+    let service: ConnectionService;
+
+    beforeEach(() => {
+        service = new ConnectionService();
+    });
+
+    afterEach(() => {
+        jest.restoreAllMocks();
+    });
+
+    it('returns a path under System32/OpenSSH on win32', () => {
+        jest.spyOn(os, 'platform').mockReturnValue('win32');
+        const candidates: string[] = (service as any).getTrustedBinaryCandidates('ssh');
+        expect(candidates.some((c: string) => c.includes('OpenSSH') && c.endsWith('ssh.exe'))).toBe(true);
+    });
+
+    it('returns /usr/bin/ssh on darwin', () => {
+        jest.spyOn(os, 'platform').mockReturnValue('darwin');
+        const candidates: string[] = (service as any).getTrustedBinaryCandidates('ssh');
+        expect(candidates).toEqual(['/usr/bin/ssh']);
+    });
+
+    it('returns two candidates on linux', () => {
+        jest.spyOn(os, 'platform').mockReturnValue('linux');
+        const candidates: string[] = (service as any).getTrustedBinaryCandidates('ssh');
+        expect(candidates).toContain('/usr/bin/ssh');
+        expect(candidates).toContain('/bin/ssh');
+    });
+});
+
+describe('generateManualSetupCommands', () => {
+    let service: ConnectionService;
+
+    const testDevice: Device = {
+        id: 'manual-1',
+        name: 'ManualDevice',
+        host: '192.168.1.60',
+        username: 'zgx',
+        port: 22,
+        isSetup: true,
+        useKeyAuth: true,
+        keySetup: {
+            keyGenerated: false,
+            keyCopied: false,
+            connectionTested: false,
+        },
+        createdAt: new Date().toISOString(),
+    };
+
+    beforeEach(() => {
+        jest.clearAllMocks();
+        service = new ConnectionService();
+    });
+
+    it('uses ed25519 key type for manual key generation across platforms', () => {
+        const commands = service.generateManualSetupCommands(testDevice);
+
+        expect(commands.windows.keyGen).toContain('ssh-keygen -t ed25519');
+        expect(commands.linux.keyGen).toContain('ssh-keygen -t ed25519');
+        expect(commands.mac.keyGen).toContain('ssh-keygen -t ed25519');
+    });
+
+    it('does not regress to rsa in manual key generation commands', () => {
+        const commands = service.generateManualSetupCommands(testDevice);
+
+        expect(commands.windows.keyGen.toLowerCase()).not.toContain('rsa');
+        expect(commands.linux.keyGen.toLowerCase()).not.toContain('rsa');
+        expect(commands.mac.keyGen.toLowerCase()).not.toContain('rsa');
+    });
 });

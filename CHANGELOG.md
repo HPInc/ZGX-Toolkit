@@ -1,3 +1,11 @@
+# Version v1.21.5 → v1.21.8 (June 2026)
+
+## What's New
+
+### Bug Fixes
+- **SSH Connectivity** - Fixes SSH "Test Connection" failures during device setup by improving reliability of connections across different terminal configurations.
+- **Manual Setup** - Updates manual commands for SSH key generation from `rsa` to `ed25519` for improved security and better cross-platform support.
+
 # Version v1.21.3 → v1.21.5 (May 2026)
 
 ## What's New

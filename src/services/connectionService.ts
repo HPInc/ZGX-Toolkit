@@ -12,13 +12,12 @@ import * as vscode from 'vscode';
 import * as os from 'os';
 import * as path from 'path';
 import * as fs from 'fs';
-import { exec, spawn } from 'child_process';
-import { promisify } from 'util';
+import { ChildProcess, spawn, SpawnOptions } from 'node:child_process';
 import { Device } from '../types/devices';
 import { logger } from '../utils/logger';
 import { DnsServiceRegistrationResult, dnsServiceRegistration } from './dnsRegistrationService';
 
-const execAsync = promisify(exec);
+type TrustedSshBinaryName = 'ssh' | 'ssh-keygen';
 
 /**
  * Platform-specific information for command generation.
@@ -51,6 +50,95 @@ export interface ManualSSHCommands {
  * Service for handling SSH connections and key management.
  */
 export class ConnectionService {
+    /**
+     * Get the fixed, OS-specific locations that are allowed for a trusted SSH binary.
+     * This avoids resolving executables through PATH, which Sonar flags as security-sensitive.
+     *
+     * @param binaryName The SSH executable to locate
+     * @returns Ordered list of absolute candidate paths to check
+     */
+    private getTrustedBinaryCandidates(binaryName: TrustedSshBinaryName): string[] {
+        const platform = os.platform();
+        if (platform === 'win32') {
+            const windowsDir = process.env.windir || String.raw`C:\Windows`;
+            return [
+                path.join(windowsDir, 'System32', 'OpenSSH', `${binaryName}.exe`),
+            ];
+        }
+
+        if (platform === 'darwin') {
+            return [
+                `/usr/bin/${binaryName}`,
+            ];
+        }
+
+        return [
+            `/usr/bin/${binaryName}`,
+            `/bin/${binaryName}`,
+        ];
+    }
+
+    /**
+     * Resolve the first existing trusted SSH binary from the platform allowlist.
+     * Throws when no fixed system path contains the requested executable.
+     *
+     * @param binaryName The SSH executable to resolve
+     * @returns Absolute path to the trusted binary
+     * @throws Error when no trusted binary is found
+     */
+    private resolveTrustedBinary(binaryName: TrustedSshBinaryName): string {
+        const candidates = this.getTrustedBinaryCandidates(binaryName);
+
+        for (const candidate of candidates) {
+            try {
+                if (fs.existsSync(candidate)) {
+                    logger.debug('Resolved trusted SSH binary', {
+                        binaryName,
+                        path: candidate,
+                    });
+                    return candidate;
+                }
+            } catch (error) {
+                logger.warn('Failed while checking trusted SSH binary path', {
+                    binaryName,
+                    path: candidate,
+                    error: error instanceof Error ? error.message : String(error),
+                });
+            }
+        }
+
+        throw new Error(
+            `Unable to locate a trusted ${binaryName} binary. Checked: ${candidates.join(', ')}.`
+        );
+    }
+
+    /**
+     * Spawn an SSH-related process using a previously resolved trusted binary path.
+     * Centralizing this keeps all SSH process launches on the same safe code path.
+     *
+     * @param binaryName The SSH executable to launch
+     * @param args Command-line arguments passed to the executable
+     * @param options Optional child process spawn options
+     * @returns The spawned child process
+     */
+    private spawnTrustedBinary(
+        binaryName: TrustedSshBinaryName,
+        args: string[],
+        options?: SpawnOptions
+    ): ChildProcess {
+        try {
+            const binaryPath = this.resolveTrustedBinary(binaryName);
+            return options ? spawn(binaryPath, args, options) : spawn(binaryPath, args);
+        } catch (error) {
+            logger.error('Trusted SSH binary resolution failed', {
+                binaryName,
+                error: error instanceof Error ? error.message : String(error),
+            });
+            throw error;
+        }
+    }
+    
+    
     /**
      * Generate SSH key pair if it doesn't exist.
      * Uses ed25519 for modern security.
@@ -89,7 +177,9 @@ export class ConnectionService {
                 logger.debug('Executing ssh-keygen command');
 
                 await new Promise<void>((resolve, reject) => {
-                    const keygenProcess = spawn('ssh-keygen', keygenArgs);
+                    const keygenProcess = this.spawnTrustedBinary('ssh-keygen', keygenArgs, {
+                            stdio: ['ignore', 'pipe', 'pipe']
+                    });
 
                     let stderr = '';
 
@@ -244,6 +334,7 @@ export class ConnectionService {
 
         // Build SSH args array
         const sshArgs = [
+            '-n',
             '-T',
             '-o', 'BatchMode=yes',
             '-o', 'ConnectTimeout=10',
@@ -260,37 +351,76 @@ export class ConnectionService {
         logger.debug('SSH test command', { args: sshArgs });
 
         return new Promise<boolean>((resolve) => {
+            let sshProcess: ChildProcess;
+            try {
+                sshProcess = this.spawnTrustedBinary('ssh', sshArgs, {
+                    stdio: ['ignore', 'pipe', 'pipe']
+                });
+            } catch (err) {
+                logger.error('SSH connectivity test failed to start', {
+                    device: device.name,
+                    success: false,
+                    error: err instanceof Error ? err.message : String(err),
+                });
+                resolve(false);
+                return;
+            }
+
+            let settled = false;
+
+            const resolveOnce = (value: boolean) => {
+                if (!settled) {
+                    settled = true;
+                    resolve(value);
+                }
+            };
+
             const timeoutHandle = setTimeout(() => {
                 logger.warn('SSH connectivity test timed out', {
                     device: device.name,
                     timeout: timeoutMs,
                 });
-                resolve(false);
+
+                if (sshProcess.exitCode === null && sshProcess.signalCode === null) {
+                    try {
+                         sshProcess.kill();
+                         logger.debug('SSH connectivity test process terminated after timeout', {
+                             device: device.name,
+                         });
+                     } catch (killError) {
+                         logger.warn('Failed to terminate SSH connectivity test process after timeout', {
+                             device: device.name,
+                             error: killError instanceof Error ? killError.message : String(killError),
+                         });
+                     }
+                }
+                resolveOnce(false);
             }, timeoutMs);
 
-            const sshProcess = spawn('ssh', sshArgs);
-
-            sshProcess.on('close', (code) => {
+            sshProcess.on('close', (code, signal) => {
                 clearTimeout(timeoutHandle);
+
                 const success = code === 0;
 
                 logger.info('SSH connectivity test completed', {
                     device: device.name,
                     success,
                     exitCode: code,
+                    signal,
                 });
 
-                resolve(success);
+                resolveOnce(success);
             });
 
             sshProcess.on('error', (err) => {
                 clearTimeout(timeoutHandle);
-                logger.info('SSH connectivity test error', {
+                logger.error('SSH connectivity test error', {
                     device: device.name,
                     success: false,
                     error: err.message,
                 });
-                resolve(false);
+
+                resolveOnce(false);
             });
         });
     }
@@ -558,8 +688,8 @@ export class ConnectionService {
         const sshDirExists = fs.existsSync(sshDir);
 
         // Key generation commands
-        const winKeyGenBase = `ssh-keygen -t rsa -b 4096 -f "$Env:USERPROFILE/.ssh/id_rsa" -N [String]::Empty`;
-        const posixKeyGenBase = `ssh-keygen -t rsa -b 4096 -f ~/.ssh/id_rsa -N ""`;
+        const winKeyGenBase = `ssh-keygen -t ed25519 -f "$Env:USERPROFILE/.ssh/id_ed25519"`;
+        const posixKeyGenBase = `ssh-keygen -t ed25519 -f ~/.ssh/id_ed25519 -N ""`;
 
 
         const windowsKeyGen = sshDirExists
