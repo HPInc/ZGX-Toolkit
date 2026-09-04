@@ -1,10 +1,10 @@
 /*
- * Copyright ©2025 HP Development Company, L.P.
+ * Copyright ©2025-2026 HP Development Company, L.P.
  * Licensed under the X11 License. See LICENSE file in the project root for details.
  */
 
 /*
- * Common styles for all views in the ZGX Toolkit extension.
+ * Common styles for all views in the Z Toolkit extension.
  * Provides consistent theming using VS Code's CSS variables.
  */
 
@@ -218,6 +218,10 @@ p {
   position: relative;
   display: inline-flex;
   align-items: stretch;
+  border: none;
+  margin: 0;
+  padding: 0;
+  min-width: 0;
 }
 
 .split-button-main {
@@ -546,26 +550,29 @@ a:hover {
 }
 
 /* Loading states */
+
 .spinner {
   display: inline-block;
-  width: 16px;
-  height: 16px;
-  border: 2px solid var(--vscode-descriptionForeground);
+  width: 12px;
+  height: 12px;
+  border: 2px solid var(--vscode-button-foreground);
   border-radius: 50%;
   border-top-color: transparent;
   animation: spin 1s ease-in-out infinite;
-}
-
-.spinner-lg {
-  width: 32px;
-  height: 32px;
-  border-width: 3px;
+  vertical-align: middle;
+  margin-right: 6px;
 }
 
 @keyframes spin {
   to {
     transform: rotate(360deg);
   }
+}
+
+.spinner-lg {
+  width: 32px;
+  height: 32px;
+  border-width: 3px;
 }
 
 /* Alerts */
@@ -883,33 +890,13 @@ a:hover {
 /* Error message */
 
 .error-message {
-    background-color: var(--vscode-inputValidation-errorBackground);
-    border: 1px solid var(--vscode-inputValidation-errorBorder);
-    color: var(--vscode-errorForeground);
-    padding: 12px;
-    margin-bottom: 16px;
-    border-radius: 4px;
-    font-size: 0.9em;
-}
-
-/* Spinner */
-
-.spinner {
-    display: inline-block;
-    width: 12px;
-    height: 12px;
-    border: 2px solid var(--vscode-button-foreground);
-    border-radius: 50%;
-    border-top-color: transparent;
-    animation: spin 1s ease-in-out infinite;
-    vertical-align: middle;
-    margin-right: 6px;
-}
-
-@keyframes spin {
-    to {
-        transform: rotate(360deg);
-    }
+  background-color: var(--vscode-inputValidation-errorBackground);
+  border: 1px solid var(--vscode-inputValidation-errorBorder);
+  color: var(--vscode-errorForeground);
+  padding: 12px;
+  margin-bottom: 16px;
+  border-radius: 4px;
+  font-size: 0.9em;
 }
 
 /* HP Stripe in Electric Blue */

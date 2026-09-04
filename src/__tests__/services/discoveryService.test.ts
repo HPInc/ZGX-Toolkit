@@ -1,10 +1,9 @@
 /*
- * Copyright ©2025 HP Development Company, L.P.
+ * Copyright ©2025-2026 HP Development Company, L.P.
  * Licensed under the X11 License. See LICENSE file in the project root for details.
  */
 
 import { DeviceDiscoveryService } from '../../services/deviceDiscoveryService';
-import { DiscoveredDevice } from '../../types/devices';
 import { ITelemetryService } from '../../types/telemetry';
 import { NET_PROTOCOLS, NET_DNSSD_SERVICES } from '../../constants/net';
 
@@ -13,22 +12,22 @@ jest.mock('vscode', () => ({
     window: {
         createOutputChannel: jest.fn(() => ({
             appendLine: jest.fn(),
-            show: jest.fn(),
-        })),
-    },
+            show: jest.fn()
+        }))
+    }
 }));
 
 // Mock dnssd with proper cleanup tracking
 const mockBrowserInstances: any[] = [];
 
 jest.mock('dnssd', () => {
-    const mockBrowserConstructor = jest.fn((serviceType: string, options: object) => {
+    const mockBrowserConstructor = jest.fn((serviceType: string, _options: object) => {
         const instance = {
             start: jest.fn(),
             stop: jest.fn(),
             on: jest.fn(),
             _eventHandlers: {} as any,
-            _serviceType: serviceType,
+            _serviceType: serviceType
         };
         
         // Store event handlers
@@ -44,7 +43,7 @@ jest.mock('dnssd', () => {
     return {
         Browser: mockBrowserConstructor,
         tcp: jest.fn((service: string) => service),
-        udp: jest.fn((service: string) => service),
+        udp: jest.fn((service: string) => service)
     };
 });
 
@@ -83,7 +82,7 @@ describe('DeviceDiscoveryService', () => {
             trackError: jest.fn(),
             isEnabled: jest.fn().mockReturnValue(false),
             setEnabled: jest.fn(),
-            dispose: jest.fn().mockResolvedValue(undefined),
+            dispose: jest.fn().mockResolvedValue(undefined)
         } as any;
         
         discoveryService = new DeviceDiscoveryService({ telemetry: mockTelemetry });
@@ -224,7 +223,7 @@ describe('DeviceDiscoveryService', () => {
             expect(devices[0].port).toBe(2222);
         });
 
-        it('should return empty array when no interfaces available', async () => {
+        it('should reject with a network discovery error when no interfaces are available', async () => {
             // Mock no network interfaces
             mockNetworkInterfaces.mockReturnValueOnce({} as any);
 
@@ -234,9 +233,10 @@ describe('DeviceDiscoveryService', () => {
                 100
             );
 
-            const devices = await discoveryPromise;
-
-            expect(devices).toEqual([]);
+            await expect(discoveryPromise).rejects.toMatchObject({
+                reason: 'network',
+                message: 'No active network interfaces found'
+            });
             expect(mockTelemetry.trackEvent).toHaveBeenCalledWith(
                 expect.objectContaining({
                     action: 'discover',
@@ -247,12 +247,12 @@ describe('DeviceDiscoveryService', () => {
             );
         });
 
-        it('should handle browser creation failure gracefully', async () => {
+        it('should reject with a classified discovery error when browser creation fails for all interfaces', async () => {
             const dnssd = require('dnssd');
             const originalImpl = dnssd.Browser.getMockImplementation();
             
             dnssd.Browser.mockImplementationOnce(() => {
-                throw new Error('Browser creation failed');
+                throw new Error('permission denied');
             });
 
             const discoveryPromise = discoveryService.discoverService(
@@ -261,14 +261,95 @@ describe('DeviceDiscoveryService', () => {
                 100
             );
 
-            const devices = await discoveryPromise;
-
-            // Should return empty array but not track error (per-interface errors are just logged)
-            expect(devices).toEqual([]);
+            await expect(discoveryPromise).rejects.toMatchObject({
+                reason: 'permission',
+                message: 'permission denied'
+            });
+            expect(mockTelemetry.trackError).toHaveBeenCalledWith(
+                expect.objectContaining({
+                    context: 'device-discovery',
+                    error: expect.objectContaining({
+                        name: 'DeviceDiscoveryError',
+                        reason: 'permission',
+                        message: 'permission denied'
+                    })
+                })
+            );
             
             if (originalImpl) {
                 dnssd.Browser.mockImplementation(originalImpl);
             }
+        });
+
+        it('should reject with a timeout discovery error when the browser reports a timeout and no devices are found', async () => {
+            const discoveryPromise = discoveryService.discoverService(
+                NET_DNSSD_SERVICES.SSH,
+                NET_PROTOCOLS.TCP,
+                100
+            );
+
+            const mockBrowser = mockBrowserInstances[mockBrowserInstances.length - 1];
+            const errorHandler = mockBrowser._eventHandlers['error'];
+
+            if (errorHandler) {
+                errorHandler(new Error('Discovery timed out waiting for mDNS responses'));
+            }
+
+            jest.advanceTimersByTime(100);
+
+            await expect(discoveryPromise).rejects.toMatchObject({
+                reason: 'timeout',
+                message: 'Discovery timed out waiting for mDNS responses'
+            });
+            expect(mockTelemetry.trackError).toHaveBeenCalledWith(
+                expect.objectContaining({
+                    context: 'device-discovery',
+                    error: expect.objectContaining({
+                        name: 'DeviceDiscoveryError',
+                        reason: 'timeout',
+                        message: 'Discovery timed out waiting for mDNS responses'
+                    })
+                })
+            );
+        });
+
+        it('should resolve empty results when one interface fails but another remains available', async () => {
+            mockNetworkInterfaces.mockReturnValueOnce({
+                'Ethernet': [{
+                    family: 'IPv4',
+                    address: '192.168.1.100',
+                    internal: false,
+                    netmask: '255.255.255.0',
+                    mac: '00:00:00:00:00:00',
+                    cidr: '192.168.1.100/24'
+                }],
+                'WiFi': [{
+                    family: 'IPv4',
+                    address: '192.168.2.100',
+                    internal: false,
+                    netmask: '255.255.255.0',
+                    mac: '00:00:00:00:00:01',
+                    cidr: '192.168.2.100/24'
+                }]
+            });
+
+            const discoveryPromise = discoveryService.discoverService(
+                NET_DNSSD_SERVICES.SSH,
+                NET_PROTOCOLS.TCP,
+                100
+            );
+
+            const failingBrowser = mockBrowserInstances[0];
+            const errorHandler = failingBrowser._eventHandlers['error'];
+
+            if (errorHandler) {
+                errorHandler(new Error('permission denied'));
+            }
+
+            jest.advanceTimersByTime(100);
+
+            await expect(discoveryPromise).resolves.toEqual([]);
+            expect(mockTelemetry.trackError).not.toHaveBeenCalled();
         });
 
         it('should create browsers on multiple network interfaces', async () => {
@@ -416,6 +497,30 @@ describe('DeviceDiscoveryService', () => {
     });
 
     describe('discoverDevices', () => {
+        it('should fall back to the default timeout when an invalid timeout is provided', async () => {
+            const discoveryPromise = discoveryService.discoverDevices(Number.NaN);
+
+            jest.advanceTimersByTime(4999);
+            await Promise.resolve();
+            expect(mockTelemetry.trackEvent).not.toHaveBeenCalled();
+
+            jest.advanceTimersByTime(1);
+            const devices = await discoveryPromise;
+
+            expect(devices).toEqual([]);
+            expect(mockTelemetry.trackEvent).toHaveBeenCalledWith(
+                expect.objectContaining({
+                    action: 'discover',
+                    properties: expect.objectContaining({
+                        result: 'success'
+                    }),
+                    measurements: expect.objectContaining({
+                        deviceCount: 0
+                    })
+                })
+            );
+        });
+
         it('should run both SSH and HPZGX discovery in parallel', async () => {
             const discoveryPromise = discoveryService.discoverDevices(100);
             
@@ -554,12 +659,12 @@ describe('DeviceDiscoveryService', () => {
             });
             
             // Second browser (HPZGX) succeeds
-            dnssd.Browser.mockImplementationOnce((serviceType: string, options: object) => {
+            dnssd.Browser.mockImplementationOnce((_serviceType: string, _options: object) => {
                 const instance = {
                     start: jest.fn(),
                     stop: jest.fn(),
                     on: jest.fn(),
-                    _eventHandlers: {} as any,
+                    _eventHandlers: {} as any
                 };
                 instance.on.mockImplementation((event: string, handler: Function) => {
                     instance._eventHandlers[event] = handler;
@@ -589,6 +694,52 @@ describe('DeviceDiscoveryService', () => {
             expect(devices).toHaveLength(1);
             expect(devices[0].hostname).toBe('zgx-def456');
             
+            if (originalImpl) {
+                dnssd.Browser.mockImplementation(originalImpl);
+            }
+        });
+
+        it('should return empty results when one service discovery fails but another completes without devices', async () => {
+            const dnssd = require('dnssd');
+            const originalImpl = dnssd.Browser.getMockImplementation();
+
+            dnssd.Browser.mockImplementationOnce(() => {
+                throw new Error('SSH browser failed');
+            });
+
+            dnssd.Browser.mockImplementationOnce((serviceType: string) => {
+                const instance = {
+                    start: jest.fn(),
+                    stop: jest.fn(),
+                    on: jest.fn(),
+                    _eventHandlers: {} as any,
+                    _serviceType: serviceType
+                };
+                instance.on.mockImplementation((event: string, handler: Function) => {
+                    instance._eventHandlers[event] = handler;
+                    return instance;
+                });
+                mockBrowserInstances.push(instance);
+                return instance;
+            });
+
+            const discoveryPromise = discoveryService.discoverDevices(100);
+
+            jest.advanceTimersByTime(100);
+
+            await expect(discoveryPromise).resolves.toEqual([]);
+            expect(mockTelemetry.trackEvent).toHaveBeenCalledWith(
+                expect.objectContaining({
+                    action: 'discover',
+                    properties: expect.objectContaining({
+                        result: 'success'
+                    }),
+                    measurements: expect.objectContaining({
+                        deviceCount: 0
+                    })
+                })
+            );
+
             if (originalImpl) {
                 dnssd.Browser.mockImplementation(originalImpl);
             }
@@ -677,6 +828,56 @@ describe('DeviceDiscoveryService', () => {
                 expect.objectContaining({
                     measurements: expect.objectContaining({
                         deviceCount: 0
+                    })
+                })
+            );
+        });
+
+        it('should reject when discovery cannot run and no devices were found', async () => {
+            mockNetworkInterfaces
+                .mockReturnValueOnce({} as any)
+                .mockReturnValueOnce({} as any);
+
+            const discoveryPromise = discoveryService.discoverDevices(100);
+
+            await expect(discoveryPromise).rejects.toMatchObject({
+                reason: 'network',
+                message: 'No active network interfaces found'
+            });
+            expect(mockTelemetry.trackError).toHaveBeenCalledWith(
+                expect.objectContaining({
+                    context: 'device-discovery',
+                    error: expect.objectContaining({
+                        name: 'DeviceDiscoveryError',
+                        reason: 'network',
+                        message: 'No active network interfaces found'
+                    })
+                })
+            );
+        });
+
+        it('should track telemetry when both discovery services only report browser errors', async () => {
+            const discoveryPromise = discoveryService.discoverDevices(100);
+
+            const sshBrowser = mockBrowserInstances[0];
+            const hpzgxBrowser = mockBrowserInstances[1];
+
+            sshBrowser._eventHandlers['error']?.(new Error('permission denied'));
+            hpzgxBrowser._eventHandlers['error']?.(new Error('Discovery timed out waiting for mDNS responses'));
+
+            jest.advanceTimersByTime(100);
+
+            await expect(discoveryPromise).rejects.toMatchObject({
+                reason: 'permission',
+                message: 'permission denied'
+            });
+            expect(mockTelemetry.trackError).toHaveBeenCalledWith(
+                expect.objectContaining({
+                    context: 'device-discovery',
+                    error: expect.objectContaining({
+                        name: 'DeviceDiscoveryError',
+                        reason: 'permission',
+                        message: 'permission denied'
                     })
                 })
             );
@@ -927,6 +1128,16 @@ describe('DeviceDiscoveryService', () => {
 
             expect(devices).toHaveLength(1);
             expect(hpzgxBrowser.stop).toHaveBeenCalled();
+        });
+
+        it('should propagate typed discovery errors during rediscovery', async () => {
+            mockNetworkInterfaces.mockReturnValueOnce({} as any);
+
+            await expect(discoveryService.rediscoverDevices(['Test'], 100)).rejects.toMatchObject({
+                name: 'DeviceDiscoveryError',
+                reason: 'network',
+                message: 'No active network interfaces found'
+            });
         });
     });
 

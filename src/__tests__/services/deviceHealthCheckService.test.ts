@@ -28,7 +28,7 @@ jest.mock('../../utils/logger', () => ({
         debug: jest.fn(),
         info: jest.fn(),
         warn: jest.fn(),
-        error: jest.fn(),
+        error: jest.fn()
     }
 }));
 
@@ -49,7 +49,7 @@ describe('DeviceHealthCheckService', () => {
             port: 22,
             useKeyAuth: true,
             isSetup: true,
-            createdAt: new Date().toISOString(),
+            createdAt: new Date().toISOString()
         } as Device;
 
         // Reset mocks
@@ -59,7 +59,7 @@ describe('DeviceHealthCheckService', () => {
         mockSSHClient = {
             connect: jest.fn(),
             on: jest.fn(),
-            end: jest.fn(),
+            end: jest.fn()
         } as any;
 
         (SSHClient as jest.MockedClass<typeof SSHClient>).mockImplementation(() => mockSSHClient);
@@ -203,13 +203,13 @@ describe('DeviceHealthCheckService', () => {
                     port: 22,
                     username: 'zgx',
                     readyTimeout: 5000,
-                    timeout: 5000,
+                    timeout: 5000
                 })
             );
         });
 
         it('should use default port 22 when not specified', async () => {
-            const { port, ...deviceWithoutPort } = testDevice;
+            const { port: _port, ...deviceWithoutPort } = testDevice;
             const testDeviceNoPort = deviceWithoutPort as Device;
 
             mockSSHClient.on.mockImplementation((event: string, handler: any) => {
@@ -223,7 +223,7 @@ describe('DeviceHealthCheckService', () => {
 
             expect(mockSSHClient.connect).toHaveBeenCalledWith(
                 expect.objectContaining({
-                    port: 22,
+                    port: 22
                 })
             );
         });
@@ -252,7 +252,7 @@ Host test-device
                 HostName: '10.0.0.50',
                 Port: '2222',
                 User: 'admin',
-                IdentityFile: path.join(path.sep, 'home', 'testuser', '.ssh', 'test_key'),
+                IdentityFile: path.join(path.sep, 'home', 'testuser', '.ssh', 'test_key')
             });
 
             (SSHConfig.parse as jest.Mock).mockReturnValue({
@@ -273,7 +273,7 @@ Host test-device
                     host: '10.0.0.50',
                     port: 2222,
                     username: 'admin',
-                    privateKey: expect.any(Buffer),
+                    privateKey: expect.any(Buffer)
                 })
             );
         });
@@ -285,7 +285,7 @@ Host test-device
             const mockCompute = jest.fn().mockReturnValue({
                 HostName: ['10.0.0.50', 'backup.host.com'],
                 Port: ['2222', '22'],
-                User: ['admin', 'root'],
+                User: ['admin', 'root']
             });
 
             (SSHConfig.parse as jest.Mock).mockReturnValue({
@@ -305,7 +305,7 @@ Host test-device
                 expect.objectContaining({
                     host: '10.0.0.50',
                     port: 2222,
-                    username: 'admin',
+                    username: 'admin'
                 })
             );
         });
@@ -326,8 +326,8 @@ Host test-device
                 IdentityFile: [
                     path.join(path.sep, 'home', 'testuser', '.ssh', 'id_ed25519'),
                     path.join(path.sep, 'home', 'testuser', '.ssh', 'id_rsa'),
-                    path.join(path.sep, 'home', 'testuser', '.ssh', 'id_ecdsa'),
-                ],
+                    path.join(path.sep, 'home', 'testuser', '.ssh', 'id_ecdsa')
+                ]
             });
 
             (SSHConfig.parse as jest.Mock).mockReturnValue({
@@ -345,7 +345,7 @@ Host test-device
 
             expect(mockSSHClient.connect).toHaveBeenCalledWith(
                 expect.objectContaining({
-                    privateKey: expect.any(Buffer),
+                    privateKey: expect.any(Buffer)
                 })
             );
         });
@@ -355,7 +355,7 @@ Host test-device
             (fs.readFileSync as jest.Mock).mockReturnValue('');
 
             const mockCompute = jest.fn().mockReturnValue({
-                IdentitiesOnly: 'yes',
+                IdentitiesOnly: 'yes'
             });
 
             (SSHConfig.parse as jest.Mock).mockReturnValue({
@@ -380,7 +380,7 @@ Host test-device
             (fs.readFileSync as jest.Mock).mockReturnValue('');
 
             const mockCompute = jest.fn().mockReturnValue({
-                IdentitiesOnly: ['yes'],
+                IdentitiesOnly: ['yes']
             });
 
             (SSHConfig.parse as jest.Mock).mockReturnValue({
@@ -440,7 +440,7 @@ Host test-device
 
             expect(mockSSHClient.connect).toHaveBeenCalledWith(
                 expect.objectContaining({
-                    privateKey: expect.any(Buffer),
+                    privateKey: expect.any(Buffer)
                 })
             );
         });
@@ -462,7 +462,7 @@ Host test-device
             });
 
             const mockCompute = jest.fn().mockReturnValue({
-                IdentityFile: '~/.ssh/custom_key',
+                IdentityFile: '~/.ssh/custom_key'
             });
 
             (SSHConfig.parse as jest.Mock).mockReturnValue({
@@ -487,7 +487,7 @@ Host test-device
             
             expect(mockSSHClient.connect).toHaveBeenCalledWith(
                 expect.objectContaining({
-                    privateKey: expect.any(Buffer),
+                    privateKey: expect.any(Buffer)
                 })
             );
         });
@@ -520,7 +520,7 @@ Host test-device
             });
 
             const mockCompute = jest.fn().mockReturnValue({
-                IdentityFile: path.join(path.sep, 'home', 'testuser', '.ssh', 'protected_key'),
+                IdentityFile: path.join(path.sep, 'home', 'testuser', '.ssh', 'protected_key')
             });
 
             (SSHConfig.parse as jest.Mock).mockReturnValue({
@@ -541,7 +541,7 @@ Host test-device
                 expect.objectContaining({
                     host: testDevice.host,
                     port: testDevice.port,
-                    username: testDevice.username,
+                    username: testDevice.username
                 })
             );
         });

@@ -1,15 +1,17 @@
 /*
- * Copyright ©2025 HP Development Company, L.P.
+ * Copyright ©2025-2026 HP Development Company, L.P.
  * Licensed under the X11 License. See LICENSE file in the project root for details.
  */
 
 import { BaseViewController } from '../../baseViewController';
+import { SETUP_VIEW_IDS } from '../setupViewIds';
 import { Logger } from '../../../utils/logger';
 import { ITelemetryService, TelemetryEventType } from '../../../types/telemetry';
 import { Device } from '../../../types/devices';
 import { Message } from '../../../types/messages';
 import { ConnectionService } from '../../../services/connectionService';
 import { DeviceService } from '../../../services/deviceService';
+import { DnsServiceRegistrationResult } from '../../../services/dnsRegistrationService';
 import { SetupSuccessViewController } from '../success/setupSuccessViewController';
 
 /**
@@ -25,7 +27,7 @@ export class DnsRegistrationViewController extends BaseViewController {
     private isDisposed = false;
 
     public static viewId(): string {
-        return 'setup/dnsRegistration';
+        return SETUP_VIEW_IDS.dnsRegistration;
     }
 
     constructor(
@@ -39,9 +41,9 @@ export class DnsRegistrationViewController extends BaseViewController {
         super(deps.logger, deps.telemetry);
         this.connectionService = deps.connectionService;
         this.deviceService = deps.deviceService;
-        this.template = this.loadTemplate('./dnsRegistration.html', __dirname);
-        this.styles = this.loadTemplate('./dnsRegistration.css', __dirname);
-        this.clientScript = this.loadTemplate('./dnsRegistration.js', __dirname);
+        this.template = this.loadTemplate('setup/dnsRegistration/dnsRegistration.html');
+        this.styles = this.loadTemplate('setup/dnsRegistration/dnsRegistration.css');
+        this.clientScript = this.loadTemplate('setup/dnsRegistration/dnsRegistration.js');
     }
 
     async render(params?: { device: Device; setupType?: 'automatic' | 'manual' | 'migration' }, nonce?: string): Promise<string> {
@@ -84,8 +86,8 @@ export class DnsRegistrationViewController extends BaseViewController {
             eventType: TelemetryEventType.View,
             action: 'navigate',
             properties: {
-                toView: 'setup.dnsRegistration',
-            },
+                toView: 'setup.dnsRegistration'
+            }
         });
 
         return this.wrapHtml(html, nonce);
@@ -219,7 +221,7 @@ export class DnsRegistrationViewController extends BaseViewController {
     /**
      * Handle successful DNS registration
      */
-    private async handleSuccessfulRegistration(registrationResult: any): Promise<void> {
+    private async handleSuccessfulRegistration(registrationResult: DnsServiceRegistrationResult): Promise<void> {
         if (!this.currentDevice) {
             return;
         }
@@ -256,7 +258,7 @@ export class DnsRegistrationViewController extends BaseViewController {
     /**
      * Handle failed DNS registration
      */
-    private handleFailedRegistration(registrationResult: any): void {
+    private handleFailedRegistration(registrationResult: DnsServiceRegistrationResult): void {
         if (!this.currentDevice) {
             return;
         }
@@ -296,7 +298,7 @@ export class DnsRegistrationViewController extends BaseViewController {
         // For migration, device is already setup - just navigate back to device manager
         if (this.setupType === 'migration') {
             this.logger.debug('mDNS registration complete for existing device, returning to device manager');
-            const { DeviceManagerViewController } = await import('../../devices/manager/deviceManagerViewController');
+            const { DeviceManagerViewController } = await import('../../devices/manager/deviceManagerViewController.js');
             await this.navigateTo(DeviceManagerViewController.viewId(), {}, 'editor');
             return;
         }

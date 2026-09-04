@@ -1,10 +1,10 @@
 /*
- * Copyright ©2025 HP Development Company, L.P.
+ * Copyright ©2025-2026 HP Development Company, L.P.
  * Licensed under the X11 License. See LICENSE file in the project root for details.
  */
 
 /**
- * Telemetry event types for the ZGX Toolkit extension.
+ * Telemetry event types for the Z Toolkit extension.
  */
 
 /**
@@ -24,6 +24,12 @@ export enum TelemetryEventType {
     Device = 'device',
     /** Group events */
     Group = 'group',
+    /** Device type detection events */
+    DeviceTypeDetection = 'device.typeDetection',
+    /** In-product announcement/promo events */
+    Announcement = 'announcement',
+    /** Quick Links entry interaction events (e.g. modals opened from a sidebar Quick Links item) */
+    QuickLink = 'quickLink'
 }
 
 /**
@@ -132,11 +138,58 @@ export interface DeviceDiscoveryEvent extends TelemetryEvent {
 }
 
 /**
+ * Device type detection/confirmation event data.
+ */
+export interface DeviceTypeDetectionEvent extends TelemetryEvent {
+    eventType: TelemetryEventType.DeviceTypeDetection;
+    action: 'confirmed';
+    properties: {
+        /** Device type reported by the fingerprint probe */
+        detectedType: string;
+        /** Device type the user confirmed or selected */
+        confirmedType: string;
+        /** Whether the user changed the probe result */
+        wasOverridden: 'true' | 'false';
+        /** Setup flow that triggered this view */
+        setupType: string;
+        [key: string]: string;
+    };
+}
+
+/**
  * Group lifecycle event data.
  */
 export interface GroupLifecycleEvent extends TelemetryEvent {
     eventType: TelemetryEventType.Group;
     action: 'create' | 'update' | 'remove' | 'add-device' | 'remove-device';
+}
+
+/**
+ * In-product announcement/promo interaction event data (e.g. the one-time ZRT
+ * announcement shown in the Device Manager view).
+ */
+export interface AnnouncementEvent extends TelemetryEvent {
+    eventType: TelemetryEventType.Announcement;
+    action: 'dismiss' | 'learn-more';
+    properties: {
+        /** Identifier for the announcement being interacted with */
+        announcementId: string;
+        [key: string]: string;
+    };
+}
+
+/**
+ * Quick Links entry interaction event data (e.g. a modal opened from a sidebar
+ * Quick Links item, as opposed to a one-time announcement).
+ */
+export interface QuickLinkEvent extends TelemetryEvent {
+    eventType: TelemetryEventType.QuickLink;
+    action: 'close' | 'learn-more';
+    properties: {
+        /** Identifier for the Quick Links entry being interacted with */
+        linkId: string;
+        [key: string]: string;
+    };
 }
 
 /**
@@ -148,7 +201,10 @@ export type AnyTelemetryEvent =
     | CommandExecutionEvent
     | DeviceLifecycleEvent
     | DeviceDiscoveryEvent
-    | GroupLifecycleEvent;
+    | DeviceTypeDetectionEvent
+    | GroupLifecycleEvent
+    | AnnouncementEvent
+    | QuickLinkEvent;
 
 /**
  * Union type for telemetry error events.

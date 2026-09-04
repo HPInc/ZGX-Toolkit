@@ -78,7 +78,7 @@ describe('RagInstructionsViewController', () => {
                 eventType: TelemetryEventType.View,
                 action: 'navigate',
                 properties: {
-                    toView: 'instructions.rag',
+                    toView: 'instructions.rag'
                 }
             });
 

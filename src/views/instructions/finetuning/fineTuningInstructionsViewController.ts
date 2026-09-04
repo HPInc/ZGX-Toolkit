@@ -1,5 +1,5 @@
 /*
- * Copyright ©2025 HP Development Company, L.P.
+ * Copyright ©2025-2026 HP Development Company, L.P.
  * Licensed under the X11 License. See LICENSE file in the project root for details.
  */
 
@@ -31,9 +31,9 @@ export class FineTuningInstructionsViewController extends BaseViewController {
         super(deps.logger, deps.telemetry);
         this.deviceService = deps.deviceService;
 
-        this.template = this.loadTemplate('./fineTuningInstructions.html', __dirname);
-        this.styles = this.loadTemplate('./fineTuningInstructions.css', __dirname);
-        this.clientScript = this.loadTemplate('./fineTuningInstructions.js', __dirname);
+        this.template = this.loadTemplate('instructions/finetuning/fineTuningInstructions.html');
+        this.styles = this.loadTemplate('instructions/finetuning/fineTuningInstructions.css');
+        this.clientScript = this.loadTemplate('instructions/finetuning/fineTuningInstructions.js');
     }
 
     /**
@@ -56,7 +56,7 @@ export class FineTuningInstructionsViewController extends BaseViewController {
             eventType: TelemetryEventType.View,
             action: 'navigate',
             properties: {
-                toView: 'instructions.finetuning',
+                toView: 'instructions.finetuning'
             }
         });
 
@@ -69,26 +69,23 @@ export class FineTuningInstructionsViewController extends BaseViewController {
     async handleMessage(message: Message): Promise<void> {
         await super.handleMessage(message);
 
-        switch (message.type) {
-            case 'connect-device': {
-                try {
-                    this.logger.info('Connecting to device from fine-tuning instructions', {
-                        deviceId: message.id
-                    });
-    
-                    await this.deviceService.connectToDevice(message.id, message.newWindow);
-                    
-                    this.logger.info('Successfully initiated connection to device', {
-                        deviceId: message.id,
-                    });
+        if (message.type === 'connect-device') {
+            try {
+                this.logger.info('Connecting to device from fine-tuning instructions', {
+                    deviceId: message.id
+                });
 
-                } catch (error) {
-                    this.logger.error('Failed to connect to device', { 
-                        error,
-                        deviceId: message.id
-                    });
-                }
-                break;
+                await this.deviceService.connectToDevice(message.id, message.newWindow);
+                
+                this.logger.info('Successfully initiated connection to device', {
+                    deviceId: message.id
+                });
+
+            } catch (error) {
+                this.logger.error('Failed to connect to device', { 
+                    error,
+                    deviceId: message.id
+                });
             }
         }
     }

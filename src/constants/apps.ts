@@ -1,7 +1,34 @@
 /*
- * Copyright ©2025 HP Development Company, L.P.
+ * Copyright ©2025-2026 HP Development Company, L.P.
  * Licensed under the X11 License. See LICENSE file in the project root for details.
  */
+
+/**
+ * A single pre-installation validation check to run on the target device
+ * before attempting to install an application.
+ */
+export interface AppPreInstallCheck {
+    /** Unique identifier for the check */
+    id: string;
+    /** Human-readable description of what is being checked */
+    description: string;
+    /** Shell command to run on the target device to perform the check */
+    command: string;
+    /**
+     * Minimum required version, if this check validates a version number.
+     * The command's output is scanned for a version string and compared
+     * against this value.
+     */
+    minVersion?: string;
+    /**
+     * Whether a failed check should block installation ('blocking', the
+     * default) or merely warn the user while installation proceeds
+     * ('warning').
+     */
+    severity?: 'blocking' | 'warning';
+    /** Message to surface to the user when this check fails */
+    failMessage: string;
+}
 
 /**
  * Application definition with installation commands and metadata.
@@ -29,6 +56,8 @@ export interface AppDefinition {
     requiresVirtualEnv?: boolean;
     /** List of app IDs that must be installed before this app */
     dependencies?: string[];
+    /** Validation checks to run on the target device before installing */
+    preInstallChecks?: AppPreInstallCheck[];
 }
 
 /**
@@ -43,6 +72,11 @@ export interface AppCategory {
     description: string;
     /** Applications in this category */
     apps: AppDefinition[];
+    /**
+     * deviceType to feature or de-emphasize the category based on 
+     * the target type. Categories without this field are shown for all devices.
+     */
+    deviceType?: string;
 }
 
 /**
@@ -50,6 +84,40 @@ export interface AppCategory {
  * Ported from original machineManagerProvider.ts.
  */
 export const APP_CATEGORIES: AppCategory[] = [
+    {
+        id: 'model-serving',
+        name: 'Model Serving',
+        description: 'Model serving and management tools for supported devices',
+        deviceType: 'zgx_fury',
+        apps: [
+            {
+                id: 'zrt',
+                name: 'HP Z Runtime',
+                icon: '⚡',
+                description: 'Command-line wrapper around vLLM for serving large language models',
+                features: [
+                    'Pull and run models from popular model hubs',
+                    'Serve models with a single command',
+                    'Streamlined model lifecycle management',
+                    'OpenAI-compatible API endpoints for LLM inference'
+                ],
+                category: 'model-serving',
+                installCommand: 'sudo snap install --classic zrt && hash -r',
+                verifyCommand: 'snap list zrt && /snap/bin/zrt version',
+                uninstallCommand: 'sudo snap remove zrt',
+                dependencies: ['snapd'],
+                preInstallChecks: [
+                    {
+                        id: 'nvidia-driver-present',
+                        description: 'Check that an NVIDIA GPU driver is installed',
+                        command: 'nvidia-smi --query-gpu=name,driver_version,memory.total --format=csv,noheader',
+                        severity: 'blocking',
+                        failMessage: 'No NVIDIA GPU driver was detected on this device. HP Z Runtime requires an NVIDIA GPU with a working driver (nvidia-smi) to run.'
+                    }
+                ]
+            }
+        ]
+    },
     {
         id: 'system-stack',
         name: 'System Stack',
@@ -116,6 +184,21 @@ export const APP_CATEGORIES: AppCategory[] = [
                 verifyCommand: '$HOME/miniforge3/bin/conda --version',
                 uninstallCommand: 'rm -rf ~/miniforge3; sed -i \'/# >>> conda initialize >>>/,/# <<< conda initialize <<</d\' ~/.bashrc 2>/dev/null || true; rm -rf ~/.conda ~/.conda_envs ~/.condarc ~/.conda/config.yaml 2>/dev/null || true',
                 dependencies: ['curl']
+            },
+            {
+                id: 'snapd',
+                name: 'snapd',
+                icon: '🧩',
+                description: 'Snap package management service for Linux',
+                features: [
+                    'Install snap packages from the Snap Store',
+                    'Automatic background updates',
+                    'Sandboxed application support'
+                ],
+                category: 'system-stack',
+                installCommand: 'sudo apt update && sudo apt install -y snapd && sudo systemctl enable --now snapd.socket',
+                verifyCommand: 'snap --version',
+                uninstallCommand: 'sudo apt remove -y snapd'
             },
             {
                 id: 'curl',
@@ -188,7 +271,7 @@ export const APP_CATEGORIES: AppCategory[] = [
                 id: 'zgx-python-env',
                 name: 'ZGX Python Environment',
                 icon: '🐍',
-                description: 'Modern Python environment for AI development in ZGX devices',
+                description: 'Modern Python environment for AI development on Z devices',
                 features: [
                     'Python 3.12 conda environment',
                     'PyTorch 2.9 and CUDA 13',

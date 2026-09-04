@@ -1,10 +1,10 @@
 /*
- * Copyright ©2025 HP Development Company, L.P.
+ * Copyright ©2025-2026 HP Development Company, L.P.
  * Licensed under the X11 License. See LICENSE file in the project root for details.
  */
 
 /**
- * ConnectX Group state management store for the ZGX Toolkit extension.
+ * ConnectX Group state management store for the Z Toolkit extension.
  * Implements observable pattern for reactive state management.
  * 
  */
@@ -90,7 +90,7 @@ export class GroupStore implements IStore<ConnectXGroup[]> {
             ...group,
             ...updates,
             // Always update the timestamp
-            updatedAt: new Date().toISOString(),
+            updatedAt: new Date().toISOString()
         };
 
         this.groups.set(id, updatedGroup);

@@ -1,5 +1,5 @@
 /*
- * Copyright ©2025 HP Development Company, L.P.
+ * Copyright ©2025-2026 HP Development Company, L.P.
  * Licensed under the X11 License. See LICENSE file in the project root for details.
  */
 
@@ -15,8 +15,6 @@ import { DeviceService } from '../../../services';
  * Provides step-by-step guide for building RAG applications.
  */
 export class RagInstructionsViewController extends BaseViewController {
-    private readonly deviceService: DeviceService;
-
     public static viewId(): string {
         return 'instructions/rag';
     }
@@ -29,11 +27,10 @@ export class RagInstructionsViewController extends BaseViewController {
         }
     ) {
         super(deps.logger, deps.telemetry);
-        this.deviceService = deps.deviceService;
 
-        this.template = this.loadTemplate('./ragInstructions.html', __dirname);
-        this.styles = this.loadTemplate('./ragInstructions.css', __dirname);
-        this.clientScript = this.loadTemplate('./ragInstructions.js', __dirname);
+        this.template = this.loadTemplate('instructions/rag/ragInstructions.html');
+        this.styles = this.loadTemplate('instructions/rag/ragInstructions.css');
+        this.clientScript = this.loadTemplate('instructions/rag/ragInstructions.js');
     }
 
     /**
@@ -56,7 +53,7 @@ export class RagInstructionsViewController extends BaseViewController {
             eventType: TelemetryEventType.View,
             action: 'navigate',
             properties: {
-                toView: 'instructions.rag',
+                toView: 'instructions.rag'
             }
         });
 

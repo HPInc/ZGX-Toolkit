@@ -2,15 +2,16 @@
 .vscode/**
 .vscode-test/**
 
-# Source files (bundled into out/extension.js)
+# Source files (bundled into dist/extension.js)
 src/**
 
 # Configuration files
 .gitignore
-.eslintrc.js
+eslint.config.js
 jest.config.js
 tsconfig.json
-tsconfig.test.json
+tsconfig.integration.json
+tsconfig.jest.json
 
 # TypeScript and source maps
 **/*.ts
@@ -34,6 +35,11 @@ scripts/**
 !CHANGELOG.md
 !SUPPORT.md
 
+# Dev/release tooling not needed at runtime
+Makefile
+releaser.py
+samples/**
+
 # CI/CD files
 .github/**
 codeway-sq.yaml
@@ -41,13 +47,17 @@ codeway-sq.yaml
 azure-pipelines.yml
 
 # Build artifacts
-out/test/**
-out/**/*.map
+dist/test/**
+dist/**/*.map
 
 # Package manager
 package-lock.json
 yarn.lock
 pnpm-lock.yaml
+
+# Full node_modules is not shipped: extension.js is bundled by esbuild and
+# only ssh2/dnssd (native) are copied into dist/node_modules by scripts/build.mjs
+/node_modules/**
 
 # IDE files
 .idea/**

@@ -1,5 +1,5 @@
 /*
- * Copyright ©2025 HP Development Company, L.P.
+ * Copyright ©2025-2026 HP Development Company, L.P.
  * Licensed under the X11 License. See LICENSE file in the project root for details.
  */
 
@@ -13,6 +13,15 @@
 export const GLOBAL_STATE_KEYS = {
     /** Whether the extension has run before*/
     HAS_RUN_BEFORE: 'hasRunBefore',
+    /** Whether the user has already seen/dismissed the one-time HP Z Runtime (ZRT) announcement */
+    ZRT_ANNOUNCEMENT_SEEN: 'zrtAnnouncementSeen',
+    /** Record of which Quick Links sidebar entries (keyed by their link id) have already been
+     *  clicked at least once, used to hide each entry's "New" badge after its first click. */
+    QUICK_LINK_BADGES_SEEN: 'quickLinkBadgesSeen',
+    /** Set to true once zgxToolkit.* settings have been migrated to zToolkit.* */
+    SETTINGS_MIGRATED_V1: 'settingsMigratedV1',
+    /** Number of times a window reload was requested because the zToolkit schema was not yet registered */
+    MIGRATION_RELOAD_ATTEMPTS: 'migrationReloadAttempts'
 } as const;
 
 /**

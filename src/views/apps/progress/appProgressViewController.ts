@@ -1,5 +1,5 @@
 /*
- * Copyright ©2025 HP Development Company, L.P.
+ * Copyright ©2025-2026 HP Development Company, L.P.
  * Licensed under the X11 License. See LICENSE file in the project root for details.
  */
 
@@ -9,8 +9,7 @@ import { ITelemetryService, TelemetryEventType } from '../../../types/telemetry'
 import { Device } from '../../../types/devices';
 import { Message } from '../../../types/messages';
 import { APP_CATEGORIES, AppDefinition, getAllApps } from '../../../constants/apps';
-import { AppInstallationService, PasswordService, DeviceService, InstallationErrorType } from '../../../services';
-import { deviceStore } from '../../../store/deviceStore';
+import { AppInstallationService, PasswordService, DeviceService } from '../../../services';
 import { AppCompleteViewController } from '../complete/appCompleteViewController';
 import { AppSelectionViewController } from '../selection/appSelectionViewController';
 
@@ -22,7 +21,7 @@ export class AppProgressViewController extends BaseViewController {
     private readonly passwordService: PasswordService;
     private readonly deviceService: DeviceService;
     private currentDevice?: Device;
-    private currentOperation?: "install" | "uninstall";
+    private currentOperation?: 'install' | 'uninstall';
     private currentSelectedApps?: string[];
     private validatedPassword?: string;
 
@@ -41,15 +40,16 @@ export class AppProgressViewController extends BaseViewController {
         this.appInstallationService = deps.appInstallationService;
         this.passwordService = deps.passwordService;
         this.deviceService = deps.deviceService;
-        this.template = this.loadTemplate('./appProgress.html', __dirname);
-        this.styles = this.loadTemplate('./appProgress.css', __dirname);
-        this.clientScript = this.loadTemplate('./appProgress.js', __dirname);
+        this.template = this.loadTemplate('apps/progress/appProgress.html');
+        this.styles = this.loadTemplate('apps/progress/appProgress.css');
+        this.clientScript = this.loadTemplate('apps/progress/appProgress.js');
     }
 
     async render(params?: {
         device: Device;
-        operation: "install" | "uninstall";
-        selectedApps: string[] | "all";
+        operation: 'install' | 'uninstall';
+        selectedApps: string[] | 'all';
+        zrtLogoUri?: string;
     }, nonce?: string): Promise<string> {
         this.logger.debug('Rendering app progress view', { device: params?.device?.name });
 
@@ -65,7 +65,7 @@ export class AppProgressViewController extends BaseViewController {
 
         let appDetails: AppDefinition[];
         
-        if (params.selectedApps === "all") {
+        if (params.selectedApps === 'all') {
             appDetails = getAllApps();
             this.currentSelectedApps = getAllApps().map(a => a.id);
         } else {
@@ -85,7 +85,13 @@ export class AppProgressViewController extends BaseViewController {
         const operationVerb = operation === 'install' ? 'Installing' : 'Uninstalling';
         const operationVerbLower = operation === 'install' ? 'installing' : 'uninstalling';
         const operationPastTense = operation === 'install' ? 'installation' : 'uninstallation';
-        const fullUninstall = operation === 'uninstall' && params.selectedApps === "all";
+        const fullUninstall = operation === 'uninstall' && params.selectedApps === 'all';
+
+        // ZRT does not stop any models it is currently serving when uninstalled (backend
+        // processes are detached/reparented to init, so they survive the snap's removal).
+        // Surface this as an informational warning so the user isn't surprised that a served model keeps running after uninstall.
+        const showZrtUninstallWarning = operation === 'uninstall' &&
+            sortedAppDetails.some(app => app.id === 'zrt');
 
         const html = this.renderTemplate(this.template, {
             deviceName: device.name,
@@ -96,9 +102,11 @@ export class AppProgressViewController extends BaseViewController {
             operationVerbLower: operationVerbLower,
             operationPastTense: operationPastTense,
             fullUninstall: fullUninstall,
+            showZrtUninstallWarning: showZrtUninstallWarning,
             apps: sortedAppDetails.map(app => ({
                 id: app.id,
                 icon: app.icon,
+                iconUri: app.id === 'zrt' ? params?.zrtLogoUri : undefined,
                 name: app.name
             }))
         });
@@ -110,7 +118,7 @@ export class AppProgressViewController extends BaseViewController {
         setTimeout(async () => {
             if (requiresSudo) {
                 // Show password prompt in the webview
-                await this.sendMessageToWebview({
+                this.sendMessageToWebview({
                     type: 'showPasswordPrompt'
                 });
             } else {
@@ -123,8 +131,8 @@ export class AppProgressViewController extends BaseViewController {
             eventType: TelemetryEventType.View,
             action: 'navigate',
             properties: {
-                toView: 'apps.progress',
-            },
+                toView: 'apps.progress'
+            }
         });
 
         return this.wrapHtml(html, nonce);
@@ -133,12 +141,12 @@ export class AppProgressViewController extends BaseViewController {
     /**
      * Check if the operation requires a sudo password
      */
-    private checkIfPasswordRequired(appDetails: AppDefinition[], operation: "install" | "uninstall"): boolean {
+    private checkIfPasswordRequired(appDetails: AppDefinition[], operation: 'install' | 'uninstall'): boolean {
         if (operation === 'install') {
             return appDetails.some(app => app.installCommand.includes('sudo'));
         } else {
-            return appDetails.some(app => 
-                app.uninstallCommand && app.uninstallCommand.includes('sudo')
+            return appDetails.some(app =>
+                app.uninstallCommand?.includes('sudo')
             );
         }
     }
@@ -153,11 +161,11 @@ export class AppProgressViewController extends BaseViewController {
         }
 
         switch (this.currentOperation) {
-            case "install": {
+            case 'install': {
                 await this.startInstallation(this.currentDevice, this.currentSelectedApps);
                 break;
             }
-            case "uninstall": {
+            case 'uninstall': {
                 await this.startUninstallation(this.currentDevice, this.currentSelectedApps);
                 break;
             }
@@ -202,11 +210,12 @@ export class AppProgressViewController extends BaseViewController {
 
                 // Navigate to completion view
                 await this.navigateTo(AppCompleteViewController.viewId(), { 
-                        device,
-                        installedApps: result.installedApps,
-                        failedApps: result.failedApps,
-                        operation: 'install'
-                     });
+                    device,
+                    installedApps: result.installedApps,
+                    failedApps: result.failedApps,
+                    failureReasons: result.failureReasons,
+                    operation: 'install'
+                });
             } else {
                 // Installation failed
                 this.logger.error('Installation failed', {
@@ -219,6 +228,7 @@ export class AppProgressViewController extends BaseViewController {
                     device,
                     installedApps: result.installedApps,
                     failedApps: result.failedApps,
+                    failureReasons: result.failureReasons,
                     operation: 'install'
                 });
             }
@@ -309,7 +319,7 @@ export class AppProgressViewController extends BaseViewController {
     /**
      * Send a progress update to the webview
      */
-    private async sendProgressUpdate(progress: any): Promise<void> {
+    private async sendProgressUpdate(progress: Record<string, unknown>): Promise<void> {
         this.sendMessageToWebview(progress);
     }
 
@@ -356,7 +366,7 @@ export class AppProgressViewController extends BaseViewController {
                 this.validatedPassword = password;
 
                 // Notify webview of successful validation
-                await this.sendMessageToWebview({
+                this.sendMessageToWebview({
                     type: 'passwordValidationResult',
                     valid: true
                 });
@@ -367,7 +377,7 @@ export class AppProgressViewController extends BaseViewController {
                 this.logger.warn('Password validation failed');
                 
                 // Notify webview of failed validation
-                await this.sendMessageToWebview({
+                this.sendMessageToWebview({
                     type: 'passwordValidationResult',
                     valid: false
                 });
@@ -378,7 +388,7 @@ export class AppProgressViewController extends BaseViewController {
             });
 
             // Notify webview of error
-            await this.sendMessageToWebview({
+            this.sendMessageToWebview({
                 type: 'passwordValidationResult',
                 valid: false,
                 error: error instanceof Error ? error.message : 'Validation error'

@@ -1,13 +1,16 @@
 /*
- * Copyright ©2025 HP Development Company, L.P.
+ * Copyright ©2025-2026 HP Development Company, L.P.
  * Licensed under the X11 License. See LICENSE file in the project root for details.
  */
 
 import { DeviceManagerViewController } from '../../views/devices/manager/deviceManagerViewController';
 import { Logger } from '../../utils/logger';
-import { ITelemetryService } from '../../types/telemetry';
-import { DeviceDiscoveryService, DeviceService, ConnectXGroupService } from '../../services';
-import { Device, DeviceConfig } from '../../types/devices';
+import { ITelemetryService, TelemetryEventType } from '../../types/telemetry';
+import { DeviceDiscoveryService, DeviceService, ConnectXGroupService, DeviceFingerprintService, extensionStateService } from '../../services';
+import { DeviceDiscoveryError } from '../../services/deviceDiscoveryService';
+import { Device, DeviceConfig, DeviceType } from '../../types/devices';
+import { URLS } from '../../constants/config';
+import * as vscode from 'vscode';
 
 describe('DeviceManagerView', () => {
     let view: DeviceManagerViewController;
@@ -16,6 +19,7 @@ describe('DeviceManagerView', () => {
     let mockService: jest.Mocked<DeviceService>;
     let mockDiscoveryService: jest.Mocked<DeviceDiscoveryService>;
     let mockGroupService: jest.Mocked<ConnectXGroupService>;
+    let mockFingerprintService: jest.Mocked<DeviceFingerprintService>;
 
     const mockDevice: Device = {
         id: 'test-1',
@@ -41,7 +45,7 @@ describe('DeviceManagerView', () => {
             info: jest.fn(),
             warn: jest.fn(),
             error: jest.fn(),
-            trace: jest.fn(),
+            trace: jest.fn()
         } as any;
 
         // Create mock telemetry
@@ -50,7 +54,7 @@ describe('DeviceManagerView', () => {
             trackError: jest.fn(),
             isEnabled: jest.fn().mockReturnValue(false),
             setEnabled: jest.fn(),
-            dispose: jest.fn().mockResolvedValue(undefined),
+            dispose: jest.fn().mockResolvedValue(undefined)
         } as any;
 
         // Create mock service
@@ -61,12 +65,12 @@ describe('DeviceManagerView', () => {
             connectToDevice: jest.fn(),
             getDevice: jest.fn(),
             getAllDevices: jest.fn().mockReturnValue([]),
-            subscribe: jest.fn().mockReturnValue(() => {}),
+            subscribe: jest.fn().mockReturnValue(() => {})
         } as any;
 
         // Create mock service
         mockDiscoveryService = {
-            discoverDevices: jest.fn().mockResolvedValue([]),
+            discoverDevices: jest.fn().mockResolvedValue([])
         } as any;
 
         // Create mock group service
@@ -74,7 +78,13 @@ describe('DeviceManagerView', () => {
             getAllGroups: jest.fn().mockResolvedValue([]),
             getGroupForDevice: jest.fn().mockResolvedValue(undefined),
             removeGroupAndUnconfigureNICs: jest.fn().mockResolvedValue({ success: true }),
-            subscribe: jest.fn().mockReturnValue(() => {}),
+            subscribe: jest.fn().mockReturnValue(() => {})
+        } as any;
+
+        // Create mock fingerprint service
+        mockFingerprintService = {
+            updateDeviceFingerprint: jest.fn((existing, updates) => ({ ...existing, ...updates })),
+            buildDeviceFingerprint: jest.fn()
         } as any;
 
         view = new DeviceManagerViewController({
@@ -83,6 +93,7 @@ describe('DeviceManagerView', () => {
             deviceService: mockService,
             deviceDiscoveryService: mockDiscoveryService,
             connectxGroupService: mockGroupService,
+            deviceFingerprintService: mockFingerprintService
         });
     });
 
@@ -114,6 +125,44 @@ describe('DeviceManagerView', () => {
             expect(html).not.toContain('No devices configured yet');
         });
 
+        it('should show a dash for device type when no fingerprint is set', async () => {
+            mockService.getAllDevices.mockResolvedValue([mockDevice]);
+
+            const html = await view.render();
+
+            expect(html).toContain('<strong>Device type:</strong> —');
+        });
+
+        it('should show a dash for device type when it is unknown', async () => {
+            mockService.getAllDevices.mockResolvedValue([
+                { ...mockDevice, fingerprint: { deviceType: DeviceType.Unknown } }
+            ]);
+
+            const html = await view.render();
+
+            expect(html).toContain('<strong>Device type:</strong> —');
+        });
+
+        it('should show a dash for device type when it is pending', async () => {
+            mockService.getAllDevices.mockResolvedValue([
+                { ...mockDevice, fingerprint: { deviceType: DeviceType.Pending } }
+            ]);
+
+            const html = await view.render();
+
+            expect(html).toContain('<strong>Device type:</strong> —');
+        });
+
+        it('should show the human-readable label when device type is known', async () => {
+            mockService.getAllDevices.mockResolvedValue([
+                { ...mockDevice, fingerprint: { deviceType: DeviceType.Z8 } }
+            ]);
+
+            const html = await view.render();
+
+            expect(html).toContain('<strong>Device type:</strong> Z8');
+        });
+
         it('should show add form when showAddForm is true', async () => {
             mockService.getAllDevices.mockResolvedValue([mockDevice]);
 
@@ -124,6 +173,8 @@ describe('DeviceManagerView', () => {
             expect(html).toContain('class="add-device-form "');
             // The show form button should have the 'hidden' class
             expect(html).toContain('show-form-btn hidden');
+            // Device type select should be hidden when adding a new device
+            expect(html).toContain('form-group hidden" id="deviceTypeGroup"');
         });
 
         it('should show edit form when editDeviceId is provided', async () => {
@@ -135,6 +186,40 @@ describe('DeviceManagerView', () => {
             expect(html).toContain('Edit Device');
             expect(html).toContain('Test device');
             expect(html).toContain('192.168.1.100');
+            // Device type select should be visible (not hidden) when editing
+            expect(html).toContain('form-group " id="deviceTypeGroup"');
+        });
+
+        it('should render device type options reused from getDeviceTypeOptions', async () => {
+            mockService.getAllDevices.mockResolvedValue([mockDevice]);
+            mockService.getDevice.mockResolvedValue(mockDevice);
+
+            const html = await view.render({ editDeviceId: 'test-1' });
+
+            expect(html).toContain('id="deviceType"');
+            expect(html).toContain('ZGX Fury');
+            expect(html).toContain('ZGX Nano');
+            expect(html).toContain('>Z8<');
+            expect(html).toContain('>Z6<');
+            expect(html).toContain('>Z4<');
+            expect(html).toContain('>Z2<');
+            expect(html).toContain('>Other<');
+            // Internal-only lifecycle states must not be user-selectable
+            expect(html).not.toContain('value="pending"');
+            expect(html).not.toContain('value="unknown"');
+        });
+
+        it('should pre-select the device\'s current device type when editing', async () => {
+            const deviceWithType: Device = {
+                ...mockDevice,
+                fingerprint: { deviceType: DeviceType.Z8 }
+            };
+            mockService.getAllDevices.mockResolvedValue([deviceWithType]);
+            mockService.getDevice.mockResolvedValue(deviceWithType);
+
+            const html = await view.render({ editDeviceId: 'test-1' });
+
+            expect(html).toContain('value="z8" selected');
         });
 
         it('should auto-show form when no devices exist', async () => {
@@ -143,6 +228,157 @@ describe('DeviceManagerView', () => {
             const html = await view.render();
 
             expect(html).toContain('Add New Device');
+        });
+
+        it('should render Discover Devices button with discover icon', async () => {
+            mockService.getAllDevices.mockResolvedValue([]);
+
+            const html = await view.render();
+
+            expect(html).toContain('id="discoverBtn"');
+            expect(html).toContain('Discover Devices');
+        });
+
+        it('should render the "What\'s this?" info tooltip button', async () => {
+            mockService.getAllDevices.mockResolvedValue([]);
+
+            const html = await view.render();
+
+            expect(html).toContain('id="discoverInfoBtn"');
+            expect(html).toContain("What's this?");
+            expect(html).toContain('discover-tooltip');
+            expect(html).toContain('Find devices on your network.');
+            expect(html).toContain('Works automatically for supported devices (like ZGX Nano and ZGX Fury)');
+            expect(html).toContain('<b>same subnet</b>');
+            expect(html).toContain('advertise via mDNS will also appear automatically');
+            expect(html).toContain('discovery becomes available <b>after</b> setup is complete');
+        });
+
+        it('should render discovery error card (initially hidden)', async () => {
+            mockService.getAllDevices.mockResolvedValue([]);
+
+            const html = await view.render();
+
+            expect(html).toContain('id="discoveryErrorCard"');
+            expect(html).toContain('discovery-error-card hidden');
+            expect(html).toContain('No devices found.');
+            expect(html).toContain('Device discovery works automatically for supported devices on the same subnet.');
+            expect(html).toContain('advertise over mDNS appear automatically');
+            expect(html).toContain('input the target device address manually to continue');
+            expect(html).toContain('id="discoveryErrorCode"');
+            expect(html).toContain('id="discoveryErrorCodeValue"');
+            expect(html).not.toContain('#ZTK-DISCO-NO-DEVICES');
+            expect(html).not.toContain('Reference code:');
+            expect(html).toContain('Having an issue?');
+            expect(html).toContain('https://github.com/HPInc/ZGX-Toolkit/issues');
+        });
+
+        it('should render Add Device button with btn-blue class', async () => {
+            mockService.getAllDevices.mockResolvedValue([]);
+
+            const html = await view.render();
+
+            expect(html).toContain('btn btn-blue');
+        });
+
+        it('should render Cancel button with btn-ghost class', async () => {
+            mockService.getAllDevices.mockResolvedValue([]);
+
+            const html = await view.render();
+
+            expect(html).toContain('btn btn-ghost');
+        });
+    });
+
+    describe('Pair Devices eligibility', () => {
+        const createDevice = (id: string, deviceType: DeviceType, isSetup = true): Device => ({
+            ...mockDevice,
+            id,
+            name: `Device ${id}`,
+            isSetup,
+            fingerprint: { deviceType }
+        });
+
+        const getPairDevicesButton = (html: string): string =>
+            html.match(/<button[^>]*id="pairDevicesBtn"[^>]*>/)?.[0] ?? '';
+
+        it('should always enable Pair Devices when there are no devices at all', async () => {
+            mockService.getAllDevices.mockResolvedValue([]);
+
+            const html = await view.render();
+
+            expect(getPairDevicesButton(html)).not.toContain('disabled');
+        });
+
+        it('should always enable Pair Devices regardless of device type/setup/pairing combinations', async () => {
+            const scenarios: Device[][] = [
+                // Only unsupported device types
+                [
+                    createDevice('device-1', DeviceType.Z8),
+                    createDevice('device-2', DeviceType.Z8)
+                ],
+                // Different compatible types
+                [
+                    createDevice('device-1', DeviceType.ZGXNano),
+                    createDevice('device-2', DeviceType.ZGXFury)
+                ],
+                // Compatible type but not setup
+                [
+                    createDevice('device-1', DeviceType.ZGXNano),
+                    createDevice('device-2', DeviceType.ZGXNano, false)
+                ],
+                // Two unpaired ZGX Nano devices
+                [
+                    createDevice('device-1', DeviceType.ZGXNano),
+                    createDevice('device-2', DeviceType.ZGXNano)
+                ],
+                // Two unpaired ZGX Fury devices
+                [
+                    createDevice('device-1', DeviceType.ZGXFury),
+                    createDevice('device-2', DeviceType.ZGXFury)
+                ]
+            ];
+
+            for (const devices of scenarios) {
+                mockService.getAllDevices.mockResolvedValue(devices);
+                mockGroupService.getAllGroups.mockResolvedValue([]);
+
+                const html = await view.render();
+
+                expect(getPairDevicesButton(html)).not.toContain('disabled');
+            }
+        });
+
+        it('should always enable Pair Devices when the only compatible devices are already paired', async () => {
+            mockService.getAllDevices.mockResolvedValue([
+                createDevice('device-1', DeviceType.ZGXNano),
+                createDevice('device-2', DeviceType.ZGXNano)
+            ]);
+            mockGroupService.getAllGroups.mockResolvedValue([
+                {
+                    id: 'group-1',
+                    deviceIds: ['device-1', 'device-2'],
+                    createdAt: '2025-01-01T00:00:00Z',
+                    updatedAt: '2025-01-01T00:00:00Z'
+                }
+            ]);
+
+            const html = await view.render();
+
+            expect(getPairDevicesButton(html)).not.toContain('disabled');
+        });
+
+        it('should render the Pair Devices information tooltip', async () => {
+            mockService.getAllDevices.mockResolvedValue([]);
+
+            const html = await view.render();
+
+            expect(html).toContain('codicon-info');
+            expect(html).toContain('id="pairDevicesTooltip"');
+            expect(html).toContain('role="tooltip"');
+            expect(html).toContain('aria-describedby="pairDevicesTooltip"');
+            expect(html).toContain('Pair devices');
+            expect(html).toContain('Connect <b>two</b> compatible devices to work together and scale local compute resources. Devices must be the <b>same type</b> and support NVIDIA® ConnectX™ Networking.');
         });
     });
 
@@ -222,6 +458,60 @@ describe('DeviceManagerView', () => {
             expect(html).toContain('Device B');
             // Unpaired device should also be shown
             expect(html).toContain('Device C');
+            // Device type field should render (dash, since no fingerprint set) for paired cards too
+            expect(html).toContain('<strong>Device type:</strong> —');
+        });
+
+        it('should render paired devices before unpaired devices with section counts', async () => {
+            mockService.getAllDevices.mockResolvedValue([mockDevice1, mockDevice2, mockDevice3]);
+            mockGroupService.getAllGroups.mockResolvedValue([
+                {
+                    id: 'group-1',
+                    deviceIds: ['device-1', 'device-2'],
+                    createdAt: '2025-01-01T00:00:00Z',
+                    updatedAt: '2025-01-01T00:00:00Z'
+                }
+            ]);
+
+            const html = await view.render();
+
+            expect(html).toContain('Paired Devices (2)');
+            expect(html).toContain('Unpaired Devices (1)');
+            expect(html.indexOf('Paired Devices (2)')).toBeLessThan(html.indexOf('Unpaired Devices (1)'));
+            expect(html).toContain('data-group-id="group-1"');
+            expect(html).toContain('data-action="pairing-details"');
+            expect(html).toContain('data-action="unpair-devices"');
+        });
+
+        it('should render an empty paired section when all devices are unpaired', async () => {
+            mockService.getAllDevices.mockResolvedValue([mockDevice1, mockDevice2]);
+            mockGroupService.getAllGroups.mockResolvedValue([]);
+
+            const html = await view.render();
+
+            expect(html).toContain('Paired Devices (0)');
+            expect(html).toContain('No paired devices');
+            expect(html).toContain('Unpaired Devices (2)');
+            expect(html).not.toContain('data-group-id=');
+        });
+
+        it('should render an empty unpaired section when all devices are paired', async () => {
+            mockService.getAllDevices.mockResolvedValue([mockDevice1, mockDevice2]);
+            mockGroupService.getAllGroups.mockResolvedValue([
+                {
+                    id: 'group-1',
+                    deviceIds: ['device-1', 'device-2'],
+                    createdAt: '2025-01-01T00:00:00Z',
+                    updatedAt: '2025-01-01T00:00:00Z'
+                }
+            ]);
+
+            const html = await view.render();
+
+            expect(html).toContain('Paired Devices (2)');
+            expect(html).toContain('Unpaired Devices (0)');
+            expect(html).toContain('No unpaired devices');
+            expect(html).toContain('data-group-id="group-1"');
         });
 
         it('should show paired badge on grouped devices', async () => {
@@ -313,12 +603,12 @@ describe('DeviceManagerView', () => {
                 host: '192.168.1.101',
                 username: 'admin',
                 port: 22,
-                useKeyAuth: false,
+                useKeyAuth: false
             };
 
             await view.handleMessage({
                 type: 'create-device',
-                data: deviceData,
+                data: deviceData
             });
 
             expect(mockService.createDevice).toHaveBeenCalledWith(deviceData);
@@ -334,13 +624,86 @@ describe('DeviceManagerView', () => {
             await view.handleMessage({
                 type: 'update-device',
                 id: 'test-1',
-                updates,
+                updates
             });
 
             expect(mockService.updateDevice).toHaveBeenCalledWith('test-1', updates);
             expect(mockLogger.info).toHaveBeenCalledWith(
                 'Updating device',
                 { id: 'test-1' }
+            );
+        });
+
+        it('should merge a manually-selected device type into the existing fingerprint on update', async () => {
+            mockService.getDevice.mockResolvedValue({
+                ...mockDevice,
+                fingerprint: { deviceType: DeviceType.Unknown }
+            });
+            (mockFingerprintService.updateDeviceFingerprint as jest.Mock).mockReturnValue({
+                deviceType: DeviceType.Z8
+            });
+
+            await view.handleMessage({
+                type: 'update-device',
+                id: 'test-1',
+                updates: { name: 'Updated device', fingerprint: { deviceType: DeviceType.Z8 } }
+            });
+
+            expect(mockFingerprintService.updateDeviceFingerprint).toHaveBeenCalledWith(
+                { deviceType: DeviceType.Unknown },
+                { deviceType: DeviceType.Z8 }
+            );
+            expect(mockService.updateDevice).toHaveBeenCalledWith('test-1', {
+                name: 'Updated device',
+                fingerprint: { deviceType: DeviceType.Z8 }
+            });
+        });
+
+        it('should reject an update-device message with a non-selectable device type', async () => {
+            await view.handleMessage({
+                type: 'update-device',
+                id: 'test-1',
+                updates: { fingerprint: { deviceType: DeviceType.Unknown } }
+            });
+
+            expect(mockService.updateDevice).not.toHaveBeenCalled();
+            expect(mockLogger.error).toHaveBeenCalledWith(
+                'Failed to update device',
+                expect.objectContaining({ id: 'test-1' })
+            );
+        });
+
+        it('should reject an update-device message with an empty fingerprint object rather than wiping the existing fingerprint', async () => {
+            mockService.getDevice.mockResolvedValue({
+                ...mockDevice,
+                fingerprint: { deviceType: DeviceType.Z8 }
+            });
+
+            await view.handleMessage({
+                type: 'update-device',
+                id: 'test-1',
+                updates: { name: 'Updated device', fingerprint: {} }
+            });
+
+            expect(mockFingerprintService.updateDeviceFingerprint).not.toHaveBeenCalled();
+            expect(mockService.updateDevice).not.toHaveBeenCalled();
+            expect(mockLogger.error).toHaveBeenCalledWith(
+                'Failed to update device',
+                expect.objectContaining({ id: 'test-1' })
+            );
+        });
+
+        it('should reject an update-device message with a missing device type', async () => {
+            await view.handleMessage({
+                type: 'update-device',
+                id: 'test-1',
+                updates: { fingerprint: { deviceType: undefined } }
+            });
+
+            expect(mockService.updateDevice).not.toHaveBeenCalled();
+            expect(mockLogger.error).toHaveBeenCalledWith(
+                'Failed to update device',
+                expect.objectContaining({ id: 'test-1' })
             );
         });
 
@@ -354,7 +717,7 @@ describe('DeviceManagerView', () => {
 
             await view.handleMessage({
                 type: 'delete-device',
-                id: 'test-1',
+                id: 'test-1'
             });
 
             expect(mockService.getDevice).toHaveBeenCalledWith('test-1');
@@ -380,7 +743,7 @@ describe('DeviceManagerView', () => {
 
             await view.handleMessage({
                 type: 'delete-device',
-                id: 'test-1',
+                id: 'test-1'
             });
 
             expect(mockService.getDevice).toHaveBeenCalledWith('test-1');
@@ -392,7 +755,7 @@ describe('DeviceManagerView', () => {
             await view.handleMessage({
                 type: 'connect-device',
                 id: 'test-1',
-                newWindow: false,
+                newWindow: false
             });
 
             expect(mockService.connectToDevice).toHaveBeenCalledWith('test-1', false);
@@ -406,7 +769,7 @@ describe('DeviceManagerView', () => {
             await view.handleMessage({
                 type: 'connect-device',
                 id: 'test-1',
-                newWindow: true,
+                newWindow: true
             });
 
             expect(mockService.connectToDevice).toHaveBeenCalledWith('test-1', true);
@@ -424,7 +787,7 @@ describe('DeviceManagerView', () => {
             mockDiscoveryService.discoverDevices.mockResolvedValue(discoveredDevices);
 
             await view.handleMessage({
-                type: 'discover-devices',
+                type: 'discover-devices'
             });
 
             expect(mockDiscoveryService.discoverDevices).toHaveBeenCalled();
@@ -449,7 +812,7 @@ describe('DeviceManagerView', () => {
 
             await view.handleMessage({
                 type: 'register-dns',
-                id: 'test-1',
+                id: 'test-1'
             });
 
             expect(mockService.getDevice).toHaveBeenCalledWith('test-1');
@@ -464,7 +827,7 @@ describe('DeviceManagerView', () => {
 
             await expect(view.handleMessage({
                 type: 'register-dns',
-                id: 'nonexistent',
+                id: 'nonexistent'
             })).rejects.toThrow('device not found: nonexistent');
 
             expect(mockLogger.error).toHaveBeenCalledWith(
@@ -586,6 +949,7 @@ describe('DeviceManagerView', () => {
                 deviceService: mockService,
                 deviceDiscoveryService: mockDiscoveryService,
                 connectxGroupService: mockGroupService,
+                deviceFingerprintService: mockFingerprintService
             });
 
             newView.dispose();
@@ -633,6 +997,7 @@ describe('DeviceManagerView', () => {
                 deviceService: mockService,
                 deviceDiscoveryService: mockDiscoveryService,
                 connectxGroupService: mockGroupService,
+                deviceFingerprintService: mockFingerprintService
             });
 
             expect(() => view2.dispose()).not.toThrow();
@@ -967,7 +1332,7 @@ describe('DeviceManagerView', () => {
 
     describe('connectDevice', () => {
         it('should handle DeviceNeedsSetupError and navigate to setup', async () => {
-            const { DeviceNeedsSetupError } = await import('../../services/deviceService');
+            const { DeviceNeedsSetupError } = await import('../../services/deviceService.js');
             const setupError = new DeviceNeedsSetupError('Device needs setup', mockDevice);
             
             mockService.connectToDevice.mockRejectedValue(setupError);
@@ -1085,12 +1450,29 @@ describe('DeviceManagerView', () => {
             });
 
             expect(sendMessageSpy).toHaveBeenCalledWith({ type: 'discoveryStarted' });
-            expect(mockDiscoveryService.discoverDevices).toHaveBeenCalledWith({ timeout: 5000 });
+            expect(mockDiscoveryService.discoverDevices).toHaveBeenCalledWith(5000);
             expect(sendMessageSpy).toHaveBeenCalledWith({
                 type: 'discoveryCompleted',
                 devices: mockDiscoveredDevices
             });
             expect(mockLogger.info).toHaveBeenCalledWith('Discovery completed', { count: 1 });
+        });
+
+        it('should send empty-state presentation on discovery with no results', async () => {
+            const sendMessageSpy = jest.spyOn(view as any, 'sendMessageToWebview');
+            mockDiscoveryService.discoverDevices.mockResolvedValue([]);
+
+            await view.handleMessage({
+                type: 'discover-devices'
+            });
+
+            expect(sendMessageSpy).toHaveBeenCalledWith({
+                type: 'discoveryCompleted',
+                devices: [],
+                emptyStateTitle: 'No devices found.',
+                emptyStateCode: 'ZTK-DISCO-NO-DEVICES'
+            });
+            expect(mockLogger.info).toHaveBeenCalledWith('Discovery completed', { count: 0 });
         });
 
         it('should send error message on discovery failure', async () => {
@@ -1105,9 +1487,70 @@ describe('DeviceManagerView', () => {
             expect(sendMessageSpy).toHaveBeenCalledWith({ type: 'discoveryStarted' });
             expect(sendMessageSpy).toHaveBeenCalledWith({
                 type: 'discoveryError',
-                error: 'Discovery failed'
+                error: 'Discovery failed',
+                errorTitle: 'Discovery failed.',
+                errorCode: 'ZTK-DISCO-UNKNOWN'
             });
             expect(mockLogger.error).toHaveBeenCalledWith('Discovery failed', { error });
+        });
+
+        it('should map expected discovery failures to support codes', async () => {
+            const sendMessageSpy = jest.spyOn(view as any, 'sendMessageToWebview');
+            const error = new Error('Timed out waiting for mDNS responses');
+            mockDiscoveryService.discoverDevices.mockRejectedValue(error);
+
+            await view.handleMessage({
+                type: 'discover-devices'
+            });
+
+            expect(sendMessageSpy).toHaveBeenCalledWith(expect.objectContaining({
+                type: 'discoveryError',
+                errorTitle: 'Discovery timed out.',
+                errorCode: 'ZTK-DISCO-TIMEOUT'
+            }));
+        });
+
+        const expectTypedDiscoveryFailure = async (
+            error: DeviceDiscoveryError,
+            expectedTitle: string,
+            expectedCode: string
+        ): Promise<void> => {
+            const sendMessageSpy = jest.spyOn(view as any, 'sendMessageToWebview');
+            mockDiscoveryService.discoverDevices.mockRejectedValue(error);
+
+            await view.handleMessage({
+                type: 'discover-devices'
+            });
+
+            expect(sendMessageSpy).toHaveBeenCalledWith(expect.objectContaining({
+                type: 'discoveryError',
+                errorTitle: expectedTitle,
+                errorCode: expectedCode
+            }));
+        };
+
+        it('should map permission discovery failures from typed errors to support codes', async () => {
+            await expectTypedDiscoveryFailure(
+                new DeviceDiscoveryError('permission', 'permission denied while browsing'),
+                'Device discovery needs network access.',
+                'ZTK-DISCO-PERMISSION'
+            );
+        });
+
+        it('should map service discovery failures from typed errors to support codes', async () => {
+            await expectTypedDiscoveryFailure(
+                new DeviceDiscoveryError('service', 'bonjour service unavailable'),
+                'The discovery service is unavailable.',
+                'ZTK-DISCO-SERVICE'
+            );
+        });
+
+        it('should map network discovery failures from typed errors to support codes', async () => {
+            await expectTypedDiscoveryFailure(
+                new DeviceDiscoveryError('network', 'No active network interfaces found'),
+                'Network discovery is unavailable.',
+                'ZTK-DISCO-NETWORK'
+            );
         });
 
         it('should handle non-Error exceptions in discovery', async () => {
@@ -1120,7 +1563,9 @@ describe('DeviceManagerView', () => {
 
             expect(sendMessageSpy).toHaveBeenCalledWith({
                 type: 'discoveryError',
-                error: 'Discovery failed'
+                error: 'Discovery failed',
+                errorTitle: 'Discovery failed.',
+                errorCode: 'ZTK-DISCO-UNKNOWN'
             });
         });
     });
@@ -1230,6 +1675,205 @@ describe('DeviceManagerView', () => {
             );
 
             jest.useRealTimers();
+        });
+    });
+
+    describe('ZRT one-time product announcement', () => {
+        afterEach(() => {
+            jest.restoreAllMocks();
+        });
+
+        it('should schedule the ZRT announcement message when it has not been seen and no delete warning is pending', async () => {
+            jest.useFakeTimers();
+            jest.spyOn(extensionStateService, 'hasSeenZrtAnnouncement').mockReturnValue(false);
+            const sendMessageSpy = jest.spyOn(view as any, 'sendMessageToWebview').mockImplementation(() => {});
+            mockService.getAllDevices.mockResolvedValue([mockDevice]);
+
+            await view.render({});
+
+            expect(sendMessageSpy).not.toHaveBeenCalledWith(
+                expect.objectContaining({ type: 'show-zrt-announcement' })
+            );
+
+            jest.advanceTimersByTime(100);
+
+            expect(sendMessageSpy).toHaveBeenCalledWith(
+                expect.objectContaining({ type: 'show-zrt-announcement' })
+            );
+
+            jest.useRealTimers();
+        });
+
+        it('should not schedule the ZRT announcement when it has already been seen', async () => {
+            jest.useFakeTimers();
+            jest.spyOn(extensionStateService, 'hasSeenZrtAnnouncement').mockReturnValue(true);
+            const sendMessageSpy = jest.spyOn(view as any, 'sendMessageToWebview').mockImplementation(() => {});
+            mockService.getAllDevices.mockResolvedValue([mockDevice]);
+
+            await view.render({});
+            jest.advanceTimersByTime(200);
+
+            expect(sendMessageSpy).not.toHaveBeenCalledWith(
+                expect.objectContaining({ type: 'show-zrt-announcement' })
+            );
+
+            jest.useRealTimers();
+        });
+
+        it('should not schedule the ZRT announcement when a paired delete warning is pending instead', async () => {
+            jest.useFakeTimers();
+            jest.spyOn(extensionStateService, 'hasSeenZrtAnnouncement').mockReturnValue(false);
+            const sendMessageSpy = jest.spyOn(view as any, 'sendMessageToWebview').mockImplementation(() => {});
+            mockService.getAllDevices.mockResolvedValue([mockDevice]);
+
+            await view.render({
+                showDeleteWarningForDeviceId: 'test-1',
+                deleteWarningDeviceName: 'Test device',
+                deleteWarningGroupId: 'group-1'
+            });
+            jest.advanceTimersByTime(200);
+
+            expect(sendMessageSpy).not.toHaveBeenCalledWith(
+                expect.objectContaining({ type: 'show-zrt-announcement' })
+            );
+            expect(sendMessageSpy).toHaveBeenCalledWith(
+                expect.objectContaining({ type: 'show-paired-delete-warning' })
+            );
+
+            jest.useRealTimers();
+        });
+
+        it('should mark the announcement as seen when dismissed', async () => {
+            const setSeenSpy = jest.spyOn(extensionStateService, 'setZrtAnnouncementSeen').mockResolvedValue(undefined);
+
+            await view.handleMessage({ type: 'zrt-announcement-dismiss' } as any);
+
+            expect(setSeenSpy).toHaveBeenCalled();
+            expect(mockTelemetry.trackEvent).toHaveBeenCalledWith(
+                expect.objectContaining({
+                    eventType: TelemetryEventType.Announcement,
+                    action: 'dismiss',
+                    properties: expect.objectContaining({ announcementId: 'zrt-intro' })
+                })
+            );
+        });
+
+        it('should mark the announcement as seen and open the learn more URL', async () => {
+            const setSeenSpy = jest.spyOn(extensionStateService, 'setZrtAnnouncementSeen').mockResolvedValue(undefined);
+
+            await view.handleMessage({ type: 'zrt-announcement-learn-more' } as any);
+
+            expect(setSeenSpy).toHaveBeenCalled();
+            expect(vscode.Uri.parse).toHaveBeenCalledWith(URLS.ZRT_LEARN_MORE);
+            expect(vscode.env.openExternal).toHaveBeenCalled();
+            const calledArg = (vscode.env.openExternal as jest.Mock).mock.calls[0][0];
+            expect(calledArg.toString()).toBe(URLS.ZRT_LEARN_MORE);
+            expect(mockTelemetry.trackEvent).toHaveBeenCalledWith(
+                expect.objectContaining({
+                    eventType: TelemetryEventType.Announcement,
+                    action: 'learn-more',
+                    properties: expect.objectContaining({ announcementId: 'zrt-intro' })
+                })
+            );
+        });
+    });
+
+    describe('ZRT info modal (from sidebar Quick Links navigation)', () => {
+        afterEach(() => {
+            jest.restoreAllMocks();
+        });
+
+        it('should schedule the ZRT info modal message when showZrtInfoModal param is provided', async () => {
+            jest.useFakeTimers();
+            const sendMessageSpy = jest.spyOn(view as any, 'sendMessageToWebview').mockImplementation(() => {});
+            mockService.getAllDevices.mockResolvedValue([mockDevice]);
+
+            await view.render({ showZrtInfoModal: true, zrtLogoUri: 'zrt-logo-uri' });
+
+            expect(sendMessageSpy).not.toHaveBeenCalledWith(
+                expect.objectContaining({ type: 'show-zrt-info' })
+            );
+
+            jest.advanceTimersByTime(100);
+
+            expect(sendMessageSpy).toHaveBeenCalledWith(
+                expect.objectContaining({ type: 'show-zrt-info', zrtLogoUri: 'zrt-logo-uri' })
+            );
+
+            jest.useRealTimers();
+        });
+
+        it('should not schedule the ZRT announcement when the info modal is requested instead', async () => {
+            jest.useFakeTimers();
+            jest.spyOn(extensionStateService, 'hasSeenZrtAnnouncement').mockReturnValue(false);
+            const sendMessageSpy = jest.spyOn(view as any, 'sendMessageToWebview').mockImplementation(() => {});
+            mockService.getAllDevices.mockResolvedValue([mockDevice]);
+
+            await view.render({ showZrtInfoModal: true });
+            jest.advanceTimersByTime(200);
+
+            expect(sendMessageSpy).toHaveBeenCalledWith(
+                expect.objectContaining({ type: 'show-zrt-info' })
+            );
+            expect(sendMessageSpy).not.toHaveBeenCalledWith(
+                expect.objectContaining({ type: 'show-zrt-announcement' })
+            );
+
+            jest.useRealTimers();
+        });
+
+        it('should not schedule the ZRT info modal when a paired delete warning is pending instead', async () => {
+            jest.useFakeTimers();
+            const sendMessageSpy = jest.spyOn(view as any, 'sendMessageToWebview').mockImplementation(() => {});
+            mockService.getAllDevices.mockResolvedValue([mockDevice]);
+
+            await view.render({
+                showZrtInfoModal: true,
+                showDeleteWarningForDeviceId: 'test-1',
+                deleteWarningDeviceName: 'Test device',
+                deleteWarningGroupId: 'group-1'
+            });
+            jest.advanceTimersByTime(200);
+
+            expect(sendMessageSpy).not.toHaveBeenCalledWith(
+                expect.objectContaining({ type: 'show-zrt-info' })
+            );
+            expect(sendMessageSpy).toHaveBeenCalledWith(
+                expect.objectContaining({ type: 'show-paired-delete-warning' })
+            );
+
+            jest.useRealTimers();
+        });
+
+        it('should open the learn more URL without touching the announcement seen state', async () => {
+            const setAnnouncementSeenSpy = jest.spyOn(extensionStateService, 'setZrtAnnouncementSeen').mockResolvedValue(undefined);
+
+            await view.handleMessage({ type: 'zrt-info-learn-more' } as any);
+
+            expect(setAnnouncementSeenSpy).not.toHaveBeenCalled();
+            expect(vscode.Uri.parse).toHaveBeenCalledWith(URLS.ZRT_LEARN_MORE);
+            expect(vscode.env.openExternal).toHaveBeenCalled();
+            const calledArg = (vscode.env.openExternal as jest.Mock).mock.calls[0][0];
+            expect(calledArg.toString()).toBe(URLS.ZRT_LEARN_MORE);
+            expect(mockTelemetry.trackEvent).toHaveBeenCalledWith(
+                expect.objectContaining({
+                    eventType: TelemetryEventType.QuickLink,
+                    action: 'learn-more',
+                    properties: expect.objectContaining({ linkId: 'zrt-info' })
+                })
+            );
+        });
+
+        it('should track telemetry when the ZRT info modal is dismissed', async () => {
+            await view.handleMessage({ type: 'zrt-info-close' } as any);
+
+            expect(mockTelemetry.trackEvent).toHaveBeenCalledWith(
+                expect.objectContaining({
+                    eventType: TelemetryEventType.QuickLink,
+                    action: 'close',
+                    properties: expect.objectContaining({ linkId: 'zrt-info' })
+                })
+            );
         });
     });
 
@@ -1484,7 +2128,9 @@ describe('DeviceManagerView', () => {
             expect(sendMessageSpy).toHaveBeenCalledWith({ type: 'discoveryStarted' });
             expect(sendMessageSpy).toHaveBeenCalledWith({
                 type: 'discoveryError',
-                error: 'Device rediscovery failed'
+                error: 'Device rediscovery failed',
+                errorTitle: 'Discovery failed.',
+                errorCode: 'ZTK-DISCO-UNKNOWN'
             });
             expect(mockLogger.error).toHaveBeenCalledWith('Device rediscovery failed', { deviceId: 'test-1', error });
         });
@@ -1501,7 +2147,9 @@ describe('DeviceManagerView', () => {
 
             expect(sendMessageSpy).toHaveBeenCalledWith({
                 type: 'discoveryError',
-                error: 'Device rediscovery failed'
+                error: 'Device rediscovery failed',
+                errorTitle: 'Discovery failed.',
+                errorCode: 'ZTK-DISCO-UNKNOWN'
             });
         });
 
@@ -1513,6 +2161,35 @@ describe('DeviceManagerView', () => {
             });
 
             expect(mockDiscoveryService.rediscoverDevices).toHaveBeenCalledWith(['xyz123'], undefined);
+        });
+
+        it('should trim DNS instance names before rediscovery', async () => {
+            await view.handleMessage({
+                type: 'rediscover-device',
+                deviceId: 'test-1',
+                dnsInstanceName: '  xyz123  '
+            });
+
+            expect(mockDiscoveryService.rediscoverDevices).toHaveBeenCalledWith(['xyz123'], undefined);
+        });
+
+        it('should reject rediscovery messages without a DNS instance name', async () => {
+            const sendMessageSpy = jest.spyOn(view as any, 'sendMessageToWebview');
+
+            await view.handleMessage({
+                type: 'rediscover-device',
+                deviceId: 'test-1',
+                dnsInstanceName: undefined
+            } as any);
+
+            expect(mockDiscoveryService.rediscoverDevices).not.toHaveBeenCalled();
+            expect(sendMessageSpy).toHaveBeenCalledTimes(1);
+            expect(sendMessageSpy).toHaveBeenCalledWith({
+                type: 'discoveryError',
+                error: 'Missing DNS instance name for device rediscovery',
+                errorTitle: 'Discovery failed.',
+                errorCode: 'ZTK-DISCO-UNKNOWN'
+            });
         });
 
         it('should handle device rediscovery with no results', async () => {
@@ -1527,7 +2204,9 @@ describe('DeviceManagerView', () => {
 
             expect(sendMessageSpy).toHaveBeenCalledWith({
                 type: 'discoveryCompleted',
-                devices: []
+                devices: [],
+                emptyStateTitle: 'No devices found.',
+                emptyStateCode: 'ZTK-DISCO-NO-DEVICES'
             });
             expect(mockLogger.info).toHaveBeenCalledWith(
                 'Device rediscovery completed',

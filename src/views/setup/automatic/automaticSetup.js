@@ -1,5 +1,5 @@
 /*
- * Copyright ©2025 HP Development Company, L.P.
+ * Copyright ©2025-2026 HP Development Company, L.P.
  * Licensed under the X11 License. See LICENSE file in the project root for details.
  */
 
@@ -66,7 +66,7 @@
                 document.getElementById('footerActions').classList.remove('hidden');
                 break;
 
-            case 'automaticError':
+            case 'automaticError': {
                 // Show error message
                 document.getElementById('loading').classList.add('hidden');
                 const errorMsg = msg.error || 'An error occurred';
@@ -87,6 +87,7 @@
                 if (runBtn) runBtn.disabled = false;
                 if (completeBtn) completeBtn.disabled = false;
                 break;
+            }
 
             case 'connectionTestFailed':
                 // Show error message above footer

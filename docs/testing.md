@@ -1,12 +1,12 @@
-# Testing Guide for ZGX Toolkit VS Code Extension
+# Testing Guide for Z Toolkit VS Code Extension
 
-This document provides comprehensive guidance on running tests locally for the ZGX Toolkit VS Code Extension.
+This document provides comprehensive guidance on running tests locally for the Z Toolkit VS Code Extension.
 
 If not already done so, please follow the quickstart guide and build instructions for the extension **[here](../README.md)**
 
 ## Overview
 
-The ZGX Toolkit extension includes two types of tests:
+The Z Toolkit extension includes two types of tests:
 
 1. **Unit Tests** - Test individual functions and classes in isolation using Jest
 2. **Integration Tests** - Test the extension in a real VS Code environment using Mocha
@@ -145,7 +145,7 @@ import * as vscode from 'vscode';
 
 describe('Integration Test', () => {
   it('should test VS Code integration', async () => {
-    const extension = vscode.extensions.getExtension('zgx-toolkit');
+    const extension = vscode.extensions.getExtension('hpinc.zgx-toolkit');
     assert.ok(extension);
     
     // Test extension functionality
@@ -226,7 +226,6 @@ The CI pipeline runs:
 
 - `jest.config.js` - Jest unit test configuration
 - `tsconfig.json` - TypeScript configuration for production code
-- `tsconfig.test.json` - TypeScript configuration for integration tests
 - `.eslintrc.js` - ESLint configuration for code quality
 
 ## Additional Resources

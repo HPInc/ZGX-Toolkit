@@ -1,5 +1,5 @@
 /*
- * Copyright ©2025 HP Development Company, L.P.
+ * Copyright ©2025-2026 HP Development Company, L.P.
  * Licensed under the X11 License. See LICENSE file in the project root for details.
  */
 
@@ -10,7 +10,7 @@
 
 import { DeviceService } from '../../services/deviceService';
 import { DeviceStore } from '../../store/deviceStore';
-import { DeviceConfig, Device, DiscoveredDevice } from '../../types/devices';
+import { DeviceConfig, Device, DeviceType } from '../../types/devices';
 import { ITelemetryService } from '../../types/telemetry';
 import { DeviceDiscoveryService } from '../../services/deviceDiscoveryService';
 
@@ -20,14 +20,14 @@ const mockTelemetryService: ITelemetryService = {
     trackError: jest.fn(),
     isEnabled: jest.fn().mockReturnValue(false),
     setEnabled: jest.fn(),
-    dispose: jest.fn().mockResolvedValue(undefined),
+    dispose: jest.fn().mockResolvedValue(undefined)
 };
 
 // Mock discovery service
 const mockDiscoveryService: jest.Mocked<DeviceDiscoveryService> = {
     discoverDevices: jest.fn().mockResolvedValue([]),
     discoverService: jest.fn().mockResolvedValue([]),
-    rediscoverDevices: jest.fn().mockResolvedValue([]),
+    rediscoverDevices: jest.fn().mockResolvedValue([])
 } as any;
 
 describe('DeviceService', () => {
@@ -51,7 +51,7 @@ describe('DeviceService', () => {
                 host: '192.168.1.100',
                 username: 'zgx',
                 port: 22,
-                useKeyAuth: true,
+                useKeyAuth: true
             };
 
             const device = await service.createDevice(config);
@@ -66,13 +66,28 @@ describe('DeviceService', () => {
             expect(store.get(device.id)).toEqual(device);
         });
 
+        it('should initialize fingerprint deviceType as Pending before setup', async () => {
+            const config: DeviceConfig = {
+                name: 'Pre-setup Device',
+                host: '192.168.1.101', // NOSONAR
+                username: 'zgx',
+                port: 22,
+                useKeyAuth: true
+            };
+
+            const device = await service.createDevice(config);
+
+            expect(device.isSetup).toBe(false);
+            expect(device.fingerprint?.deviceType).toBe(DeviceType.Pending);
+        });
+
         it('should throw error if name is missing', async () => {
             const config: DeviceConfig = {
                 name: '',
                 host: '192.168.1.100',
                 username: 'zgx',
                 port: 22,
-                useKeyAuth: true,
+                useKeyAuth: true
             };
 
             await expect(service.createDevice(config)).rejects.toThrow('invalid device name');
@@ -84,7 +99,7 @@ describe('DeviceService', () => {
                 host: '',
                 username: 'zgx',
                 port: 22,
-                useKeyAuth: true,
+                useKeyAuth: true
             };
 
             await expect(service.createDevice(config)).rejects.toThrow('invalid device host');
@@ -96,7 +111,7 @@ describe('DeviceService', () => {
                 host: '192.168.1.100',
                 username: '',
                 port: 22,
-                useKeyAuth: true,
+                useKeyAuth: true
             };
 
             await expect(service.createDevice(config)).rejects.toThrow('invalid username');
@@ -108,7 +123,7 @@ describe('DeviceService', () => {
                 host: '192.168.1.100',
                 username: 'zgx',
                 port: 0,
-                useKeyAuth: true,
+                useKeyAuth: true
             };
 
             await expect(service.createDevice(config)).rejects.toThrow('invalid port number (must be between 1 and 65535)');
@@ -120,7 +135,7 @@ describe('DeviceService', () => {
                 host: '10.0.0.1',
                 username: 'zgx',
                 port: 22,
-                useKeyAuth: true,
+                useKeyAuth: true
             };
 
             const device = await service.createDevice(config);
@@ -133,7 +148,7 @@ describe('DeviceService', () => {
                 host: '::1',
                 username: 'zgx',
                 port: 22,
-                useKeyAuth: true,
+                useKeyAuth: true
             };
 
             const device = await service.createDevice(config);
@@ -146,7 +161,7 @@ describe('DeviceService', () => {
                 host: 'example.com',
                 username: 'zgx',
                 port: 22,
-                useKeyAuth: true,
+                useKeyAuth: true
             };
 
             const device = await service.createDevice(config);
@@ -159,7 +174,7 @@ describe('DeviceService', () => {
                 host: '192.168.1.100',
                 username: 'user name',
                 port: 22,
-                useKeyAuth: true,
+                useKeyAuth: true
             };
 
             await expect(service.createDevice(config)).rejects.toThrow('invalid username');
@@ -171,7 +186,7 @@ describe('DeviceService', () => {
                 host: '192.168.1.100',
                 username: '..admin',
                 port: 22,
-                useKeyAuth: true,
+                useKeyAuth: true
             };
 
             await expect(service.createDevice(config)).rejects.toThrow('invalid username');
@@ -183,7 +198,7 @@ describe('DeviceService', () => {
                 host: '192.168.1.100',
                 username: 'user@domain',
                 port: 22,
-                useKeyAuth: true,
+                useKeyAuth: true
             };
 
             const device = await service.createDevice(config);
@@ -196,7 +211,7 @@ describe('DeviceService', () => {
                 host: '192.168.1.100',
                 username: 'DOMAIN\\user',
                 port: 22,
-                useKeyAuth: true,
+                useKeyAuth: true
             };
 
             const device = await service.createDevice(config);
@@ -209,7 +224,7 @@ describe('DeviceService', () => {
                 host: '192.168.1.100',
                 username: 'zgx',
                 port: 70000,
-                useKeyAuth: true,
+                useKeyAuth: true
             };
 
             await expect(service.createDevice(config)).rejects.toThrow('invalid port number');
@@ -221,7 +236,7 @@ describe('DeviceService', () => {
                 host: '192.168.1.100',
                 username: 'zgx',
                 port: 22.5,
-                useKeyAuth: true,
+                useKeyAuth: true
             };
 
             await expect(service.createDevice(config)).rejects.toThrow('invalid port number');
@@ -233,7 +248,7 @@ describe('DeviceService', () => {
                 host: 'a'.repeat(254),
                 username: 'zgx',
                 port: 22,
-                useKeyAuth: true,
+                useKeyAuth: true
             };
 
             await expect(service.createDevice(config)).rejects.toThrow('invalid device host');
@@ -245,7 +260,7 @@ describe('DeviceService', () => {
                 host: '192.168.1.100',
                 username: 'zgx',
                 port: 22,
-                useKeyAuth: true,
+                useKeyAuth: true
             };
 
             await service.createDevice(config);
@@ -261,7 +276,7 @@ describe('DeviceService', () => {
                 host: '192.168.1.100',
                 username: 'zgx',
                 port: 22,
-                useKeyAuth: true,
+                useKeyAuth: true
             };
 
             const machine1 = await service.createDevice({ ...config, name: 'device 1' });
@@ -276,7 +291,7 @@ describe('DeviceService', () => {
             const device = await createTestDevice(service);
             
             await service.updateDevice(device.id, {
-                name: 'Updated Name',
+                name: 'Updated Name'
             });
 
             const updated = store.get(device.id);
@@ -460,7 +475,7 @@ describe('DeviceService', () => {
             }), { virtual: true });
 
             // Import fresh to get mocked version
-            const { DeviceService: FreshDeviceService } = await import('../../services/deviceService');
+            const { DeviceService: FreshDeviceService } = await import('../../services/deviceService.js');
             const freshService = new FreshDeviceService({ 
                 store, 
                 telemetry: mockTelemetryService,
@@ -469,7 +484,7 @@ describe('DeviceService', () => {
 
             try {
                 await freshService.connectToDevice(device.id, false);
-            } catch (error) {
+            } catch {
                 // Expected to fail because connection service is complex to mock
                 // But we're testing the flow reaches that point
             }
@@ -484,7 +499,7 @@ describe('DeviceService', () => {
 
             try {
                 await service.connectToDevice(device.id, true);
-            } catch (error) {
+            } catch {
                 // Expected to fail because we can't fully mock the connection service
             }
 
@@ -500,7 +515,7 @@ describe('DeviceService', () => {
                 host: '192.168.1.100',
                 username: null as any,
                 port: 22,
-                useKeyAuth: true,
+                useKeyAuth: true
             };
 
             await expect(service.createDevice(config)).rejects.toThrow('invalid username');
@@ -512,7 +527,7 @@ describe('DeviceService', () => {
                 host: null as any,
                 username: 'zgx',
                 port: 22,
-                useKeyAuth: true,
+                useKeyAuth: true
             };
 
             await expect(service.createDevice(config)).rejects.toThrow('invalid device host');
@@ -524,7 +539,7 @@ describe('DeviceService', () => {
                 host: '192.168.1.100',
                 username: 'zgx',
                 port: 22,
-                useKeyAuth: true,
+                useKeyAuth: true
             };
 
             await expect(service.createDevice(config)).rejects.toThrow('invalid device name');
@@ -536,7 +551,7 @@ describe('DeviceService', () => {
                 host: 'my-server.example.com',
                 username: 'zgx',
                 port: 22,
-                useKeyAuth: true,
+                useKeyAuth: true
             };
 
             const device = await service.createDevice(config);
@@ -549,7 +564,7 @@ describe('DeviceService', () => {
                 host: '192.168.1.100',
                 username: 'user.name-123',
                 port: 22,
-                useKeyAuth: true,
+                useKeyAuth: true
             };
 
             const device = await service.createDevice(config);
@@ -562,7 +577,7 @@ describe('DeviceService', () => {
                 host: '192.168.1.100',
                 username: 'zgx',
                 port: 1,
-                useKeyAuth: true,
+                useKeyAuth: true
             };
 
             const device = await service.createDevice(config);
@@ -575,7 +590,7 @@ describe('DeviceService', () => {
                 host: '192.168.1.100',
                 username: 'zgx',
                 port: 65535,
-                useKeyAuth: true,
+                useKeyAuth: true
             };
 
             const device = await service.createDevice(config);
@@ -669,7 +684,7 @@ describe('DeviceService', () => {
                 host: 'zgx-test.local',
                 username: 'zgx',
                 port: 22,
-                useKeyAuth: true,
+                useKeyAuth: true
             };
             const device = await service.createDevice(config);
             
@@ -994,14 +1009,14 @@ describe('DeviceService', () => {
  */
 async function createTestDevice(
     service: DeviceService,
-    name: string = 'Test device'
+    name = 'Test device'
 ): Promise<Device> {
     const config: DeviceConfig = {
         name,
         host: '192.168.1.100',
         username: 'zgx',
         port: 22,
-        useKeyAuth: true,
+        useKeyAuth: true
     };
 
     return service.createDevice(config);

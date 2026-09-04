@@ -1,10 +1,10 @@
 /*
- * Copyright ©2025 HP Development Company, L.P.
+ * Copyright ©2025-2026 HP Development Company, L.P.
  * Licensed under the X11 License. See LICENSE file in the project root for details.
  */
 
 /**
- * VS Code command identifiers for the ZGX Toolkit extension.
+ * VS Code command identifiers for the Z Toolkit extension.
  * These commands can be invoked via the command palette or programmatically.
  */
 
@@ -26,7 +26,7 @@ export const COMMANDS = {
     /** Unpair devices by removing a ConnectX group */
     UNPAIR_DEVICES: 'zgxToolkit.unpairDevices',
     /** Show details of paired devices and their ConnectX NICs */
-    PAIR_DETAILS: 'zgxToolkit.pairDetails',
+    PAIR_DETAILS: 'zgxToolkit.pairDetails'
 } as const;
 
 /**

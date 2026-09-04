@@ -1,5 +1,5 @@
 /*
- * Copyright ©2025 HP Development Company, L.P.
+ * Copyright ©2025-2026 HP Development Company, L.P.
  * Licensed under the X11 License. See LICENSE file in the project root for details.
  */
 
@@ -13,12 +13,6 @@
     document.querySelectorAll('.template-card').forEach(card => {
         card.addEventListener('click', () => {
             send('template-select', { id: card.getAttribute('data-id') });
-        });
-        card.addEventListener('keypress', e => {
-            if (e.key === 'Enter' || e.key === ' ') {
-                e.preventDefault();
-                send('template-select', { id: card.getAttribute('data-id') });
-            }
         });
     });
 })();

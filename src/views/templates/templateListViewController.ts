@@ -1,5 +1,5 @@
 /*
- * Copyright ©2025 HP Development Company, L.P.
+ * Copyright ©2025-2026 HP Development Company, L.P.
  * Licensed under the X11 License. See LICENSE file in the project root for details.
  */
 
@@ -9,6 +9,7 @@ import { ITelemetryService, TelemetryEventType } from '../../types/telemetry';
 import { InferenceInstructionsViewController } from '../instructions/inference/inferenceInstructionsViewController';
 import { FineTuningInstructionsViewController } from '../instructions/finetuning/fineTuningInstructionsViewController';
 import { RagInstructionsViewController } from '../instructions/rag/ragInstructionsViewController';
+import { Message } from '../../types/messages';
 
 export class TemplateListViewController extends BaseViewController {
     public static viewId(): string {
@@ -18,12 +19,12 @@ export class TemplateListViewController extends BaseViewController {
     constructor(deps: { logger: Logger; telemetry: ITelemetryService }) {
         super(deps.logger, deps.telemetry);
 
-        this.template = this.loadTemplate('./templateList.html', __dirname);
-        this.styles = this.loadTemplate('./templateList.css', __dirname);
-        this.clientScript = this.loadTemplate('./templateList.js', __dirname);
+        this.template = this.loadTemplate('templates/templateList.html');
+        this.styles = this.loadTemplate('templates/templateList.css');
+        this.clientScript = this.loadTemplate('templates/templateList.js');
     }
 
-    async render(_params?: any, nonce?: string): Promise<string> {
+    async render(_params?: Record<string, unknown>, nonce?: string): Promise<string> {
         this.logger.debug('Rendering template list view');
         const templatesAvailable = (this.template.match(/data-id="([^"]+)"/g) || []).length;
 
@@ -31,16 +32,16 @@ export class TemplateListViewController extends BaseViewController {
             eventType: TelemetryEventType.View,
             action: 'navigate',
             properties: {
-                toView: 'templates.list',
+                toView: 'templates.list'
             },
             measurements: {
-                templateCount: templatesAvailable,
+                templateCount: templatesAvailable
             }
         });
         return this.wrapHtml(this.template, nonce);
     }
 
-    async handleMessage(message: any): Promise<void> {
+    async handleMessage(message: Message): Promise<void> {
         await super.handleMessage(message);
         
         if (message.type !== 'template-select') {
@@ -56,7 +57,7 @@ export class TemplateListViewController extends BaseViewController {
                         eventType: TelemetryEventType.View,
                         action: 'navigate',
                         properties: {
-                            toView: 'templates.inference',
+                            toView: 'templates.inference'
                         }
                     });
                     await this.navigateTo(
@@ -80,7 +81,7 @@ export class TemplateListViewController extends BaseViewController {
                         eventType: TelemetryEventType.View,
                         action: 'navigate',
                         properties: {
-                            toView: 'templates.fine-tuning',
+                            toView: 'templates.fine-tuning'
                         }
                     });
                     await this.navigateTo(
@@ -104,7 +105,7 @@ export class TemplateListViewController extends BaseViewController {
                         eventType: TelemetryEventType.View,
                         action: 'navigate',
                         properties: {
-                            toView: 'templates.rag',
+                            toView: 'templates.rag'
                         }
                     });
                     await this.navigateTo(

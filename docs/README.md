@@ -1,8 +1,8 @@
-# ZGX Toolkit VS Code Extension
+# Z Toolkit VS Code Extension
 
 ## Documentation
 
-This directory contains comprehensive documentation for the ZGX Toolkit VS Code Extension.
+This directory contains comprehensive documentation for the Z Toolkit VS Code Extension.
 
 ## Available Documentation
 

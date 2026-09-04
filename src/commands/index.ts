@@ -1,10 +1,10 @@
 /*
- * Copyright ©2025 HP Development Company, L.P.
+ * Copyright ©2025-2026 HP Development Company, L.P.
  * Licensed under the X11 License. See LICENSE file in the project root for details.
  */
 
 /**
- * Command handlers for the ZGX Toolkit extension.
+ * Command handlers for the Z Toolkit extension.
  * Implements all commands registered in package.json.
  */
 
@@ -23,7 +23,7 @@ import { ZgxToolkitProvider } from '../providers';
  * This should be called during extension activation.
  * 
  * @param context Extension context for registering disposables
- * @param zgxProvider The ZGX Toolkit provider for view navigation
+ * @param zgxProvider The Z Toolkit provider for view navigation
  */
 export function registerCommands(context: vscode.ExtensionContext, zgxProvider: ZgxToolkitProvider): void {
 
@@ -47,6 +47,35 @@ export function registerCommands(context: vscode.ExtensionContext, zgxProvider: 
 }
 
 /**
+ * Records a 'command executed' telemetry event.
+ *
+ * @param commandId The id of the command that was executed
+ * @param properties Additional telemetry properties to include
+ */
+function trackCommandExecuted(commandId: string, properties: Record<string, string> = {}): void {
+    telemetryService.trackEvent({
+        eventType: TelemetryEventType.Command,
+        action: 'execute',
+        properties: { commandId, ...properties }
+    });
+}
+
+/**
+ * Logs, reports and surfaces a command failure to the user.
+ *
+ * @param logMessage Message to record via the logger
+ * @param userMessage Message to display to the user
+ * @param telemetryContext Telemetry context identifier for the error
+ * @param error The error that was thrown
+ */
+function handleCommandError(logMessage: string, userMessage: string, telemetryContext: string, error: unknown): void {
+    logger.error(logMessage, { error });
+    vscode.window.showErrorMessage(userMessage);
+    telemetryService.trackError({ eventType: TelemetryEventType.Error, error: error as Error, context: telemetryContext });
+}
+
+
+/**
  * Command handler for 'zgxToolkit.setLogLevel'.
  * Shows a QuickPick menu to select the log level.
  */
@@ -59,7 +88,7 @@ async function setLogLevelCommand(): Promise<void> {
             Array.from(LOG_LEVEL_OPTIONS),
             {
                 placeHolder: 'Select log level',
-                title: 'ZGX Toolkit: Set Log Level',
+                title: 'Z Toolkit: Set Log Level'
             }
         );
 
@@ -77,25 +106,19 @@ async function setLogLevelCommand(): Promise<void> {
 
         // Show confirmation message
         vscode.window.showInformationMessage(
-            `ZGX Toolkit: Log level set to ${selected}`
+            `Z Toolkit: Log level set to ${selected}`
         );
 
         logger.info('Log level changed by user', { level: selected });
-        telemetryService.trackEvent({
-            eventType: TelemetryEventType.Command,
-            action: 'execute',
-            properties: {
-                commandId: COMMANDS.SET_LOG_LEVEL,
-                level: selected,
-            }
-        });
+        trackCommandExecuted(COMMANDS.SET_LOG_LEVEL, { level: selected });
 
     } catch (error) {
-        logger.error('Failed to set log level', { error });
-        vscode.window.showErrorMessage(
-            `Failed to set log level: ${error instanceof Error ? error.message : 'Unknown error'}`
+        handleCommandError(
+            'Failed to set log level',
+            `Failed to set log level: ${error instanceof Error ? error.message : 'Unknown error'}`,
+            'set-log-level',
+            error
         );
-        telemetryService.trackError({ eventType: TelemetryEventType.Error, error: error as Error, context: 'set-log-level' });
     }
 }
 
@@ -117,24 +140,18 @@ async function toggleTelemetryCommand(): Promise<void> {
 
         // Show confirmation message
         const statusText = newState ? 'enabled' : 'disabled';
-        const message = `ZGX Toolkit: Telemetry ${statusText}`;
+        const message = `Z Toolkit: Telemetry ${statusText}`;
         vscode.window.showInformationMessage(message);
 
         logger.info('Telemetry toggled by user', { enabled: newState });
-        telemetryService.trackEvent({
-            eventType: TelemetryEventType.Command,
-            action: 'execute',
-            properties: {
-                commandId: COMMANDS.TOGGLE_TELEMETRY,
-                enabled: newState.toString(),
-            }
-        });
+        trackCommandExecuted(COMMANDS.TOGGLE_TELEMETRY, { enabled: newState.toString() });
     } catch (error) {
-        logger.error('Failed to toggle telemetry', { error });
-        vscode.window.showErrorMessage(
-            `Failed to toggle telemetry: ${error instanceof Error ? error.message : 'Unknown error'}`
+        handleCommandError(
+            'Failed to toggle telemetry',
+            `Failed to toggle telemetry: ${error instanceof Error ? error.message : 'Unknown error'}`,
+            'toggle-telemetry',
+            error
         );
-        telemetryService.trackError({ eventType: TelemetryEventType.Error, error: error as Error, context: 'toggle-telemetry' });
     }
 }
 
@@ -146,18 +163,12 @@ async function showTelemetryStatusCommand(): Promise<void> {
     logger.debug('showTelemetryStatus command invoked');
 
     try {
-        telemetryService.trackEvent({
-            eventType: TelemetryEventType.Command,
-            action: 'execute',
-            properties: {
-                commandId: COMMANDS.SHOW_TELEMETRY_STATUS
-            }
-        });
+        trackCommandExecuted(COMMANDS.SHOW_TELEMETRY_STATUS);
 
         const enabled = configService.getTelemetryEnabled();
         const statusText = enabled ? 'ENABLED' : 'DISABLED';
 
-        const message = `ZGX Toolkit Telemetry Status: ${statusText}`;
+        const message = `Z Toolkit Telemetry Status: ${statusText}`;
 
         const action = enabled ? 'Disable' : 'Enable';
         const selection = await vscode.window.showInformationMessage(
@@ -181,11 +192,12 @@ async function showTelemetryStatusCommand(): Promise<void> {
 
         logger.debug('Telemetry status shown to user');
     } catch (error) {
-        logger.error('Failed to show telemetry status', { error });
-        vscode.window.showErrorMessage(
-            `Failed to show telemetry status: ${error instanceof Error ? error.message : 'Unknown error'}`
+        handleCommandError(
+            'Failed to show telemetry status',
+            `Failed to show telemetry status: ${error instanceof Error ? error.message : 'Unknown error'}`,
+            'show-telemetry-status',
+            error
         );
-        telemetryService.trackError({ eventType: TelemetryEventType.Error, error: error as Error, context: 'show-telemetry-status' });
     }
 }
 
@@ -196,13 +208,7 @@ async function showTelemetryStatusCommand(): Promise<void> {
 async function openLog(): Promise<void> {
     
     try {
-        telemetryService.trackEvent({
-            eventType: TelemetryEventType.Command,
-            action: 'execute',
-            properties: {
-                commandId: COMMANDS.OPEN_LOG
-            }
-        });
+        trackCommandExecuted(COMMANDS.OPEN_LOG);
 
         const logPath = Logger.getInstance().currentLogFilePath;
         if (!logPath) {
@@ -213,9 +219,7 @@ async function openLog(): Promise<void> {
         await vscode.window.showTextDocument(doc);
     } catch (error) {
         const message = `Failed to open log file: ${error instanceof Error ? error.message : String(error)}`;
-        logger.error(message, { error });
-        telemetryService.trackError({ eventType: TelemetryEventType.Error, error: error as Error, context: 'open-log' });
-        vscode.window.showErrorMessage(message);
+        handleCommandError(message, message, 'open-log', error);
     }
 }
 
@@ -224,13 +228,7 @@ async function openLog(): Promise<void> {
  * Shows the log file location and provides options to open the log or copy the path.
  */
 async function showLogLocation(): Promise<void> {
-    telemetryService.trackEvent({
-        eventType: TelemetryEventType.Command,
-        action: 'execute',
-        properties: {
-            commandId: COMMANDS.SHOW_LOG_LOCATION
-        }
-    });
+    trackCommandExecuted(COMMANDS.SHOW_LOG_LOCATION);
     vscode.window.showInformationMessage(
         `Log file location: ${Logger.getInstance().currentLogFilePath}`,
         'Open Log',
@@ -251,6 +249,48 @@ async function showLogLocation(): Promise<void> {
 }
 
 /**
+ * Prompts the user to select a paired device group via QuickPick.
+ * Resolves all current groups, filters out any that failed to resolve,
+ * and shows an informational message if none are available.
+ *
+ * @param placeHolder QuickPick placeholder text
+ * @param title QuickPick title
+ * @returns The selected group's id, or undefined if cancelled/unavailable
+ */
+async function selectDeviceGroupId(placeHolder: string, title: string): Promise<string | undefined> {
+    // Get all current groups and resolve their device details
+    const allGroups = await connectxGroupService.getAllGroups();
+
+    if (!allGroups || allGroups.length === 0) {
+        vscode.window.showInformationMessage('Z Toolkit: No paired device groups found.');
+        return undefined;
+    }
+
+    const groupInfos = await Promise.all(
+        allGroups.map(group => connectxGroupService.getGroupInfo(group.id))
+    );
+    const validGroupInfos = groupInfos.filter(
+        (info): info is NonNullable<typeof info> => info !== undefined
+    );
+
+    if (validGroupInfos.length === 0) {
+        vscode.window.showInformationMessage('Z Toolkit: No valid paired device groups found.');
+        return undefined;
+    }
+
+    // Build QuickPick items from groups
+    const items = validGroupInfos.map(groupInfo => ({
+        label: `[${groupInfo.devices.map(d => d.name).join(', ')}]`,
+        groupId: groupInfo.group.id
+    }));
+
+    // Show group selection
+    const selected = await vscode.window.showQuickPick(items, { placeHolder, title });
+
+    return selected?.groupId;
+}
+
+/**
  * Command handler for 'zgxToolkit.unpairDevices'.
  * Shows a list of ConnectX groups and navigates to the unpair devices view
  * for the selected group.
@@ -259,61 +299,26 @@ async function unpairDevicesCommand(): Promise<void> {
     logger.debug('unpairDevices command invoked');
 
     try {
-        telemetryService.trackEvent({
-            eventType: TelemetryEventType.Command,
-            action: 'execute',
-            properties: {
-                commandId: COMMANDS.UNPAIR_DEVICES
-            }
-        });
+        trackCommandExecuted(COMMANDS.UNPAIR_DEVICES);
 
-        // Get all current groups and resolve their device details
-        const allGroups = await connectxGroupService.getAllGroups();
+        const groupId = await selectDeviceGroupId('Select a device group to unpair', 'Z Toolkit: Unpair Devices');
 
-        if (!allGroups || allGroups.length === 0) {
-            vscode.window.showInformationMessage('ZGX Toolkit: No paired device groups found.');
-            return;
-        }
-
-        const groupInfos = await Promise.all(
-            allGroups.map(group => connectxGroupService.getGroupInfo(group.id))
-        );
-        const validGroupInfos = groupInfos.filter(
-            (info): info is NonNullable<typeof info> => info !== undefined
-        );
-
-        if (validGroupInfos.length === 0) {
-            vscode.window.showInformationMessage('ZGX Toolkit: No valid paired device groups found.');
-            return;
-        }
-
-        // Build QuickPick items from groups
-        const items = validGroupInfos.map(groupInfo => ({
-            label: `[${groupInfo.devices.map(d => d.name).join(', ')}]`,
-            groupId: groupInfo.group.id
-        }));
-
-        // Show group selection
-        const selected = await vscode.window.showQuickPick(items, {
-            placeHolder: 'Select a device group to unpair',
-            title: 'ZGX Toolkit: Unpair Devices'
-        });
-
-        if (!selected) {
+        if (!groupId) {
             logger.debug('Unpair devices selection cancelled');
             return;
         }
 
         // Navigate to the unpair devices view in the editor panel
-        await commandProvider.openInEditor('groups/unpairDevices', { groupId: selected.groupId });
+        await commandProvider.openInEditor('groups/unpairDevices', { groupId });
 
-        logger.info('Navigated to unpair devices view', { groupId: selected.groupId });
+        logger.info('Navigated to unpair devices view', { groupId });
     } catch (error) {
-        logger.error('Failed to unpair devices', { error });
-        vscode.window.showErrorMessage(
-            `Failed to unpair devices: ${error instanceof Error ? error.message : 'Unknown error'}`
+        handleCommandError(
+            'Failed to unpair devices',
+            `Failed to unpair devices: ${error instanceof Error ? error.message : 'Unknown error'}`,
+            'unpair-devices',
+            error
         );
-        telemetryService.trackError({ eventType: TelemetryEventType.Error, error: error as Error, context: 'unpair-devices' });
     }
 }
 
@@ -337,7 +342,7 @@ let commandProvider: ZgxToolkitProvider;
  * Set the provider for commands that need to navigate to views.
  * This should be called during extension activation.
  * 
- * @param zgxProvider The ZGX Toolkit provider
+ * @param zgxProvider The Z Toolkit provider
  */
 export function setCommandProvider(zgxProvider: ZgxToolkitProvider): void {
     commandProvider = zgxProvider;
@@ -352,60 +357,25 @@ async function pairDetailsCommand(): Promise<void> {
     logger.debug('pairDetails command invoked');
 
     try {
-        telemetryService.trackEvent({
-            eventType: TelemetryEventType.Command,
-            action: 'execute',
-            properties: {
-                commandId: COMMANDS.PAIR_DETAILS
-            }
-        });
+        trackCommandExecuted(COMMANDS.PAIR_DETAILS);
 
-        // Get all current groups and resolve their device details
-        const allGroups = await connectxGroupService.getAllGroups();
+        const groupId = await selectDeviceGroupId('Select a device group to view details', 'Z Toolkit: Pairing Details');
 
-        if (!allGroups || allGroups.length === 0) {
-            vscode.window.showInformationMessage('ZGX Toolkit: No paired device groups found.');
-            return;
-        }
-
-        const groupInfos = await Promise.all(
-            allGroups.map(group => connectxGroupService.getGroupInfo(group.id))
-        );
-        const validGroupInfos = groupInfos.filter(
-            (info): info is NonNullable<typeof info> => info !== undefined
-        );
-
-        if (validGroupInfos.length === 0) {
-            vscode.window.showInformationMessage('ZGX Toolkit: No valid paired device groups found.');
-            return;
-        }
-
-        // Build QuickPick items from groups
-        const items = validGroupInfos.map(groupInfo => ({
-            label: `[${groupInfo.devices.map(d => d.name).join(', ')}]`,
-            groupId: groupInfo.group.id
-        }));
-
-        // Show group selection
-        const selected = await vscode.window.showQuickPick(items, {
-            placeHolder: 'Select a device group to view details',
-            title: 'ZGX Toolkit: Pairing Details'
-        });
-
-        if (!selected) {
+        if (!groupId) {
             logger.debug('Pair details selection cancelled');
             return;
         }
 
         // Navigate to pair details view in the editor panel
-        await commandProvider.openInEditor('groups/pairDetails', { groupId: selected.groupId });
+        await commandProvider.openInEditor('groups/pairDetails', { groupId });
 
-        logger.info('Navigated to pair details view', { groupId: selected.groupId });
+        logger.info('Navigated to pair details view', { groupId });
     } catch (error) {
-        logger.error('Failed to show pair details', { error });
-        vscode.window.showErrorMessage(
-            `Failed to show pairing details: ${error instanceof Error ? error.message : 'Unknown error'}`
+        handleCommandError(
+            'Failed to show pair details',
+            `Failed to show pairing details: ${error instanceof Error ? error.message : 'Unknown error'}`,
+            'pair-details',
+            error
         );
-        telemetryService.trackError({ eventType: TelemetryEventType.Error, error: error as Error, context: 'pair-details' });
     }
 }

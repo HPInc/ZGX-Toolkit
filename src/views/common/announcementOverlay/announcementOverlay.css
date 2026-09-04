@@ -1,0 +1,65 @@
+/*
+ * Copyright ©2026 HP Development Company, L.P.
+ * Licensed under the X11 License. See LICENSE file in the project root for details.
+ */
+
+/**
+ * Announcement overlay styles for one-time product announcement dialogs.
+ * Extends base overlay styles with announcement-specific presentation.
+ */
+
+/* Generic icon for announcement-specific overlay (accent/star) */
+.announcement-overlay-icon {
+    color: var(--vscode-charts-blue);
+}
+
+/* Custom logo image icon (e.g. product logo) */
+.announcement-overlay-icon-img {
+    width: 50px !important;
+    height: 50px !important;
+    object-fit: contain;
+}
+
+.announcement-overlay-icon-img.hidden {
+    display: none;
+}
+
+.announcement-overlay-content {
+    font-size: 14px;
+    line-height: 1.5;
+    color: var(--vscode-foreground);
+}
+
+.announcement-overlay-content p {
+    margin: 0 0 10px 0;
+}
+
+.announcement-overlay-content ul,
+.announcement-overlay-content ol {
+    margin: 8px 0 0 0;
+    padding-left: 20px;
+}
+
+.announcement-overlay-content ul li,
+.announcement-overlay-content ol li {
+    margin-bottom: 4px;
+}
+
+.announcement-overlay-content .announcement-overlay-note {
+    display: flex;
+    align-items: flex-start;
+    gap: 6px;
+    font-style: italic;
+    color: var(--vscode-descriptionForeground);
+}
+
+.announcement-overlay-note-icon {
+    flex-shrink: 0;
+    margin-top: 2px;
+    font-size: 14px;
+    color: var(--vscode-descriptionForeground);
+}
+
+.announcement-overlay-actions {
+    flex-wrap: wrap;
+}

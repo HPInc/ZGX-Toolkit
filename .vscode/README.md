@@ -1,6 +1,6 @@
 # VS Code Workspace Configuration
 
-This folder contains VS Code workspace-specific settings for the ZGX Toolkit extension development.
+This folder contains VS Code workspace-specific settings for the Z Toolkit extension development.
 
 ## Files
 

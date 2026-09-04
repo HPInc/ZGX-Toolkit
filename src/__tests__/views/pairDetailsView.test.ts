@@ -76,7 +76,7 @@ describe('PairDetailsView', () => {
             info: jest.fn(),
             warn: jest.fn(),
             error: jest.fn(),
-            trace: jest.fn(),
+            trace: jest.fn()
         } as any;
 
         mockTelemetry = {
@@ -84,7 +84,7 @@ describe('PairDetailsView', () => {
             trackError: jest.fn(),
             isEnabled: jest.fn().mockReturnValue(false),
             setEnabled: jest.fn(),
-            dispose: jest.fn().mockResolvedValue(undefined),
+            dispose: jest.fn().mockResolvedValue(undefined)
         } as any;
 
         mockGroupService = {
@@ -96,7 +96,7 @@ describe('PairDetailsView', () => {
             getConnectXNICsForDevice: jest.fn(),
             deleteGroup: jest.fn(),
             removeGroup: jest.fn(),
-            subscribe: jest.fn().mockReturnValue(() => {}),
+            subscribe: jest.fn().mockReturnValue(() => {})
         } as any;
 
         mockNavigationCallback = jest.fn();
@@ -379,7 +379,7 @@ describe('PairDetailsView', () => {
                         eventType: TelemetryEventType.View,
                         action: 'navigate',
                         properties: {
-                            toView: 'groups.pairDetails',
+                            toView: 'groups.pairDetails'
                         },
                         measurements: {
                             networkEntryCount: 3

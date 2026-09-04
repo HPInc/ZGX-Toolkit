@@ -1,5 +1,5 @@
 /*
- * Copyright ©2025 HP Development Company, L.P.
+ * Copyright ©2025-2026 HP Development Company, L.P.
  * Licensed under the X11 License. See LICENSE file in the project root for details.
  */
 
@@ -61,6 +61,128 @@
     margin-bottom: 20px;
 }
 
+.device-filter-group {
+    max-width: 320px;
+    margin-bottom: 12px;
+}
+
+.device-filter-group label {
+    font-size: 13px;
+}
+
+.device-type-filter {
+    position: relative;
+}
+
+.device-type-filter-toggle {
+    width: 100%;
+    min-height: 36px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    background: var(--vscode-input-background);
+    color: var(--vscode-input-foreground);
+    border: 1px solid var(--vscode-input-border);
+    border-radius: var(--border-radius);
+    padding: var(--spacing-sm) 12px;
+    font-size: inherit;
+    font-family: inherit;
+    cursor: pointer;
+}
+
+.device-type-filter-toggle:hover {
+    border-color: var(--vscode-focusBorder);
+}
+
+.device-type-filter-toggle:focus {
+    outline: none;
+    border-color: var(--vscode-focusBorder);
+    box-shadow: 0 0 0 2px var(--vscode-focusBorder);
+}
+
+.device-type-filter-menu {
+    position: absolute;
+    top: calc(100% + 4px);
+    left: 0;
+    right: 0;
+    background: var(--vscode-dropdown-background);
+    border: 1px solid var(--vscode-dropdown-border);
+    border-radius: var(--border-radius);
+    box-shadow: 0 2px 8px var(--vscode-widget-shadow);
+    z-index: 1001;
+    overflow: hidden;
+}
+
+.device-type-filter-option {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    padding: 10px 12px;
+    margin-bottom: 0;
+    font-weight: 400;
+    line-height: 1;
+    cursor: pointer;
+    color: var(--vscode-dropdown-foreground);
+    user-select: none;
+}
+
+.device-type-filter-option span {
+    display: inline-flex;
+    align-items: center;
+    padding-left: 4px;
+    transform: translateY(1px);
+}
+
+.device-type-filter-option:hover {
+    background: var(--vscode-list-hoverBackground);
+}
+
+.device-type-filter-option .device-type-filter-checkbox {
+    width: 18px;
+    min-width: 18px;
+    max-width: 18px;
+    height: 18px;
+    min-height: 18px;
+    max-height: 18px;
+    margin: 0;
+    padding: 0;
+    display: inline-block;
+    box-sizing: border-box;
+    vertical-align: middle;
+    line-height: 0;
+    flex-shrink: 0;
+    cursor: pointer;
+    appearance: none;
+    -webkit-appearance: none;
+    -moz-appearance: none;
+    border: 2px solid #8e8e8e;
+    border-radius: 3px;
+    background-color: transparent;
+    position: relative;
+    outline: none;
+}
+
+.device-type-filter-option .device-type-filter-checkbox:hover {
+    border-color: #a0a0a0;
+}
+
+.device-type-filter-option .device-type-filter-checkbox:checked {
+    background-color: var(--vscode-button-background);
+    border-color: var(--vscode-button-background);
+}
+
+.device-type-filter-option .device-type-filter-checkbox:checked::after {
+    content: '';
+    position: absolute;
+    left: 5px;
+    top: 2px;
+    width: 4px;
+    height: 8px;
+    border: solid white;
+    border-width: 0 2px 2px 0;
+    transform: rotate(45deg);
+}
+
 .no-devices-message {
     text-align: center;
     padding: 40px 20px;
@@ -72,19 +194,84 @@
     font-size: 13px;
 }
 
+.codicon.no-devices-icon {
+    display: inline-block;
+    font-size: 48px;
+    line-height: 1;
+    font-weight: 400;
+    color: var(--vscode-descriptionForeground);
+    margin-bottom: 8px;
+}
+
+.no-devices-title {
+    font-weight: 600;
+    color: var(--vscode-foreground);
+}
+
 .device-list {
+    --pair-row-divider: rgba(220, 220, 220, 0.22);
+    --pair-devices-grid-columns: 22px minmax(0, 320px) 124px minmax(112px, 1fr);
     background-color: var(--vscode-textCodeBlock-background);
     border: 1px solid var(--vscode-panel-border);
     border-radius: 4px;
-    max-height: 220px;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+}
+
+.device-list-header,
+.device-list-footer {
+    display: grid;
+    grid-template-columns: var(--pair-devices-grid-columns);
+    column-gap: 12px;
+    align-items: center;
+    padding: 12px 14px;
+    background-color: var(--vscode-textCodeBlock-background);
+}
+
+.device-list-header {
+    border-bottom: 1px solid var(--pair-row-divider);
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--vscode-foreground);
+}
+
+.device-list-header-type {
+    justify-self: center;
+}
+
+.device-list-footer {
+    border-top: 1px solid var(--pair-row-divider);
+    color: var(--vscode-foreground);
+    font-weight: 500;
+}
+
+#deviceCount {
+    grid-column: 1 / -1;
+}
+
+.device-list-body {
+    height: 220px;
     overflow-y: auto;
 }
 
+.filter-empty-message {
+    padding: 16px 14px;
+    color: var(--vscode-descriptionForeground);
+    font-size: 13px;
+    text-align: center;
+}
+
 .device-item {
-    display: flex;
+    --pair-row-muted-foreground: #a3a3a3;
+    --pair-row-muted-fill: transparent;
+    --pair-row-muted-border: #636363;
+    display: grid;
+    grid-template-columns: var(--pair-devices-grid-columns);
+    column-gap: 12px;
     align-items: center;
     padding: 10px 14px;
-    border-bottom: 1px solid var(--vscode-panel-border);
+    border-bottom: 1px solid var(--pair-row-divider);
     transition: all 0.15s ease;
     background-color: transparent;
 }
@@ -93,28 +280,40 @@
     border-bottom: none;
 }
 
-.device-item:has(.device-checkbox:checked) {
-    background-color: #1e5a8e;
+.device-item.filtered-out {
+    display: none;
 }
 
-.device-item:hover:not(.disabled) {
+.device-item:has(.device-checkbox:checked) {
+    background-color: #064ddc1a;
+}
+
+.device-item:hover:not(.disabled):not(.paired) {
     background-color: var(--vscode-list-hoverBackground);
 }
 
-.device-item:has(.device-checkbox:checked):hover:not(.disabled) {
-    background-color: #2565a0;
+.device-item:has(.device-checkbox:checked):hover:not(.disabled):not(.paired) {
+    background-color: #064ddc1a;
 }
 
 .device-item.disabled {
-    opacity: 0.4;
+    cursor: default;
+}
+
+.device-item.paired {
     pointer-events: none;
     cursor: not-allowed;
 }
 
-.device-item.paired {
-    opacity: 0.5;
-    pointer-events: none;
-    cursor: not-allowed;
+.device-item.disabled .device-name,
+.device-item.paired .device-name {
+    color: var(--pair-row-muted-foreground);
+}
+
+.device-item.disabled .device-checkbox,
+.device-item.paired .device-checkbox {
+    border-color: var(--vscode-disabledForeground);
+    opacity: 0.75;
 }
 
 .device-item.paired .device-checkbox {
@@ -125,17 +324,20 @@
     cursor: default;
 }
 
+.device-item.disabled .device-label {
+    cursor: default;
+}
+
 .paired-badge {
     display: flex;
     align-items: center;
     gap: 4px;
-    padding: 4px 8px;
+    padding: 6px 14px;
     background-color: var(--vscode-badge-background);
     color: var(--vscode-badge-foreground);
-    border-radius: 4px;
-    font-size: 11px;
+    border-radius: 999px;
+    font-size: 12px;
     font-weight: 500;
-    margin-left: auto;
     pointer-events: auto;
     cursor: default;
 }
@@ -146,7 +348,7 @@
 }
 
 .device-checkbox {
-    margin: 0 12px 0 0;
+    margin: 0;
     cursor: pointer;
     width: 18px;
     height: 18px;
@@ -163,6 +365,10 @@
 
 .device-checkbox:hover:not(:disabled) {
     border-color: #8e8e8e;
+}
+
+.device-checkbox:disabled {
+    cursor: default;
 }
 
 .device-checkbox:checked {
@@ -187,13 +393,80 @@
     display: flex;
     flex-direction: column;
     gap: 0;
-    flex: 1;
+    min-width: 0;
 }
 
 .device-name {
     font-size: 13px;
     font-weight: 400;
     color: var(--vscode-foreground);
+}
+
+.device-type-column {
+    width: 124px;
+    min-width: 124px;
+    display: flex;
+    justify-content: center;
+    margin: 0;
+}
+
+.device-status-column {
+    min-width: 112px;
+    width: 100%;
+    display: flex;
+    justify-content: flex-end;
+}
+
+.device-type-badge {
+    --device-type-badge-bg: transparent;
+    --device-type-badge-fg: var(--vscode-foreground);
+    --device-type-badge-border: transparent;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 4px;
+    min-width: 96px;
+    padding: 6px 10px;
+    border-radius: 999px;
+    font-size: 12px;
+    font-weight: 500;
+    line-height: normal;
+    background-color: var(--device-type-badge-bg);
+    color: var(--device-type-badge-fg);
+    border: 1.5px solid var(--device-type-badge-border);
+}
+
+.device-type-badge.nano {
+    --device-type-badge-bg: #1258d6;
+    --device-type-badge-fg: #ffffff;
+}
+
+.device-type-badge.fury {
+    --device-type-badge-bg: #83b2ff;
+    --device-type-badge-fg: #1b1b1b;
+}
+
+.device-type-badge.other {
+    --device-type-badge-bg: var(--pair-row-muted-fill);
+    --device-type-badge-fg: var(--pair-row-muted-foreground);
+    --device-type-badge-border: var(--pair-row-muted-border);
+    font-weight: 700;
+    cursor: default;
+    pointer-events: auto;
+}
+
+.device-item.disabled .device-type-badge,
+.device-item.paired .device-type-badge {
+    --device-type-badge-bg: var(--pair-row-muted-fill);
+    --device-type-badge-fg: var(--pair-row-muted-foreground);
+    --device-type-badge-border: var(--pair-row-muted-border);
+    font-weight: 700;
+}
+
+.device-type-badge-icon {
+    font-size: 12px;
+    color: var(--pair-row-muted-foreground);
+    opacity: 1;
 }
 
 .tip-section {
@@ -233,12 +506,13 @@
     justify-content: center;
     align-items: center;
     margin: 20px 0;
+    min-height: 250px;
 }
 
 .zgx-diagram {
-    max-width: 100%;
-    height: auto;
-    max-height: 250px;
+    width: 100%;
+    max-width: 520px;
+    height: 250px;
     object-fit: contain;
 }
 
@@ -259,19 +533,19 @@
 }
 
 /* Scrollbar styling for device list */
-.device-list::-webkit-scrollbar {
+.device-list-body::-webkit-scrollbar {
     width: 10px;
 }
 
-.device-list::-webkit-scrollbar-track {
+.device-list-body::-webkit-scrollbar-track {
     background: var(--vscode-scrollbarSlider-background);
 }
 
-.device-list::-webkit-scrollbar-thumb {
+.device-list-body::-webkit-scrollbar-thumb {
     background: var(--vscode-scrollbarSlider-hoverBackground);
     border-radius: 5px;
 }
 
-.device-list::-webkit-scrollbar-thumb:hover {
+.device-list-body::-webkit-scrollbar-thumb:hover {
     background: var(--vscode-scrollbarSlider-activeBackground);
 }

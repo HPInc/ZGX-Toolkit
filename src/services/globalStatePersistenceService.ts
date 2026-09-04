@@ -1,10 +1,10 @@
 /*
- * Copyright ©2025 HP Development Company, L.P.
+ * Copyright ©2025-2026 HP Development Company, L.P.
  * Licensed under the X11 License. See LICENSE file in the project root for details.
  */
 
 import * as vscode from 'vscode';
-import { Device } from '../types/devices';
+import { Device, DeviceType } from '../types/devices';
 import { ConnectXGroup } from '../types/connectxGroup';
 import { DeviceStore } from '../store/deviceStore';
 import { GroupStore } from '../store/groupStore';
@@ -35,7 +35,7 @@ export class GlobalStatePersistenceService {
     private deviceUnsubscribe?: () => void;
     private groupUnsubscribe?: () => void;
 
-    constructor(private config: StorageServiceConfig) { }
+    constructor(private readonly config: StorageServiceConfig) { }
 
     /**
      * Initialize the storage service.
@@ -90,14 +90,20 @@ export class GlobalStatePersistenceService {
             }
 
             if (savedDevices.length > 0) {
-                // Validate and load devices
-                const validDevices = savedDevices.filter(device => this.validateDevice(device));
+                const { devices: migratedDevices, changed } = this.migrateDevicesOnLoad(savedDevices);
+                if (changed) {
+                    await this.saveDevices(migratedDevices);
+                    logger.info('Device startup migration completed', { count: migratedDevices.length });
+                }
 
-                if (validDevices.length < savedDevices.length) {
+                // Validate and load devices
+                const validDevices = migratedDevices.filter(device => this.validateDevice(device));
+
+                if (validDevices.length < migratedDevices.length) {
                     logger.warn('Some devices failed validation and were skipped', {
-                        total: savedDevices.length,
+                        total: migratedDevices.length,
                         valid: validDevices.length,
-                        skipped: savedDevices.length - validDevices.length,
+                        skipped: migratedDevices.length - validDevices.length
                     });
                 }
 
@@ -110,6 +116,40 @@ export class GlobalStatePersistenceService {
             logger.error('Failed to load devices from storage', { error });
             // Don't throw - allow extension to continue with empty state
         }
+    }
+
+    /**
+     * Run one-time-on-startup data migrations for device records loaded from storage.
+     *
+     * Each fingerprint field is checked and backfilled independently, so adding a new
+     * field in the future is a matter of adding a new guarded block below.
+     *
+     * Current rules:
+     * - `deviceType` absent → backfill with ZGXNano (legacy devices pre-dating fingerprint tracking)
+     */
+    private migrateDevicesOnLoad(savedDevices: Device[]): { devices: Device[]; changed: boolean } {
+        let changed = false;
+
+        const migratedDevices = savedDevices.map(device => {
+            let migratedDevice = { ...device };
+            let deviceChanged = false;
+
+            if (migratedDevice.fingerprint?.deviceType === undefined || migratedDevice.fingerprint?.deviceType === null) {
+                migratedDevice = {
+                    ...migratedDevice,
+                    fingerprint: { ...migratedDevice.fingerprint, deviceType: DeviceType.Unknown }
+                };
+                deviceChanged = true;
+            }
+
+            if (deviceChanged) {
+                changed = true;
+                return migratedDevice;
+            }
+            return device;
+        });
+
+        return { devices: migratedDevices, changed };
     }
 
     /**
@@ -135,7 +175,7 @@ export class GlobalStatePersistenceService {
                 logger.warn('Some groups failed validation and were skipped', {
                     total: savedGroups.length,
                     valid: validGroups.length,
-                    skipped: skippedCount,
+                    skipped: skippedCount
                 });
             }
 
@@ -327,7 +367,7 @@ export class GlobalStatePersistenceService {
             const devices: Device[] = JSON.parse(json);
 
             if (!Array.isArray(devices)) {
-                throw new Error('Invalid JSON: expected an array of devices');
+                throw new TypeError('Invalid JSON: expected an array of devices');
             }
 
             // Validate all devices
@@ -336,7 +376,7 @@ export class GlobalStatePersistenceService {
             if (validDevices.length < devices.length) {
                 logger.warn('Some devices in import were invalid', {
                     total: devices.length,
-                    valid: validDevices.length,
+                    valid: validDevices.length
                 });
             }
 
@@ -355,23 +395,26 @@ export class GlobalStatePersistenceService {
      * Validate a device object to ensure it has required fields.
      * Returns true if valid, false otherwise.
      */
-    private validateDevice(device: any): device is Device {
+    private validateDevice(device: unknown): device is Device {
         if (!device || typeof device !== 'object') {
             return false;
         }
 
+        const candidate = device as Record<string, unknown>;
+
         // Check required fields
         const required = ['id', 'name', 'host', 'username', 'port'];
         for (const field of required) {
-            if (!(field in device)) {
-                logger.warn('device validation failed: missing required field', { field, id: device.id });
+            if (!(field in candidate)) {
+                logger.warn('device validation failed: missing required field', { field, id: candidate.id });
                 return false;
             }
         }
 
         // Validate port range
-        if (device.port < 1 || device.port > 65535) {
-            logger.warn('device validation failed: invalid port', { port: device.port, id: device.id });
+        const port = candidate.port;
+        if (typeof port !== 'number' || port < 1 || port > 65535) {
+            logger.warn('device validation failed: invalid port', { port, id: candidate.id });
             return false;
         }
 
@@ -381,21 +424,23 @@ export class GlobalStatePersistenceService {
     /**
      * Validate a group object has the required fields.
      */
-    private validateGroup(group: any): boolean {
+    private validateGroup(group: unknown): boolean {
         if (!group || typeof group !== 'object') {
             logger.warn('Invalid group: not an object', { group });
             return false;
         }
 
+        const candidate = group as Record<string, unknown>;
+
         const requiredFields = ['id', 'deviceIds', 'createdAt', 'updatedAt'];
         for (const field of requiredFields) {
-            if (!(field in group)) {
+            if (!(field in candidate)) {
                 logger.warn('Invalid group: missing required field', { field, group });
                 return false;
             }
         }
 
-        if (!Array.isArray(group.deviceIds)) {
+        if (!Array.isArray(candidate.deviceIds)) {
             logger.warn('Invalid group: deviceIds is not an array', { group });
             return false;
         }
@@ -437,7 +482,7 @@ export class GlobalStatePersistenceService {
         return {
             machineCount: devices.length,
             groupCount: groups.length,
-            storageSize: Buffer.byteLength(json, 'utf8'),
+            storageSize: Buffer.byteLength(json, 'utf8')
         };
     }
 }

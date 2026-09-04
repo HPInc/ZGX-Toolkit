@@ -1,5 +1,5 @@
 /*
- * Copyright ©2025 HP Development Company, L.P.
+ * Copyright ©2025-2026 HP Development Company, L.P.
  * Licensed under the X11 License. See LICENSE file in the project root for details.
  */
 
@@ -23,7 +23,7 @@ describe('SudoPasswordService', () => {
 
             expect(result).toBe(mockPassword);
             expect(vscode.window.showInputBox).toHaveBeenCalledWith({
-                prompt: 'Enter your user password for your ZGX device',
+                prompt: 'Enter your user password for your device',
                 password: true,
                 placeHolder: 'Password',
                 ignoreFocusOut: true,
@@ -40,7 +40,6 @@ describe('SudoPasswordService', () => {
         });
 
         it('should validate that password is not empty', async () => {
-            const mockValidateInput = jest.fn();
             jest.spyOn(vscode.window, 'showInputBox').mockImplementation(async (options) => {
                 if (options && options.validateInput) {
                     // Test validation with empty string
@@ -130,7 +129,7 @@ describe('SudoPasswordService', () => {
 
             expect(result).toBe(true);
             expect(vscode.window.showWarningMessage).toHaveBeenCalledWith(
-                'A password is required to install these applications on your ZGX device.',
+                'A password is required to install these applications on your device.',
                 'Retry',
                 'Cancel'
             );

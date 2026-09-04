@@ -1,5 +1,5 @@
 /*
- * Copyright ©2025 HP Development Company, L.P.
+ * Copyright ©2025-2026 HP Development Company, L.P.
  * Licensed under the X11 License. See LICENSE file in the project root for details.
  */
 
@@ -444,7 +444,7 @@
         // Add click listeners to app widgets
         document.addEventListener('click', function(e) {
             const widget = e.target.closest('.app-widget');
-            if (widget) {
+            if (widget && widget.dataset.disabled !== 'true') {
                 toggleApp(widget.dataset.appId);
             }
         });
@@ -649,7 +649,7 @@
                 // Use the error overlay component
                 if (typeof window.showErrorOverlay === 'function') {
                     // Determine onClose behavior
-                    let onClose = message.onClose || null;
+                    const onClose = message.onClose || null;
                     window.showErrorOverlay(
                         message.errorTitle, 
                         message.errorDetails, 
@@ -661,7 +661,7 @@
                     console.error('Error overlay component not loaded');
                 }
                 break;
-            case 'start-verification':
+            case 'start-verification': {
                 // Trigger verification of installed apps
                 const allAppIds = appDefinitions.map(app => app.id);
                 if (allAppIds.length > 0) {
@@ -672,6 +672,7 @@
                     });
                 }
                 break;
+            }
         }
     });
     

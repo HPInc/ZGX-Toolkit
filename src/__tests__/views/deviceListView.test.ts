@@ -1,12 +1,12 @@
 /*
- * Copyright ©2025 HP Development Company, L.P.
+ * Copyright ©2025-2026 HP Development Company, L.P.
  * Licensed under the X11 License. See LICENSE file in the project root for details.
  */
 
 import { DeviceListViewController } from '../../views/devices/list/deviceListViewController';
 import { Logger } from '../../utils/logger';
 import { ITelemetryService, TelemetryEventType } from '../../types/telemetry';
-import { DeviceService, ConnectXGroupService } from '../../services';
+import { DeviceService, ConnectXGroupService, extensionStateService } from '../../services';
 import { Device } from '../../types/devices';
 import { ConnectXGroup } from '../../types/connectxGroup';
 import { Message } from '../../types/messages';
@@ -37,7 +37,7 @@ describe('DeviceListViewController', () => {
             keyCopied: true,
             connectionTested: true
         },
-        createdAt: '2025-01-01T00:00:00Z',
+        createdAt: '2025-01-01T00:00:00Z'
     };
 
     const mockDevice2: Device = {
@@ -53,7 +53,7 @@ describe('DeviceListViewController', () => {
             keyCopied: false,
             connectionTested: false
         },
-        createdAt: '2025-01-02T00:00:00Z',
+        createdAt: '2025-01-02T00:00:00Z'
     };
 
     const mockDevice3: Device = {
@@ -69,7 +69,7 @@ describe('DeviceListViewController', () => {
             keyCopied: true,
             connectionTested: true
         },
-        createdAt: '2025-01-03T00:00:00Z',
+        createdAt: '2025-01-03T00:00:00Z'
     };
 
     const mockDevice4: Device = {
@@ -85,7 +85,7 @@ describe('DeviceListViewController', () => {
             keyCopied: true,
             connectionTested: true
         },
-        createdAt: '2025-01-04T00:00:00Z',
+        createdAt: '2025-01-04T00:00:00Z'
     };
 
     const mockGroup: ConnectXGroup = {
@@ -102,7 +102,7 @@ describe('DeviceListViewController', () => {
             info: jest.fn(),
             warn: jest.fn(),
             error: jest.fn(),
-            trace: jest.fn(),
+            trace: jest.fn()
         } as any;
 
         // Create mock telemetry
@@ -111,7 +111,7 @@ describe('DeviceListViewController', () => {
             trackError: jest.fn(),
             isEnabled: jest.fn().mockReturnValue(false),
             setEnabled: jest.fn(),
-            dispose: jest.fn().mockResolvedValue(undefined),
+            dispose: jest.fn().mockResolvedValue(undefined)
         } as any;
 
         // Create mock unsubscribe functions
@@ -126,7 +126,7 @@ describe('DeviceListViewController', () => {
             connectToDevice: jest.fn().mockResolvedValue(undefined),
             getDevice: jest.fn().mockResolvedValue(mockDevice),
             getAllDevices: jest.fn().mockResolvedValue([mockDevice, mockDevice2]),
-            subscribe: jest.fn().mockReturnValue(mockUnsubscribe),
+            subscribe: jest.fn().mockReturnValue(mockUnsubscribe)
         } as any;
 
         // Create mock connectx group service
@@ -134,14 +134,14 @@ describe('DeviceListViewController', () => {
             getAllGroups: jest.fn().mockResolvedValue([]),
             getGroupForDevice: jest.fn().mockResolvedValue(undefined),
             removeGroupAndUnconfigureNICs: jest.fn().mockResolvedValue({ success: true }),
-            subscribe: jest.fn().mockReturnValue(mockGroupUnsubscribe),
+            subscribe: jest.fn().mockReturnValue(mockGroupUnsubscribe)
         } as any;
 
         controller = new DeviceListViewController({
             logger: mockLogger,
             telemetry: mockTelemetry,
             deviceService: mockDeviceService,
-            connectxGroupService: mockConnectxGroupService,
+            connectxGroupService: mockConnectxGroupService
         });
     });
 
@@ -232,7 +232,7 @@ describe('DeviceListViewController', () => {
                     eventType: TelemetryEventType.View,
                     action: 'navigate',
                     properties: {
-                        toView: 'devices.list',
+                        toView: 'devices.list'
                     },
                     measurements: {
                         deviceCount: 2,
@@ -258,6 +258,24 @@ describe('DeviceListViewController', () => {
                     }
                 })
             );
+        });
+
+        it('should show the ZRT quick link "New" badge when it has not been seen', async () => {
+            jest.spyOn(extensionStateService, 'hasSeenQuickLinkBadge').mockReturnValue(false);
+
+            const html = await controller.render();
+
+            expect(html).toContain('Learn About HP Z Runtime');
+            expect(html).toContain('<span class="quick-links-badge">New!</span>');
+        });
+
+        it('should hide the ZRT quick link "New" badge once it has been seen', async () => {
+            jest.spyOn(extensionStateService, 'hasSeenQuickLinkBadge').mockReturnValue(true);
+
+            const html = await controller.render();
+
+            expect(html).toContain('Learn About HP Z Runtime');
+            expect(html).not.toContain('<span class="quick-links-badge">New</span>');
         });
 
         it('should store render params for refresh', async () => {
@@ -354,14 +372,16 @@ describe('DeviceListViewController', () => {
             );
         });
 
-        it('should render flat device list when no groups exist', async () => {
+        it('should render both device sections when no groups exist', async () => {
             mockConnectxGroupService.getAllGroups.mockResolvedValue([]);
 
             const html = await controller.render();
 
             expect(html).not.toContain('data-group-id="');
-            expect(html).not.toContain('Paired Devices');
-            expect(html).not.toContain('Unpaired Devices');
+            expect(html).toContain('Paired Devices (0)');
+            expect(html).toContain('Unpaired Devices (2)');
+            expect(html).toContain('No paired devices');
+            expect(html.indexOf('Paired Devices (0)')).toBeLessThan(html.indexOf('Unpaired Devices (2)'));
             expect(html).toContain('Test Device');
             expect(html).toContain('Second Device');
             expect(mockTelemetry.trackEvent).toHaveBeenCalledWith(
@@ -384,6 +404,17 @@ describe('DeviceListViewController', () => {
             expect(html).toContain('data-action="unpair-devices"');
             expect(html).toContain('Pairing Details');
             expect(html).toContain('Unpair Devices');
+        });
+
+        it('should render paired group cards expanded by default', async () => {
+            mockConnectxGroupService.getAllGroups.mockResolvedValue([mockGroup]);
+
+            const html = await controller.render();
+
+            expect(html).toContain('class="sidebar-paired-group-container" data-group-id="group-1"');
+            expect(html).not.toContain('class="sidebar-paired-group-container collapsed"');
+            expect(html).toContain('data-action="pairing-details"');
+            expect(html).toContain('data-action="unpair-devices"');
         });
 
         it('should render section headers with correct counts', async () => {
@@ -436,13 +467,13 @@ describe('DeviceListViewController', () => {
             expect(html).toContain('Show less');
         });
 
-        it('should not render section headers when no paired groups exist', async () => {
+        it('should render section headers when no paired groups exist', async () => {
             mockConnectxGroupService.getAllGroups.mockResolvedValue([]);
 
             const html = await controller.render();
 
-            expect(html).not.toContain('data-section="paired"');
-            expect(html).not.toContain('data-section="unpaired"');
+            expect(html).toContain('data-section="paired"');
+            expect(html).toContain('data-section="unpaired"');
         });
     });
 
@@ -483,7 +514,7 @@ describe('DeviceListViewController', () => {
                 expect(mockTelemetry.trackEvent).toHaveBeenCalledWith(
                     expect.objectContaining({
                         properties: {
-                            toView: 'external.docs',
+                            toView: 'external.docs'
                         }
                     })
                 );
@@ -498,6 +529,30 @@ describe('DeviceListViewController', () => {
                 } as Message);
 
                 expect(navigateToSpy).toHaveBeenCalledWith('templates/list', {}, 'editor');
+            });
+
+            it('should handle zrt-info link: mark badge seen and navigate to the Device Manager editor view to show the ZRT info modal', async () => {
+                const setSeenSpy = jest.spyOn(extensionStateService, 'setQuickLinkBadgeSeen').mockResolvedValue(undefined);
+                const navigateToSpy = jest.spyOn(controller as any, 'navigateTo').mockResolvedValue(undefined);
+
+                await controller.handleMessage({
+                    type: 'quick-links',
+                    link: 'zrt-info'
+                } as Message);
+
+                expect(setSeenSpy).toHaveBeenCalledWith('zrt-info');
+                expect(navigateToSpy).toHaveBeenCalledWith(
+                    'devices/manager',
+                    expect.objectContaining({ showZrtInfoModal: true }),
+                    'editor'
+                );
+                expect(mockTelemetry.trackEvent).toHaveBeenCalledWith(
+                    expect.objectContaining({
+                        properties: {
+                            toView: 'external.zrt-info'
+                        }
+                    })
+                );
             });
         });
 
@@ -528,7 +583,7 @@ describe('DeviceListViewController', () => {
 
             it('should handle DeviceNeedsSetupError and navigate to setup', async () => {
                 // Mock DeviceNeedsSetupError
-                const { DeviceNeedsSetupError } = await import('../../services/deviceService');
+                const { DeviceNeedsSetupError } = await import('../../services/deviceService.js');
                 const setupError = new DeviceNeedsSetupError('Device needs setup', mockDevice);
                 
                 mockDeviceService.connectToDevice.mockRejectedValue(setupError);
@@ -845,7 +900,7 @@ describe('DeviceListViewController', () => {
                 logger: mockLogger,
                 telemetry: mockTelemetry,
                 deviceService: mockDeviceService,
-                connectxGroupService: mockConnectxGroupService,
+                connectxGroupService: mockConnectxGroupService
             });
 
             expect(() => controller2.dispose()).not.toThrow();

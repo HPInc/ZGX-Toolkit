@@ -1,9 +1,9 @@
 /*
- * Copyright ©2025 HP Development Company, L.P.
+ * Copyright ©2025-2026 HP Development Company, L.P.
  * Licensed under the X11 License. See LICENSE file in the project root for details.
  */
 
-import { readFileSync } from 'fs';
+import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import Handlebars from 'handlebars';
 import { Logger } from '../utils/logger';
@@ -20,7 +20,7 @@ export interface IView {
      * @param nonce Optional nonce for CSP compliance
      * @returns HTML string to display
      */
-    render(params?: any, nonce?: string): Promise<string>;
+    render(params?: Record<string, unknown>, nonce?: string): Promise<string>;
 
     /**
      * Handle a message from the webview
@@ -32,19 +32,19 @@ export interface IView {
      * Set the callback for sending messages to the webview
      * @param callback Function to call when sending messages
      */
-    setMessageCallback(callback: (message: any) => void): void;
+    setMessageCallback(callback: (message: Record<string, unknown>) => void): void;
 
     /**
      * Set the callback for navigation requests from views
      * @param callback Function to call when navigation is requested
      */
-    setNavigationCallback(callback: (viewId: string, params?: any, panel?: 'sidebar' | 'editor') => Promise<void>): void;
+    setNavigationCallback(callback: (viewId: string, params?: Record<string, unknown>, panel?: 'sidebar' | 'editor') => Promise<void>): void;
 
     /**
      * Set the callback for refreshing the webview HTML
      * @param callback Function to call when the view needs to update its HTML
      */
-    setRefreshCallback(callback: (params: any) => void): void;
+    setRefreshCallback(callback: (params?: Record<string, unknown>) => void): void;
 
     /**
      * Clean up resources when the view is disposed
@@ -56,31 +56,35 @@ export interface IView {
  * Base class for all views providing common functionality
  */
 export abstract class BaseViewController implements IView {
-    protected template: string = '';
-    protected styles: string = '';
-    protected clientScript: string = '';
+    protected template = '';
+    protected styles = '';
+    protected clientScript = '';
     private static handlebarsInitialized = false;
-    private static commonCss: string = '';
+    private static commonCss = '';
     
-    private static errorOverlayCss: string = '';
-    private static errorOverlayJs: string = '';
-    private static errorOverlayHtml: string = '';
+    private static errorOverlayCss = '';
+    private static errorOverlayJs = '';
+    private static errorOverlayHtml = '';
     
-    private static baseOverlayCss: string = '';
-    private static baseOverlayJs: string = '';
+    private static baseOverlayCss = '';
+    private static baseOverlayJs = '';
     
-    private static passwordInputOverlayCss: string = '';
-    private static passwordInputOverlayJs: string = '';
-    private static passwordInputOverlayHtml: string = '';
+    private static passwordInputOverlayCss = '';
+    private static passwordInputOverlayJs = '';
+    private static passwordInputOverlayHtml = '';
     
-    private static warningOverlayCss: string = '';
-    private static warningOverlayJs: string = '';
-    private static warningOverlayHtml: string = '';
+    private static warningOverlayCss = '';
+    private static warningOverlayJs = '';
+    private static warningOverlayHtml = '';
     
-    private messageCallback?: (message: any) => void;
-    private navigationCallback?: (viewId: string, params?: any, panel?: 'sidebar' | 'editor') => Promise<void>;
-    private refreshCallback?: (params: any) => void;
-    private baseOverlayEnabled: boolean = false;
+    private static announcementOverlayCss = '';
+    private static announcementOverlayJs = '';
+    private static announcementOverlayHtml = '';
+    
+    private messageCallback?: (message: Record<string, unknown>) => void;
+    private navigationCallback?: (viewId: string, params?: Record<string, unknown>, panel?: 'sidebar' | 'editor') => Promise<void>;
+    private refreshCallback?: (params?: Record<string, unknown>) => void;
+    private baseOverlayEnabled = false;
 
     public static viewId(): string {
         throw new Error('Subclasses must implement static viewId() method');
@@ -98,34 +102,41 @@ export abstract class BaseViewController implements IView {
 
         // Load common.css once for all views
         if (!BaseViewController.commonCss) {
-            BaseViewController.commonCss = this.loadTemplate('./common/common.css', __dirname);
+            BaseViewController.commonCss = this.loadTemplate('common/common.css');
         }
         
         // Load base overlay assets once for all views
         if (!BaseViewController.baseOverlayCss) {
-            BaseViewController.baseOverlayCss = this.loadTemplate('./common/overlay/baseOverlay.css', __dirname);
-            BaseViewController.baseOverlayJs = this.loadTemplate('./common/overlay/baseOverlay.js', __dirname);
+            BaseViewController.baseOverlayCss = this.loadTemplate('common/overlay/baseOverlay.css');
+            BaseViewController.baseOverlayJs = this.loadTemplate('common/overlay/baseOverlay.js');
         }
         
         // Load error overlay assets once for all views
         if (!BaseViewController.errorOverlayCss) {
-            BaseViewController.errorOverlayCss = this.loadTemplate('./common/errorOverlay/errorOverlay.css', __dirname);
-            BaseViewController.errorOverlayJs = this.loadTemplate('./common/errorOverlay/errorOverlay.js', __dirname);
-            BaseViewController.errorOverlayHtml = this.loadTemplate('./common/errorOverlay/errorOverlay.html', __dirname);
+            BaseViewController.errorOverlayCss = this.loadTemplate('common/errorOverlay/errorOverlay.css');
+            BaseViewController.errorOverlayJs = this.loadTemplate('common/errorOverlay/errorOverlay.js');
+            BaseViewController.errorOverlayHtml = this.loadTemplate('common/errorOverlay/errorOverlay.html');
         }
         
         // Load password input overlay assets once for all views
         if (!BaseViewController.passwordInputOverlayCss) {
-            BaseViewController.passwordInputOverlayCss = this.loadTemplate('./common/passwordInputOverlay/passwordInputOverlay.css', __dirname);
-            BaseViewController.passwordInputOverlayJs = this.loadTemplate('./common/passwordInputOverlay/passwordInputOverlay.js', __dirname);
-            BaseViewController.passwordInputOverlayHtml = this.loadTemplate('./common/passwordInputOverlay/passwordInputOverlay.html', __dirname);
+            BaseViewController.passwordInputOverlayCss = this.loadTemplate('common/passwordInputOverlay/passwordInputOverlay.css');
+            BaseViewController.passwordInputOverlayJs = this.loadTemplate('common/passwordInputOverlay/passwordInputOverlay.js');
+            BaseViewController.passwordInputOverlayHtml = this.loadTemplate('common/passwordInputOverlay/passwordInputOverlay.html');
         }
         
         // Load warning overlay assets once for all views
         if (!BaseViewController.warningOverlayCss) {
-            BaseViewController.warningOverlayCss = this.loadTemplate('./common/warningOverlay/warningOverlay.css', __dirname);
-            BaseViewController.warningOverlayJs = this.loadTemplate('./common/warningOverlay/warningOverlay.js', __dirname);
-            BaseViewController.warningOverlayHtml = this.loadTemplate('./common/warningOverlay/warningOverlay.html', __dirname);
+            BaseViewController.warningOverlayCss = this.loadTemplate('common/warningOverlay/warningOverlay.css');
+            BaseViewController.warningOverlayJs = this.loadTemplate('common/warningOverlay/warningOverlay.js');
+            BaseViewController.warningOverlayHtml = this.loadTemplate('common/warningOverlay/warningOverlay.html');
+        }
+        
+        // Load announcement overlay assets once for all views
+        if (!BaseViewController.announcementOverlayCss) {
+            BaseViewController.announcementOverlayCss = this.loadTemplate('common/announcementOverlay/announcementOverlay.css');
+            BaseViewController.announcementOverlayJs = this.loadTemplate('common/announcementOverlay/announcementOverlay.js');
+            BaseViewController.announcementOverlayHtml = this.loadTemplate('common/announcementOverlay/announcementOverlay.html');
         }
     }
 
@@ -133,7 +144,7 @@ export abstract class BaseViewController implements IView {
      * Set the callback for sending messages to the webview.
      * This is called by the provider when it wants to receive async messages from the view.
      */
-    public setMessageCallback(callback: (message: any) => void): void {
+    public setMessageCallback(callback: (message: Record<string, unknown>) => void): void {
         this.messageCallback = callback;
     }
 
@@ -141,7 +152,7 @@ export abstract class BaseViewController implements IView {
      * Set the callback for navigation requests from views.
      * This allows views to trigger navigation programmatically.
      */
-    public setNavigationCallback(callback: (viewId: string, params?: any, panel?: 'sidebar' | 'editor') => Promise<void>): void {
+    public setNavigationCallback(callback: (viewId: string, params?: Record<string, unknown>, panel?: 'sidebar' | 'editor') => Promise<void>): void {
         this.navigationCallback = callback;
     }
 
@@ -149,7 +160,7 @@ export abstract class BaseViewController implements IView {
      * Set the callback for refreshing the webview HTML.
      * This is called by the provider to enable views to update their content.
      */
-    public setRefreshCallback(callback: (params: any) => void): void {
+    public setRefreshCallback(callback: (params?: Record<string, unknown>) => void): void {
         this.refreshCallback = callback;
     }
 
@@ -157,7 +168,7 @@ export abstract class BaseViewController implements IView {
      * Request navigation to another view.
      * This is called by views when they need to navigate programmatically.
      */
-    protected async navigateTo(viewId: string, params?: any, panel?: 'sidebar' | 'editor'): Promise<void> {
+    protected async navigateTo(viewId: string, params?: Record<string, unknown>, panel?: 'sidebar' | 'editor'): Promise<void> {
         if (this.navigationCallback) {
             await this.navigationCallback(viewId, params, panel);
         } else {
@@ -175,7 +186,7 @@ export abstract class BaseViewController implements IView {
      * 
      * @param params Optional parameters to pass to the render method
      */
-    protected async refresh(params?: any): Promise<void> {
+    protected async refresh(params?: Record<string, unknown>): Promise<void> {
         if (!this.refreshCallback) {
             this.logger.warn('Cannot refresh: no refresh callback set', {
                 view: this.constructor.name
@@ -198,7 +209,7 @@ export abstract class BaseViewController implements IView {
      * Send a message to the webview through the provider.
      * Views can use this to send async updates (like discovery results).
      */
-    protected sendMessageToWebview(message: any): void {
+    protected sendMessageToWebview(message: Record<string, unknown>): void {
         if (this.messageCallback) {
             this.messageCallback(message);
         } else {
@@ -212,7 +223,7 @@ export abstract class BaseViewController implements IView {
     /**
      * Render the view (must be implemented by subclasses)
      */
-    abstract render(params?: any, nonce?: string): Promise<string>;
+    abstract render(params?: Record<string, unknown>, nonce?: string): Promise<string>;
 
     /**
      * Handle messages from the webview
@@ -357,21 +368,50 @@ export abstract class BaseViewController implements IView {
     }
 
     /**
-     * Load a template file from the filesystem
-     * @param relativePath Path relative to the view file
-     * @param callerDir The __dirname of the calling file (must be passed from subclass)
+     * Enable announcement overlay support for this view.
+     * Call this in constructor after setting up template, styles, and clientScript.
+     * This will append announcement overlay CSS/JS and the view should include
+     * getAnnouncementOverlayHtml() in render output.
+     * 
+     * Use this for one-time product announcements (e.g. introducing a new feature),
+     * gated on some persisted "seen" flag (see ExtensionStateService) so it is never
+     * shown again once dismissed.
      */
-    protected loadTemplate(relativePath: string, callerDir?: string): string {
+    protected enableAnnouncementOverlay(): void {
+        // Ensure base overlay is loaded first
+        this.ensureBaseOverlay();
+        
+        // Append announcement overlay CSS to styles
+        this.styles = this.styles + '\n' + BaseViewController.announcementOverlayCss;
+        
+        // Append announcement overlay JS (after base overlay)
+        this.clientScript = this.clientScript + '\n' + BaseViewController.announcementOverlayJs;
+    }
+
+    /**
+     * Get announcement overlay HTML template to include in rendered output.
+     */
+    protected getAnnouncementOverlayHtml(): string {
+        return BaseViewController.announcementOverlayHtml;
+    }
+
+    /**
+     * Load a template file from the filesystem.
+     * @param relativePath Path to the file relative to views/ (e.g. 'devices/list/deviceList.html').
+     *   __dirname here is baseViewController's own module location, which already sits at the views
+     *   root under ts-jest/unbundled tsc, but collapses to the single dist/ bundle dir once esbuild
+     *   bundles everything into dist/extension.js - hence the two-tier lookup below.
+     */
+    protected loadTemplate(relativePath: string): string {
         try {
-            // Use callerDir if provided, otherwise use __dirname
-            let baseDir = callerDir ?? __dirname;
-            
-            const fullPath = path.resolve(baseDir, relativePath);
-            
-            return readFileSync(fullPath, 'utf8');
-        } catch (error) {
-            this.logger.error('Failed to load template', { relativePath, callerDir, error });
-            return '';
+            return readFileSync(path.resolve(__dirname, relativePath), 'utf8');
+        } catch {
+            try {
+                return readFileSync(path.resolve(__dirname, 'views', relativePath), 'utf8');
+            } catch (error) {
+                this.logger.error('Failed to load template', { relativePath, error });
+                return '';
+            }
         }
     }
 
@@ -404,14 +444,14 @@ export abstract class BaseViewController implements IView {
      * @param template The template string
      * @param data The data to render
      */
-    protected renderTemplate(template: string, data: any): string {
+    protected renderTemplate(template: string, data: Record<string, unknown>): string {
         const startTime = Date.now();
         
         try {
             // Compile the template
             const compiledTemplate = Handlebars.compile(template, {
                 noEscape: false, // Enable HTML escaping for security
-                strict: false,   // Allow accessing undefined properties without errors
+                strict: false   // Allow accessing undefined properties without errors
             });
             
             // Render with data

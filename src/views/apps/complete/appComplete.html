@@ -1,8 +1,8 @@
 <!--
-  Copyright ©2025 HP Development Company, L.P.
+    Copyright ©2025-2026 HP Development Company, L.P.
   Licensed under the X11 License. See LICENSE file in the project root for details.
 -->
-
+  
 <meta name="device-id" content="{{deviceId}}">
 <meta name="failed-app-ids" content="{{failedAppIds}}">
 <meta name="operation" content="{{operation}}">
@@ -18,15 +18,15 @@
         <div class="password-error-message">
             <h3 style="margin-top: 0;">🔑 Password Authentication Required</h3>
             <p>The sudo password provided could not be verified. Please check your password and try again.</p>
-            <p>Application {{operationPastAction}} requires a valid sudo password to modify system packages on your ZGX device.</p>
+            <p>Application {{operationPastAction}} requires a valid sudo password to modify system packages on your device.</p>
         </div>
         {{#if failedApps}}
         <h3 class="section-title">✗ Failed {{operationLabel}}s</h3>
         <div class="installed-apps">
             {{#each failedApps}}
             <div class="app-item">
-                <div class="app-icon">{{icon}}</div>
-                <div class="app-name">{{name}}</div>
+                <div class="app-icon">{{#if iconUri}}<img src="{{iconUri}}" alt="{{name}} icon" class="app-icon-img" />{{else}}{{icon}}{{/if}}</div>
+                <div class="app-name">{{name}}{{#if reason}}<div class="failure-reason">{{reason}}</div>{{/if}}</div>
                 <div class="failure-indicator">✗ Failed</div>
             </div>
             {{/each}}
@@ -38,7 +38,7 @@
         <div class="installed-apps">
             {{#each successfulApps}}
             <div class="app-item">
-                <div class="app-icon">{{icon}}</div>
+                <div class="app-icon">{{#if iconUri}}<img src="{{iconUri}}" alt="{{name}} icon" class="app-icon-img" />{{else}}{{icon}}{{/if}}</div>
                 <div class="app-name">{{name}}</div>
                 <div class="success-indicator">✓ {{operationPastActionCap}}</div>
             </div>
@@ -51,14 +51,14 @@
         <div class="installed-apps">
             {{#each failedApps}}
             <div class="app-item">
-                <div class="app-icon">{{icon}}</div>
-                <div class="app-name">{{name}}</div>
+                <div class="app-icon">{{#if iconUri}}<img src="{{iconUri}}" alt="{{name}} icon" class="app-icon-img" />{{else}}{{icon}}{{/if}}</div>
+                <div class="app-name">{{name}}{{#if reason}}<div class="failure-reason">{{reason}}</div>{{/if}}</div>
                 <div class="failure-indicator">✗ Failed</div>
             </div>
             {{/each}}
         </div>
         <div class="warning-message">
-            <strong>Note:</strong> Some applications failed to {{operation}}. You can retry the failed {{operationPastAction}}s or check the logs for more details (Ctrl+Shift+P and type 'ZGX Toolkit: Open Log File').
+            <strong>Note:</strong> Some applications failed to {{operation}}. You can retry the failed {{operationPastAction}}s or check the logs for more details (Ctrl+Shift+P and type 'Z Toolkit: Open Log File').
         </div>
         {{else}}
         {{#if hasAnyInstalls}}

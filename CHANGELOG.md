@@ -1,3 +1,34 @@
+# Version v1.21.8 → v1.35.10 (September 2026)
+
+## What's New
+
+This release expands HP ZGX Toolkit beyond ZGX Nano to support the full range of HP Z AI workstations with NVIDIA hardware—including the newly launched HP ZGX Fury and HP Z-series x86 devices (Z2, Z4, Z6, Z8). To deliver a tailored experience across this wider hardware lineup, the extension now automatically identifies the type of device you're connecting to during setup. (If the detected type doesn't look right, you can confirm or correct it before setup completes.)
+
+Device awareness unlocks two meaningful improvements in this release: smarter pairing eligibility and a new application in the catalog.
+
+## Major Features
+
+### ConnectX Pairing Now Supported on ZGX Fury
+ConnectX device pairing, introduced in the March 2026 release, now extends to HP ZGX Fury devices. You can pair two ZGX Nanos or two ZGX Furys for high-bandwidth local networking—each pair must consist of two devices of the same type connected with a QSFP high speed networking cable.
+
+### HP Z Runtime
+HP Z Runtime (ZRT) is HP's new vLLM wrapper software for pulling, serving, and managing large language models locally, with capabilities that streamline production model serving on ZGX devices. Install it directly from Z Toolkit or through the Canonical Snapcraft store (https://snapcraft.io/zrt).
+
+#### What ZRT offers:
+ - Pull and run models from popular model hubs with a single command
+ - Serve models through an OpenAI-compatible API for use with your existing tools
+ - Streamlined model lifecycle management designed for local inference
+ - Passes vLLM tags to properly serve models locally
+
+ZRT is available for HP ZGX Fury and HP ZGX Nano devices. To install, open the Device Manager, select your ZGX device, click Manage Apps, and choose HP Z Runtime under Model Serving.
+
+### Other Changes
+- Small bug fixes and improvements.
+
+### Upgrade Notes
+ 
+**Minimum VS Code version:** This release requires VS Code **1.102.3 or later**. If you're on an older version, please update VS Code before upgrading the extension.
+
 # Version v1.21.5 → v1.21.8 (June 2026)
 
 ## What's New

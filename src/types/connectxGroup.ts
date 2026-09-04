@@ -1,5 +1,5 @@
 /*
- * Copyright ©2025 HP Development Company, L.P.
+ * Copyright ©2025-2026 HP Development Company, L.P.
  * Licensed under the X11 License. See LICENSE file in the project root for details.
  */
 
@@ -23,7 +23,7 @@ export interface ConnectXGroup {
     /** Timestamp when group was last updated */
     updatedAt: string;
     /** Optional metadata for the group */
-    metadata?: Record<string, any>;
+    metadata?: Record<string, unknown>;
 }
 
 /**
@@ -33,7 +33,7 @@ export interface ConnectXGroupConfig {
     /** Initial device IDs to add to the group (must be at least 2) */
     deviceIds: string[];
     /** Optional metadata */
-    metadata?: Record<string, any>;
+    metadata?: Record<string, unknown>;
 }
 
 /**

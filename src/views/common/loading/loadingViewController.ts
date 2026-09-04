@@ -1,5 +1,5 @@
 /*
- * Copyright ©2025 HP Development Company, L.P.
+ * Copyright ©2025-2026 HP Development Company, L.P.
  * Licensed under the X11 License. See LICENSE file in the project root for details.
  */
 
@@ -18,8 +18,8 @@ export class LoadingViewController extends BaseViewController {
 
     constructor(deps: { logger: Logger; telemetry: ITelemetryService }) {
         super(deps.logger, deps.telemetry);
-        this.template = this.loadTemplate('./loading.html', __dirname);
-        this.styles = this.loadTemplate('./loading.css', __dirname);
+        this.template = this.loadTemplate('common/loading/loading.html');
+        this.styles = this.loadTemplate('common/loading/loading.css');
         // No client script needed for loading view
     }
 

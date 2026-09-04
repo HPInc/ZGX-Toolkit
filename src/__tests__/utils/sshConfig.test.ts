@@ -25,7 +25,7 @@ jest.mock('../../utils/logger', () => ({
         debug: jest.fn(),
         info: jest.fn(),
         warn: jest.fn(),
-        error: jest.fn(),
+        error: jest.fn()
     }
 }));
 
@@ -49,7 +49,7 @@ describe('sshConfig', () => {
                 connectionTested: true
             },
             createdAt: new Date().toISOString(),
-            updatedAt: new Date().toISOString(),
+            updatedAt: new Date().toISOString()
         };
 
         (os.homedir as jest.Mock).mockReturnValue('/home/testuser');

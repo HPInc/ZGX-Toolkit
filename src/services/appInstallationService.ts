@@ -1,13 +1,12 @@
 /*
- * Copyright ©2025 HP Development Company, L.P.
+ * Copyright ©2025-2026 HP Development Company, L.P.
  * Licensed under the X11 License. See LICENSE file in the project root for details.
  */
 
 import { Device } from '../types/devices';
 import { SSHCommandResult } from '../types/ssh';
-import { AppDefinition, getAllApps, getAppById } from '../constants/apps';
+import { AppDefinition, AppPreInstallCheck, getAllApps } from '../constants/apps';
 import { logger } from '../utils/logger';
-import { getLastChars } from '../utils/string';
 import { executeSSHCommand } from '../utils/sshConnection';
 
 /**
@@ -20,6 +19,7 @@ export enum InstallationErrorType {
     INSTALLATION_FAILED = 'installation_failed',
     UNINSTALLATION_FAILED = 'uninstallation_failed',
     SYSTEM_STATE_INCONSISTENT = 'system_state_inconsistent',
+    PRE_INSTALL_CHECK_FAILED = 'pre_install_check_failed',
     UNKNOWN_ERROR = 'unknown_error'
 }
 
@@ -60,6 +60,8 @@ export interface InstallationResult {
     failedApps: string[];
     errorType?: InstallationErrorType;
     message?: string;
+    /** Per-app failure reason (e.g. a pre-install check's failMessage), keyed by app id */
+    failureReasons?: Record<string, string>;
 }
 
 /**
@@ -72,6 +74,17 @@ export interface UninstallationResult {
     errorType?: InstallationErrorType;
     message?: string;
 }
+
+/**
+ * Mutable accumulator used internally while installing a batch of apps, tracking
+ * which apps succeeded/failed and why. Bundled into a single object (rather than
+ * passed as separate parameters) to keep helper method signatures small.
+ */
+interface InstallAccumulator {
+    newlyInstalled: string[];
+    failedApps: string[];
+    failureReasons: Record<string, string>;
+}
 /**
  * Service for managing application installation on remote devices.
  * Handles SSH command execution, dependency resolution, and progress tracking.
@@ -82,7 +95,7 @@ export interface UninstallationResult {
 export class AppInstallationService {
 
     private readonly zgxPythonEnvId = 'zgx-python-env';
-    public static readonly invalidPasswordMessage = "Invalid password. Please try again.";
+    public static readonly invalidPasswordMessage = 'Invalid password. Please try again.';
 
     /**
      * Install selected applications on a device.
@@ -112,40 +125,17 @@ export class AppInstallationService {
             // Sort apps by dependencies to ensure dependencies are installed first
             const sortedApps = this.sortAppsByDependencies(appsToInstall);
 
-            // Check if any apps require sudo
-            const requiresSudo = sortedApps.some(app => app.installCommand.includes('sudo'));
-
-            if (requiresSudo && !sudoPassword) {
-                logger.warn('Sudo required but no password provided');
-                return {
-                    success: false,
-                    installedApps: [],
-                    failedApps: selectedApps,
-                    errorType: InstallationErrorType.SUDO_PASSWORD_REQUIRED,
-                    message: 'Sudo password required for installation'
-                };
-            }
-
-            // Validate sudo password if provided
-            if (requiresSudo && sudoPassword) {
-                const isValid = await this.validatePassword(device, sudoPassword);
-                if (!isValid) {
-                    logger.error('Password validation failed');
-                    return {
-                        success: false,
-                        installedApps: [],
-                        failedApps: selectedApps,
-                        errorType: InstallationErrorType.INVALID_PASSWORD,
-                        message: AppInstallationService.invalidPasswordMessage
-                    };
-                }
-                
-                logger.info('Password validated successfully');
+            const sudoValidationError = await this.validateSudoRequirements(device, sortedApps, selectedApps, sudoPassword);
+            if (sudoValidationError) {
+                return sudoValidationError;
             }
 
             // Prepare for installation
-            const newlyInstalled: string[] = [];
-            const failedApps: string[] = [];
+            const accumulator: InstallAccumulator = {
+                newlyInstalled: [],
+                failedApps: [],
+                failureReasons: {}
+            };
 
             // Notify progress start
             progressCallback({
@@ -156,62 +146,30 @@ export class AppInstallationService {
             });
 
             // Install base system first if not already installed
-            const baseSystemApp = allApps.find(app => app.id === 'base-system');
-            if (baseSystemApp && !await this.verifyAppInstallation(device, baseSystemApp)) {
-                const success = await this.installSingleApp(
-                    device,
-                    baseSystemApp,
-                    0,
-                    sortedApps.length + 1,
-                    progressCallback,
-                    sudoPassword
-                );
+            await this.installBaseSystemIfNeeded(
+                device,
+                allApps,
+                sortedApps,
+                progressCallback,
+                sudoPassword,
+                accumulator
+            );
 
-                if (success) {
-                    newlyInstalled.push('base-system');
-                } else {
-                    failedApps.push('base-system');
-                }
-            }
+            // Install selected applications sequentially in dependency order.
+            // installSingleApp() checks whether the app is already installed
+            // internally and returns true in that case. If checked here it would 
+            // only send progress callbacks without pushing the app's id into
+            // newlyInstalled/failedApps, causing it to silently disappear from 
+            // both lists on the Application Install Complete screen.
+            await this.installAppsInOrder(
+                device,
+                sortedApps,
+                progressCallback,
+                sudoPassword,
+                accumulator
+            );
 
-            // Install selected applications sequentially in dependency order
-            let currentIndex = 0;
-            for (const app of sortedApps) {
-                currentIndex++;
-
-                await this.verifyAppInstallation(device, app).then(async alreadyInstalled => {
-                    if (alreadyInstalled) {
-                        // App already installed, just update progress
-                        const progress = (currentIndex / sortedApps.length) * 100;
-                        progressCallback({
-                            type: 'progress',
-                            progress: progress,
-                            currentApp: app.name,
-                            status: 'Already installed'
-                        });
-                        progressCallback({
-                            type: 'appStatus',
-                            appId: app.id,
-                            status: 'Already installed'
-                        });
-                    } else {
-                        const success = await this.installSingleApp(
-                            device,
-                            app,
-                            currentIndex,
-                            sortedApps.length,
-                            progressCallback,
-                            sudoPassword
-                        );
-
-                        if (success) {
-                            newlyInstalled.push(app.id);
-                        } else {
-                            failedApps.push(app.id);
-                        }
-                    }
-                });
-            }
+            const { newlyInstalled, failedApps, failureReasons } = accumulator;
 
             // Notify completion
             progressCallback({
@@ -232,7 +190,8 @@ export class AppInstallationService {
                 errorType: failedApps.length === 0 ? InstallationErrorType.NONE : InstallationErrorType.INSTALLATION_FAILED,
                 message: failedApps.length === 0
                     ? 'All applications installed successfully'
-                    : `${newlyInstalled.length} installed, ${failedApps.length} failed`
+                    : `${newlyInstalled.length} installed, ${failedApps.length} failed`,
+                failureReasons: Object.keys(failureReasons).length > 0 ? failureReasons : undefined
             };
 
         } catch (error) {
@@ -256,8 +215,219 @@ export class AppInstallationService {
     }
 
     /**
-     * Install a single application.
+     * Ensure sudo password requirements are satisfied before installing.
+     * Returns an InstallationResult describing the failure if validation fails,
+     * or undefined if installation can proceed.
      */
+    private async validateSudoRequirements(
+        device: Device,
+        sortedApps: AppDefinition[],
+        selectedApps: string[],
+        sudoPassword?: string
+    ): Promise<InstallationResult | undefined> {
+        const requiresSudo = sortedApps.some(app => app.installCommand.includes('sudo'));
+
+        if (requiresSudo && !sudoPassword) {
+            logger.warn('Sudo required but no password provided');
+            return {
+                success: false,
+                installedApps: [],
+                failedApps: selectedApps,
+                errorType: InstallationErrorType.SUDO_PASSWORD_REQUIRED,
+                message: 'Sudo password required for installation'
+            };
+        }
+
+        if (requiresSudo && sudoPassword) {
+            const isValid = await this.validatePassword(device, sudoPassword);
+            if (!isValid) {
+                logger.error('Password validation failed');
+                return {
+                    success: false,
+                    installedApps: [],
+                    failedApps: selectedApps,
+                    errorType: InstallationErrorType.INVALID_PASSWORD,
+                    message: AppInstallationService.invalidPasswordMessage
+                };
+            }
+
+            logger.info('Password validated successfully');
+        }
+
+        return undefined;
+    }
+
+    /**
+     * Install the base-system app first if it isn't already installed, recording
+     * the outcome into the shared accumulator (newlyInstalled/failedApps/failureReasons).
+     */
+    private async installBaseSystemIfNeeded(
+        device: Device,
+        allApps: AppDefinition[],
+        sortedApps: AppDefinition[],
+        progressCallback: InstallProgressCallback,
+        sudoPassword: string | undefined,
+        accumulator: InstallAccumulator
+    ): Promise<void> {
+        const baseSystemApp = allApps.find(app => app.id === 'base-system');
+        if (!baseSystemApp || (await this.verifyAppInstallation(device, baseSystemApp)).isInstalled) {
+            return;
+        }
+
+        const { success, failureReason } = await this.installSingleApp(
+            device,
+            baseSystemApp,
+            0,
+            sortedApps.length + 1,
+            progressCallback,
+            sudoPassword
+        );
+
+        if (success) {
+            accumulator.newlyInstalled.push('base-system');
+        } else {
+            accumulator.failedApps.push('base-system');
+            if (failureReason) {
+                accumulator.failureReasons['base-system'] = failureReason;
+            }
+        }
+    }
+
+    /**
+     * Install each app in sortedApps sequentially, recording the outcome into
+     * the shared accumulator (newlyInstalled/failedApps/failureReasons).
+     */
+    private async installAppsInOrder(
+        device: Device,
+        sortedApps: AppDefinition[],
+        progressCallback: InstallProgressCallback,
+        sudoPassword: string | undefined,
+        accumulator: InstallAccumulator
+    ): Promise<void> {
+        let currentIndex = 0;
+        for (const app of sortedApps) {
+            currentIndex++;
+
+            const { success, failureReason } = await this.installSingleApp(
+                device,
+                app,
+                currentIndex,
+                sortedApps.length,
+                progressCallback,
+                sudoPassword
+            );
+
+            if (success) {
+                accumulator.newlyInstalled.push(app.id);
+            } else {
+                accumulator.failedApps.push(app.id);
+                if (failureReason) {
+                    accumulator.failureReasons[app.id] = failureReason;
+                }
+            }
+        }
+    }
+
+    /**
+     * Run all pre-install checks defined for an app against the target device.
+     * Blocking checks that fail cause the overall result to fail immediately.
+     * Warning checks that fail are collected and returned but do not fail the result.
+     */
+    private async runPreInstallChecks(
+        device: Device,
+        app: AppDefinition
+    ): Promise<{ passed: boolean; warnings: string[]; failMessage?: string }> {
+        const warnings: string[] = [];
+
+        for (const check of app.preInstallChecks ?? []) {
+            const severity = check.severity ?? 'blocking';
+
+            try {
+                const result = await executeSSHCommand(
+                    device,
+                    check.command,
+                    { timeout: 15000, readyTimeout: 15000, keepaliveInterval: 10000, keepaliveCountMax: 3 },
+                    { operationName: check.id, retries: 1 }
+                );
+
+                const output = `${result.stdout ?? ''}\n${result.stderr ?? ''}`;
+                const checkPassed = this.evaluatePreInstallCheck(result, output, check);
+
+                if (!checkPassed) {
+                    logger.warn(`Pre-install check '${check.id}' failed`, {
+                        error: result.error?.message,
+                        stderr: result.stderr,
+                        stdout: result.stdout
+                    });
+
+                    if (severity === 'blocking') {
+                        return { passed: false, warnings, failMessage: check.failMessage };
+                    }
+                    warnings.push(check.failMessage);
+                }
+            } catch (error) {
+                const message = error instanceof Error ? error.message : String(error);
+                logger.warn(`Pre-install check '${check.id}' threw an error`, { error: message });
+
+                if (severity === 'blocking') {
+                    return { passed: false, warnings, failMessage: check.failMessage };
+                }
+                warnings.push(check.failMessage);
+            }
+        }
+
+        return { passed: true, warnings };
+    }
+
+    /**
+     * Determine whether a pre-install check succeeded, based on the command's
+     * result and (if the check specifies a minVersion) a version comparison.
+     */
+    private evaluatePreInstallCheck(result: SSHCommandResult, output: string, check: AppPreInstallCheck): boolean {
+        if (!result.success) {
+            return false;
+        }
+
+        if (check.minVersion) {
+            const detectedVersion = this.extractVersion(output);
+            if (!detectedVersion) {
+                return false;
+            }
+            return this.compareVersions(detectedVersion, check.minVersion) >= 0;
+        }
+
+        return true;
+    }
+
+    /**
+     * Extract the first semantic-version-like string from text.
+     */
+    private extractVersion(text: string): string | undefined {
+        const versionPattern = /\d{1,9}\.\d{1,9}(?:\.\d{1,9})?(?:\.\d{1,9})?/;
+        const match = versionPattern.exec(text);
+        return match ? match[0] : undefined;
+    }
+
+    /**
+     * Compare two dotted-numeric version strings.
+     * Returns a positive number if `a` > `b`, negative if `a` < `b`, and 0 if equal.
+     */
+    private compareVersions(a: string, b: string): number {
+        const partsA = a.split('.').map(Number);
+        const partsB = b.split('.').map(Number);
+        const length = Math.max(partsA.length, partsB.length);
+
+        for (let i = 0; i < length; i++) {
+            const numA = partsA[i] ?? 0;
+            const numB = partsB[i] ?? 0;
+            if (numA !== numB) {
+                return numA - numB;
+            }
+        }
+
+        return 0;
+    }
+
     private async installSingleApp(
         device: Device,
         app: AppDefinition,
@@ -265,7 +435,7 @@ export class AppInstallationService {
         totalApps: number,
         progressCallback: InstallProgressCallback,
         sudoPassword?: string
-    ): Promise<boolean> {
+    ): Promise<{ success: boolean; failureReason?: string }> {
         const progress = (currentIndex / totalApps) * 100;
 
         logger.info(`Installing ${app.name} (${app.id})`);
@@ -287,26 +457,18 @@ export class AppInstallationService {
         try {
             // First, check if the app is already installed
             logger.debug(`Checking if ${app.name} is already installed`);
-            const alreadyInstalled = await this.verifyAppInstallation(device, app);
-
-            if (alreadyInstalled) {
-                logger.info(`${app.name} is already installed, skipping installation`);
-                progressCallback({
-                    type: 'appStatus',
-                    appId: app.id,
-                    status: 'Completed'
-                });
-                progressCallback({
-                    type: 'progress',
-                    progress: progress,
-                    currentApp: app.name,
-                    status: `${app.name} already installed ✓`
-                });
-                return true;
+            if ((await this.verifyAppInstallation(device, app)).isInstalled) {
+                return this.reportAlreadyInstalled(app, progress, progressCallback);
             }
 
             // App is not installed, proceed with installation
             logger.info(`${app.name} not found, proceeding with installation`);
+
+            const preCheckFailure = await this.enforcePreInstallChecks(device, app, progress, progressCallback);
+            if (preCheckFailure) {
+                return preCheckFailure;
+            }
+
             progressCallback({
                 type: 'progress',
                 progress: progress,
@@ -314,62 +476,8 @@ export class AppInstallationService {
                 status: `Installing ${app.name}...`
             });
 
-            // Execute installation command
-            const installCommand = app.installCommand;
-            const requiresSudo = installCommand.includes('sudo');
-
-            let result: SSHCommandResult;
-
-            if (requiresSudo && sudoPassword) {
-                // For sudo commands, wrap in single sudo bash -c
-                const commandWithoutSudo = installCommand.replace(/sudo\s+/g, '');
-                const sudoCommand = `sudo -S bash -c ${this.escapeShellArg(commandWithoutSudo)}`;
-
-                result = await executeSSHCommand(
-                    device,
-                    sudoCommand,
-                    { timeout: 30000, readyTimeout: 30000, keepaliveInterval: 10000, keepaliveCountMax: 3 },
-                    { operationName: app.name, sudoPassword, retries: 3 }
-                );
-            } else {
-                result = await executeSSHCommand(
-                    device,
-                    installCommand,
-                    { timeout: 30000, readyTimeout: 30000, keepaliveInterval: 10000, keepaliveCountMax: 3 },
-                    { operationName: app.name, sudoPassword, retries: 3 }
-                );
-            }
-
-            if (result.success) {
-                // Confirm installation
-                const isInstalled = await this.verifyAppInstallation(device, app);
-
-                if (isInstalled) {
-                    progressCallback({
-                        type: 'appStatus',
-                        appId: app.id,
-                        status: 'Completed'
-                    });
-                    logger.info(`Successfully installed ${app.name}`);
-                    return true;
-                } else {
-                    progressCallback({
-                        type: 'appStatus',
-                        appId: app.id,
-                        status: 'Failed'
-                    });
-                    logger.warn(`Failed to verify installation of ${app.name}`);
-                    return false;
-                }
-            } else {
-                progressCallback({
-                    type: 'appStatus',
-                    appId: app.id,
-                    status: 'Failed'
-                });
-                logger.warn(`Installation command failed for ${app.name}`, { device: device.name, error: result.error?.message, stderr: result.stderr, stdout: result.stdout });
-                return false;
-            }
+            const result = await this.runInstallCommand(device, app, sudoPassword);
+            return await this.finalizeInstallResult(device, app, result, progressCallback);
 
         } catch (error) {
             progressCallback({
@@ -380,14 +488,166 @@ export class AppInstallationService {
             logger.error(`Installation failed for ${app.name}`, {
                 error: error instanceof Error ? error.message : String(error)
             });
-            return false;
+            return { success: false, failureReason: error instanceof Error ? error.message : String(error) };
         }
     }
 
     /**
-     * Verify that an application is installed.
+     * Report that an app is already installed and can be skipped.
      */
-    public async verifyAppInstallation(device: Device, app: AppDefinition): Promise<boolean> {
+    private reportAlreadyInstalled(
+        app: AppDefinition,
+        progress: number,
+        progressCallback: InstallProgressCallback
+    ): { success: true } {
+        logger.info(`${app.name} is already installed, skipping installation`);
+        progressCallback({
+            type: 'appStatus',
+            appId: app.id,
+            status: 'Completed'
+        });
+        progressCallback({
+            type: 'progress',
+            progress: progress,
+            currentApp: app.name,
+            status: `${app.name} already installed ✓`
+        });
+        return { success: true };
+    }
+
+    /**
+     * Run any pre-install validation checks defined for an app, surfacing warnings
+     * via the progress callback. Returns a failure result if a blocking check failed,
+     * or undefined if installation can proceed.
+     */
+    private async enforcePreInstallChecks(
+        device: Device,
+        app: AppDefinition,
+        progress: number,
+        progressCallback: InstallProgressCallback
+    ): Promise<{ success: false; failureReason: string } | undefined> {
+        if (!app.preInstallChecks || app.preInstallChecks.length === 0) {
+            return undefined;
+        }
+
+        progressCallback({
+            type: 'progress',
+            progress: progress,
+            currentApp: app.name,
+            status: `Checking prerequisites for ${app.name}...`
+        });
+
+        const checksResult = await this.runPreInstallChecks(device, app);
+
+        for (const warning of checksResult.warnings) {
+            logger.warn(`Pre-install check warning for ${app.name}: ${warning}`);
+            progressCallback({
+                type: 'progress',
+                progress: progress,
+                currentApp: app.name,
+                status: warning
+            });
+        }
+
+        if (checksResult.passed) {
+            return undefined;
+        }
+
+        progressCallback({
+            type: 'appStatus',
+            appId: app.id,
+            status: 'Failed'
+        });
+        logger.warn(`Pre-install checks failed for ${app.name}: ${checksResult.failMessage}`);
+        progressCallback({
+            type: 'progress',
+            progress: progress,
+            currentApp: app.name,
+            status: checksResult.failMessage
+        });
+        return { success: false, failureReason: checksResult.failMessage! };
+    }
+
+    /**
+     * Execute an app's install command over SSH, wrapping it in a sudo bash -c
+     * invocation when the command requires sudo and a password is available.
+     */
+    private async runInstallCommand(
+        device: Device,
+        app: AppDefinition,
+        sudoPassword?: string
+    ): Promise<SSHCommandResult> {
+        const installCommand = app.installCommand;
+        const requiresSudo = installCommand.includes('sudo');
+
+        if (requiresSudo && sudoPassword) {
+            // For sudo commands, wrap in single sudo bash -c
+            const commandWithoutSudo = installCommand.replaceAll(/sudo\s+/g, '');
+            const sudoCommand = `sudo -S bash -c ${this.escapeShellArg(commandWithoutSudo)}`;
+
+            return executeSSHCommand(
+                device,
+                sudoCommand,
+                { timeout: 30000, readyTimeout: 30000, keepaliveInterval: 10000, keepaliveCountMax: 3 },
+                { operationName: app.name, sudoPassword, retries: 3 }
+            );
+        }
+
+        return executeSSHCommand(
+            device,
+            installCommand,
+            { timeout: 30000, readyTimeout: 30000, keepaliveInterval: 10000, keepaliveCountMax: 3 },
+            { operationName: app.name, sudoPassword, retries: 3 }
+        );
+    }
+
+    /**
+     * Interpret the result of an install command, verifying the app actually got
+     * installed and reporting the appropriate progress/status.
+     */
+    private async finalizeInstallResult(
+        device: Device,
+        app: AppDefinition,
+        result: SSHCommandResult,
+        progressCallback: InstallProgressCallback
+    ): Promise<{ success: boolean; failureReason?: string }> {
+        if (!result.success) {
+            progressCallback({
+                type: 'appStatus',
+                appId: app.id,
+                status: 'Failed'
+            });
+            logger.warn(`Installation command failed for ${app.name}`, { device: device.name, error: result.error?.message, stderr: result.stderr, stdout: result.stdout });
+            return { success: false, failureReason: result.error?.message || result.stderr || `Installation command failed for ${app.name}.` };
+        }
+
+        // Confirm installation
+        const { isInstalled, detail } = await this.verifyAppInstallation(device, app);
+
+        if (isInstalled) {
+            progressCallback({
+                type: 'appStatus',
+                appId: app.id,
+                status: 'Completed'
+            });
+            logger.info(`Successfully installed ${app.name}`);
+            return { success: true };
+        }
+
+        progressCallback({
+            type: 'appStatus',
+            appId: app.id,
+            status: 'Failed'
+        });
+        logger.error(`Failed to verify installation of ${app.name}`, { detail });
+        return { success: false, failureReason: `Installation command completed but ${app.name} could not be verified as installed.` };
+    }
+
+    /**
+     * Verify that an application is installed. Also returns verify command failure
+     * detail (stderr/error message) so callers can surface it for diagnosis.
+     */
+    public async verifyAppInstallation(device: Device, app: AppDefinition): Promise<{ isInstalled: boolean; detail?: string }> {
         logger.debug(`Verifying installation of ${app.name}`);
 
         try {
@@ -398,15 +658,14 @@ export class AppInstallationService {
                 { timeout: 30000, readyTimeout: 30000, keepaliveInterval: 10000, keepaliveCountMax: 3 },
                 { operationName: app.name, timeoutSeconds: 7, retries: 3 }
             );
-            if (!result.success && result.error) {
-                logger.error('App verification failed', { device: device.name, error: result.error.message, stderr: result.stderr, stdout: result.stdout });
+            if (!result.success) {
+                logger.error('App verification failed', { device: device.name, error: result.error?.message, stderr: result.stderr, stdout: result.stdout });
             }
-            return result.success;
+            return { isInstalled: result.success, detail: result.error?.message || result.stderr?.trim() || undefined };
         } catch (error) {
-            logger.error(`Verification exception for ${app.name}`, {
-                error: error instanceof Error ? error.message : String(error)
-            });
-            return false;
+            const message = error instanceof Error ? error.message : String(error);
+            logger.error(`Verification exception for ${app.name}`, { error: message });
+            return { isInstalled: false, detail: message };
         }
     }
 
@@ -473,7 +732,8 @@ export class AppInstallationService {
      * Escape shell argument for safe command execution.
      */
     private escapeShellArg(arg: string): string {
-        return `'${arg.replace(/'/g, "'\\''")}'`;
+        const escapedSingleQuote = String.raw`'\''`;
+        return `'${arg.replaceAll("'", escapedSingleQuote)}'`;
     }
 
     /**
@@ -518,37 +778,14 @@ export class AppInstallationService {
             // Sort apps for uninstallation (reverse dependency order)
             const sortedApps = this.sortAppsForUninstallation(appsToUninstallDefs);
 
-            // Check if any apps require sudo
-            const requiresSudo = sortedApps.some(app =>
-                app.uninstallCommand && app.uninstallCommand.includes('sudo')
+            const sudoValidationResult = await this.validateUninstallSudoRequirements(
+                device,
+                sortedApps,
+                appsToUninstall,
+                password
             );
-
-            if (requiresSudo && !password) {
-                logger.warn('Sudo required but no password provided');
-                return {
-                    success: false,
-                    uninstalledApps: [],
-                    failedApps: appsToUninstall,
-                    errorType: InstallationErrorType.SUDO_PASSWORD_REQUIRED,
-                    message: 'Sudo password required for uninstallation'
-                };
-            }
-
-            // Validate sudo password if provided (same as install flow)
-            if (requiresSudo && password) {
-                const isValid = await this.validatePassword(device, password);
-                if (!isValid) {
-                    logger.error('Password validation failed during uninstallation');
-                    return {
-                        success: false,
-                        uninstalledApps: [],
-                        failedApps: appsToUninstall,
-                        errorType: InstallationErrorType.INVALID_PASSWORD,
-                        message: AppInstallationService.invalidPasswordMessage
-                    };
-                }
-                
-                logger.info('Password validated successfully');
+            if (sudoValidationResult) {
+                return sudoValidationResult;
             }
 
             const successfullyUninstalled: string[] = [];
@@ -569,87 +806,21 @@ export class AppInstallationService {
             const hasZgxCondaEnvironment = sortedApps.some(app => app.id === this.zgxPythonEnvId);
 
             if (hasZgxCondaEnvironment) {
-                logger.info('Removing ZGX Python Environment');
-
-                if (progressCallback) {
-                    progressCallback({
-                        type: 'progress',
-                        progress: 0,
-                        currentApp: 'ZGX Python Environment',
-                        status: 'Removing ZGX Python Environment...'
-                    });
-                }
-
-                const condaEnvResult = await executeSSHCommand(
-                    device,
-                    'if [ -d "$HOME/miniforge3" ]; then $HOME/miniforge3/bin/conda env remove -n zgx -y 2>/dev/null || true; fi',
-                    { timeout: 30000, readyTimeout: 30000, keepaliveInterval: 10000, keepaliveCountMax: 3 },
-                    { operationName: 'Remove zgx conda env', sudoPassword: password, retries: 3 }
-                );
-
-                if (condaEnvResult.success) {
-                    successfullyUninstalled.push(this.zgxPythonEnvId);
-                    logger.info('Successfully removed ZGX Python Environment');
-                    // Mark all Python Tools as successfully uninstalled
-                    const pythonToolApps = sortedApps.filter(app => app.dependencies?.includes(this.zgxPythonEnvId));
-                    for (const app of pythonToolApps) {
-                        successfullyUninstalled.push(app.id);
-                        if (progressCallback) {
-                            progressCallback({
-                                type: 'appStatus',
-                                appId: app.id,
-                                status: 'Completed'
-                            });
-                        }
-                    }
-                } else {
-                    logger.warn('Failed to remove ZGX Python Environment');
-                    // Mark Python Tools as failed
-                    const pythonToolApps = sortedApps.filter(app => app.dependencies?.includes(this.zgxPythonEnvId));
-                    for (const app of pythonToolApps) {
-                        failedUninstalls.push(app.id);
-                        if (progressCallback) {
-                            progressCallback({
-                                type: 'appStatus',
-                                appId: app.id,
-                                status: 'Failed'
-                            });
-                        }
-                    }
-                }
+                const condaResult = await this.removeCondaEnvironmentForUninstall(device, sortedApps, password, progressCallback);
+                successfullyUninstalled.push(...condaResult.successfullyUninstalled);
+                failedUninstalls.push(...condaResult.failedUninstalls);
             }
 
             // Uninstall each app sequentially
-            let currentIndex = 0;
-            for (const app of sortedApps) {
-                currentIndex++;
-
-                if (hasZgxCondaEnvironment && (app.id === this.zgxPythonEnvId || app.dependencies?.includes(this.zgxPythonEnvId))) {
-                    // Already handled with conda env removal
-                    continue;
-                }
-
-                // Skip if app doesn't have uninstall command (like base-system)
-                if (!app.uninstallCommand) {
-                    logger.debug(`Skipping ${app.name} - no uninstall command defined`);
-                    continue;
-                }
-
-                const success = await this.uninstallSingleApp(
-                    device,
-                    app,
-                    currentIndex,
-                    sortedApps.length,
-                    progressCallback,
-                    password
-                );
-
-                if (success) {
-                    successfullyUninstalled.push(app.id);
-                } else {
-                    failedUninstalls.push(app.id);
-                }
-            }
+            const sequentialResult = await this.uninstallAppsSequentially(
+                device,
+                sortedApps,
+                hasZgxCondaEnvironment,
+                progressCallback,
+                password
+            );
+            successfullyUninstalled.push(...sequentialResult.successfullyUninstalled);
+            failedUninstalls.push(...sequentialResult.failedUninstalls);
 
             // Notify completion
             if (progressCallback) {
@@ -698,6 +869,159 @@ export class AppInstallationService {
     }
 
     /**
+     * Validate sudo password requirements for an uninstallation run.
+     * Returns a failure result if validation fails, or null when it's safe to proceed.
+     */
+    private async validateUninstallSudoRequirements(
+        device: Device,
+        sortedApps: AppDefinition[],
+        appsToUninstall: string[],
+        password?: string
+    ): Promise<UninstallationResult | null> {
+        const requiresSudo = sortedApps.some(app => app.uninstallCommand?.includes('sudo'));
+
+        if (requiresSudo && !password) {
+            logger.warn('Sudo required but no password provided');
+            return {
+                success: false,
+                uninstalledApps: [],
+                failedApps: appsToUninstall,
+                errorType: InstallationErrorType.SUDO_PASSWORD_REQUIRED,
+                message: 'Sudo password required for uninstallation'
+            };
+        }
+
+        if (requiresSudo && password) {
+            const isValid = await this.validatePassword(device, password);
+            if (!isValid) {
+                logger.error('Password validation failed during uninstallation');
+                return {
+                    success: false,
+                    uninstalledApps: [],
+                    failedApps: appsToUninstall,
+                    errorType: InstallationErrorType.INVALID_PASSWORD,
+                    message: AppInstallationService.invalidPasswordMessage
+                };
+            }
+
+            logger.info('Password validated successfully');
+        }
+
+        return null;
+    }
+
+    /**
+     * Remove the shared ZGX Python (Conda) environment and mark its dependent apps accordingly.
+     */
+    private async removeCondaEnvironmentForUninstall(
+        device: Device,
+        sortedApps: AppDefinition[],
+        password: string | undefined,
+        progressCallback?: UninstallProgressCallback
+    ): Promise<{ successfullyUninstalled: string[]; failedUninstalls: string[] }> {
+        const successfullyUninstalled: string[] = [];
+        const failedUninstalls: string[] = [];
+
+        logger.info('Removing ZGX Python Environment');
+
+        if (progressCallback) {
+            progressCallback({
+                type: 'progress',
+                progress: 0,
+                currentApp: 'ZGX Python Environment',
+                status: 'Removing ZGX Python Environment...'
+            });
+        }
+
+        const condaEnvResult = await executeSSHCommand(
+            device,
+            'if [ -d "$HOME/miniforge3" ]; then $HOME/miniforge3/bin/conda env remove -n zgx -y 2>/dev/null || true; fi',
+            { timeout: 30000, readyTimeout: 30000, keepaliveInterval: 10000, keepaliveCountMax: 3 },
+            { operationName: 'Remove zgx conda env', sudoPassword: password, retries: 3 }
+        );
+
+        const pythonToolApps = sortedApps.filter(app => app.dependencies?.includes(this.zgxPythonEnvId));
+
+        if (condaEnvResult.success) {
+            successfullyUninstalled.push(this.zgxPythonEnvId);
+            logger.info('Successfully removed ZGX Python Environment');
+            // Mark all Python Tools as successfully uninstalled
+            for (const app of pythonToolApps) {
+                successfullyUninstalled.push(app.id);
+                if (progressCallback) {
+                    progressCallback({
+                        type: 'appStatus',
+                        appId: app.id,
+                        status: 'Completed'
+                    });
+                }
+            }
+        } else {
+            logger.warn('Failed to remove ZGX Python Environment');
+            // Mark Python Tools as failed
+            for (const app of pythonToolApps) {
+                failedUninstalls.push(app.id);
+                if (progressCallback) {
+                    progressCallback({
+                        type: 'appStatus',
+                        appId: app.id,
+                        status: 'Failed'
+                    });
+                }
+            }
+        }
+
+        return { successfullyUninstalled, failedUninstalls };
+    }
+
+    /**
+     * Uninstall the given apps one at a time, skipping those already handled via the Conda environment removal.
+     */
+    private async uninstallAppsSequentially(
+        device: Device,
+        sortedApps: AppDefinition[],
+        hasZgxCondaEnvironment: boolean,
+        progressCallback: UninstallProgressCallback | undefined,
+        password: string | undefined
+    ): Promise<{ successfullyUninstalled: string[]; failedUninstalls: string[] }> {
+        const successfullyUninstalled: string[] = [];
+        const failedUninstalls: string[] = [];
+
+        let currentIndex = 0;
+        for (const app of sortedApps) {
+            currentIndex++;
+
+            if (hasZgxCondaEnvironment && (app.id === this.zgxPythonEnvId || app.dependencies?.includes(this.zgxPythonEnvId))) {
+                // Already handled with conda env removal
+                continue;
+            }
+
+            // Skip if app doesn't have uninstall command (like base-system)
+            if (!app.uninstallCommand) {
+                logger.debug(`Skipping ${app.name} - no uninstall command defined`);
+                continue;
+            }
+
+            const success = await this.uninstallSingleApp(
+                device,
+                app,
+                currentIndex,
+                sortedApps.length,
+                progressCallback,
+                password
+            );
+
+            if (success) {
+                successfullyUninstalled.push(app.id);
+            } else {
+                failedUninstalls.push(app.id);
+            }
+        }
+
+        return { successfullyUninstalled, failedUninstalls };
+    }
+
+    /**
      * Uninstall a single application.
      */
     private async uninstallSingleApp(
@@ -720,77 +1044,82 @@ export class AppInstallationService {
                 currentApp: app.name,
                 status: `Uninstalling ${app.name}...`
             });
+        }
+        this.reportUninstallStatus(app, 'Uninstalling', progressCallback);
 
-            progressCallback({
-                type: 'appStatus',
-                appId: app.id,
-                status: 'Uninstalling'
-            });
+        if (!app.uninstallCommand) {
+            logger.debug(`${app.name} has no uninstall command, skipping`);
+            return true;
         }
 
         try {
-            if (!app.uninstallCommand) {
-                logger.debug(`${app.name} has no uninstall command, skipping`);
-                return true;
-            }
-
-            const requiresSudo = app.uninstallCommand.includes('sudo');
-            let result: SSHCommandResult;
-
-            if (requiresSudo && sudoPassword) {
-                // For sudo commands, wrap in single sudo -S command
-                const commandWithoutSudo = app.uninstallCommand.replace(/sudo\s+/g, '');
-                const sudoCommand = `sudo -S bash -c ${this.escapeShellArg(commandWithoutSudo)}`;
-
-                result = await executeSSHCommand(
-                    device,
-                    sudoCommand,
-                    { timeout: 30000, readyTimeout: 30000, keepaliveInterval: 10000, keepaliveCountMax: 3 },
-                    { operationName: app.name, sudoPassword, retries: 3 }
-                );
-            } else {
-                result = await executeSSHCommand(
-                    device,
-                    app.uninstallCommand,
-                    { timeout: 30000, readyTimeout: 30000, keepaliveInterval: 10000, keepaliveCountMax: 3 },
-                    { operationName: app.name, sudoPassword, retries: 3 }
-                );
-            }
+            const result = await this.runUninstallCommand(device, app, sudoPassword);
 
             if (result.success) {
-                if (progressCallback) {
-                    progressCallback({
-                        type: 'appStatus',
-                        appId: app.id,
-                        status: 'Completed'
-                    });
-                }
+                this.reportUninstallStatus(app, 'Completed', progressCallback);
                 logger.info(`Successfully uninstalled ${app.name}`);
                 return true;
-            } else {
-                if (progressCallback) {
-                    progressCallback({
-                        type: 'appStatus',
-                        appId: app.id,
-                        status: 'Failed'
-                    });
-                }
-                logger.warn(`Failed to uninstall ${app.name}`, { device: device.name, error: result.error?.message, stderr: result.stderr, stdout: result.stdout });
-                return false;
             }
 
+            this.reportUninstallStatus(app, 'Failed', progressCallback);
+            logger.warn(`Failed to uninstall ${app.name}`, { device: device.name, error: result.error?.message, stderr: result.stderr, stdout: result.stdout });
+            return false;
+
         } catch (error) {
-            if (progressCallback) {
-                progressCallback({
-                    type: 'appStatus',
-                    appId: app.id,
-                    status: 'Failed'
-                });
-            }
+            this.reportUninstallStatus(app, 'Failed', progressCallback);
             logger.error(`Uninstallation failed for ${app.name}`, {
                 error: error instanceof Error ? error.message : String(error)
             });
             return false;
+        }
+    }
+
+    /**
+     * Execute the uninstall command for a single app, wrapping it in sudo if required.
+     */
+    private async runUninstallCommand(
+        device: Device,
+        app: AppDefinition,
+        sudoPassword?: string
+    ): Promise<SSHCommandResult> {
+        const uninstallCommand = app.uninstallCommand as string;
+        const requiresSudo = uninstallCommand.includes('sudo');
+
+        if (requiresSudo && sudoPassword) {
+            // For sudo commands, wrap in single sudo -S command
+            const commandWithoutSudo = uninstallCommand.replaceAll(/sudo\s+/g, '');
+            const sudoCommand = `sudo -S bash -c ${this.escapeShellArg(commandWithoutSudo)}`;
+
+            return executeSSHCommand(
+                device,
+                sudoCommand,
+                { timeout: 30000, readyTimeout: 30000, keepaliveInterval: 10000, keepaliveCountMax: 3 },
+                { operationName: app.name, sudoPassword, retries: 3 }
+            );
+        }
+
+        return executeSSHCommand(
+            device,
+            uninstallCommand,
+            { timeout: 30000, readyTimeout: 30000, keepaliveInterval: 10000, keepaliveCountMax: 3 },
+            { operationName: app.name, sudoPassword, retries: 3 }
+        );
+    }
+
+    /**
+     * Report an app uninstall status update via the progress callback, if provided.
+     */
+    private reportUninstallStatus(
+        app: AppDefinition,
+        status: 'Uninstalling' | 'Completed' | 'Failed',
+        progressCallback?: UninstallProgressCallback
+    ): void {
+        if (progressCallback) {
+            progressCallback({
+                type: 'appStatus',
+                appId: app.id,
+                status
+            });
         }
     }
 
@@ -814,8 +1143,17 @@ export class AppInstallationService {
         const pythonTools = apps.filter(app => app.category === 'python-tools');
         const miniforge = apps.find(app => app.id === 'miniforge');
         const systemStack = apps.filter(app => app.category === 'system-stack' && app.id !== 'miniforge');
+        // Any app that doesn't belong to the above categories (e.g. Model Serving apps like ZRT)
+        // still needs to be uninstalled. Fold it in with the system stack apps so dependency
+        // ordering (e.g. an app uninstalled before a dependency it needed only at install time)
+        // is still respected via reverseDependencySort below.
+        const otherApps = apps.filter(app =>
+            app.category !== 'python-tools' &&
+            app.id !== 'miniforge' &&
+            app.category !== 'system-stack'
+        );
 
-        // Build result: Python Tools -> Miniforge -> System Stack (reverse dependency order)
+        // Build result: Python Tools -> Miniforge -> System Stack + other apps (reverse dependency order)
         const result: AppDefinition[] = [];
 
         // Add Python Tools first (they depend on miniforge)
@@ -826,9 +1164,9 @@ export class AppInstallationService {
             result.push(miniforge);
         }
 
-        // Add System Stack apps in reverse dependency order
+        // Add System Stack apps (plus any other-category apps like ZRT) in reverse dependency order
         // Apps with dependencies should be removed before their dependencies
-        const sortedSystemStack = this.reverseDependencySort(systemStack);
+        const sortedSystemStack = this.reverseDependencySort([...otherApps, ...systemStack]);
         result.push(...sortedSystemStack);
 
         logger.debug('Apps sorted for uninstallation', {
@@ -873,4 +1211,3 @@ export class AppInstallationService {
         return sorted;
     }
 }
-

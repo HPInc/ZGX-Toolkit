@@ -1,14 +1,15 @@
 /*
- * Copyright ©2025 HP Development Company, L.P.
+ * Copyright ©2025-2026 HP Development Company, L.P.
  * Licensed under the X11 License. See LICENSE file in the project root for details.
  */
 
 import * as vscode from 'vscode';
+import { randomBytes } from 'node:crypto';
 import { IView } from '../views/baseViewController';
 import { ViewFactory } from '../views/viewFactory';
 import { MessageRouter } from '../utils/messageRouter';
 import { Logger } from '../utils/logger';
-import { Message, NavigateMessage } from '../types/messages';
+import { Message } from '../types/messages';
 
 /**
  * Unified provider that handles both sidebar and editor panel webviews.
@@ -26,6 +27,9 @@ export class ZgxToolkitProvider implements vscode.WebviewViewProvider {
     private editorWebview?: vscode.Webview;
     private editorCurrentView?: IView;
     private editorCurrentViewId?: string;
+
+    private lastSidebarHtml?: string;
+    private lastEditorHtml?: string;
 
     private readonly nonce: string;
 
@@ -49,8 +53,8 @@ export class ZgxToolkitProvider implements vscode.WebviewViewProvider {
      */
     async resolveWebviewView(
         webviewView: vscode.WebviewView,
-        context: vscode.WebviewViewResolveContext,
-        token: vscode.CancellationToken
+        _context: vscode.WebviewViewResolveContext,
+        _token: vscode.CancellationToken
     ): Promise<void> {
         this.logger.info('Resolving sidebar webview');
 
@@ -104,7 +108,7 @@ export class ZgxToolkitProvider implements vscode.WebviewViewProvider {
 
         // Check if this is a navigate message with editor target
         if (message.type === 'navigate') {
-            const navMsg = message as NavigateMessage;
+            const navMsg = message;
             this.logger.debug('Navigation message from sidebar', {
                 targetView: navMsg.targetView,
                 panel: navMsg.panel,
@@ -127,7 +131,7 @@ export class ZgxToolkitProvider implements vscode.WebviewViewProvider {
      * @param viewId Optional view ID to navigate to (defaults to 'devices/manager')
      * @param params Optional parameters for the view
      */
-    async openInEditor(viewId: string = 'devices/manager', params?: any): Promise<void> {
+    async openInEditor(viewId = 'devices/manager', params?: Record<string, unknown>): Promise<void> {
         this.logger.debug('Opening view in editor panel', { viewId, params });
 
         // If editor panel already exists, reuse it
@@ -141,7 +145,7 @@ export class ZgxToolkitProvider implements vscode.WebviewViewProvider {
         // Create new editor panel
         const panel = vscode.window.createWebviewPanel(
             'zgxToolkitEditor',
-            'ZGX Device Manager',
+            'ZTK Device Manager',
             vscode.ViewColumn.One,
             {
                 enableScripts: true,
@@ -171,7 +175,7 @@ export class ZgxToolkitProvider implements vscode.WebviewViewProvider {
 
                 // Handle navigation messages for editor panel
                 if (message.type === 'navigate') {
-                    const navMsg = message as NavigateMessage;
+                    const navMsg = message;
                     // If panel is editor or not specified, navigate within editor
                     if (navMsg.panel === 'editor' || !navMsg.panel) {
                         await this.navigateEditor(navMsg.targetView, navMsg.params);
@@ -204,17 +208,24 @@ export class ZgxToolkitProvider implements vscode.WebviewViewProvider {
      * @param webview The webview to generate URIs for
      * @returns Params enriched with resource URIs
      */
-    private injectResourceUris(params?: any, webview?: vscode.Webview): any {
+    private injectResourceUris(params?: Record<string, unknown>, webview?: vscode.Webview): Record<string, unknown> {
         if (!webview) {
             return params || {};
         }
 
         const zgxNanoDiagramPath = vscode.Uri.joinPath(this.context.extensionUri, 'resources', 'ZGX_Nano_Diagram.png');
         const zgxNanoDiagramUri = webview.asWebviewUri(zgxNanoDiagramPath).toString();
+        const zgxFuryDiagramPath = vscode.Uri.joinPath(this.context.extensionUri, 'resources', 'ZGX_Fury_Diagram.png');
+        const zgxFuryDiagramUri = webview.asWebviewUri(zgxFuryDiagramPath).toString();
+
+        const zrtLogoPath = vscode.Uri.joinPath(this.context.extensionUri, 'resources', 'ZRT_logo.png');
+        const zrtLogoUri = webview.asWebviewUri(zrtLogoPath).toString();
 
         return {
             ...params,
-            zgxNanoDiagramUri
+            zgxNanoDiagramUri,
+            zgxFuryDiagramUri,
+            zrtLogoUri
         };
     }
 
@@ -224,17 +235,15 @@ export class ZgxToolkitProvider implements vscode.WebviewViewProvider {
      * @param params Optional parameters to pass to the view
      * @param target The target display ('sidebar' or 'editor')
      */
-    private async navigateTo(viewId: string, params: any, target: 'sidebar' | 'editor'): Promise<void> {
+    private async navigateTo(viewId: string, params: Record<string, unknown> | undefined, target: 'sidebar' | 'editor'): Promise<void> {
         if (target === 'sidebar') {
             await this.navigateSidebar(viewId, params);
+        } else if (this.editorPanel) {
+            await this.navigateEditor(viewId, params);
         } else {
             // If navigating to editor but it doesn't exist, open it first
-            if (!this.editorPanel) {
-                this.logger.debug('Editor panel does not exist, opening it first');
-                await this.openInEditor(viewId, params);
-            } else {
-                await this.navigateEditor(viewId, params);
-            }
+            this.logger.debug('Editor panel does not exist, opening it first');
+            await this.openInEditor(viewId, params);
         }
     }
 
@@ -243,7 +252,7 @@ export class ZgxToolkitProvider implements vscode.WebviewViewProvider {
      * @param viewId The view identifier
      * @param params Optional parameters to pass to the view
      */
-    private async navigateSidebar(viewId: string, params?: any): Promise<void> {
+    private async navigateSidebar(viewId: string, params?: Record<string, unknown>): Promise<void> {
         this.logger.debug('Navigating sidebar to view', { viewId, params });
 
         try {
@@ -257,7 +266,7 @@ export class ZgxToolkitProvider implements vscode.WebviewViewProvider {
             this.sidebarCurrentViewId = viewId;
 
             // Set message callback so view can send async messages back
-            this.sidebarCurrentView.setMessageCallback((message: any) => {
+            this.sidebarCurrentView.setMessageCallback((message: Record<string, unknown>) => {
                 if (this.sidebarWebview) {
                     this.sidebarWebview.postMessage(message);
                     this.logger.trace('Sent message to sidebar webview', { type: message.type });
@@ -265,17 +274,16 @@ export class ZgxToolkitProvider implements vscode.WebviewViewProvider {
             });
 
             // Set navigation callback so view can trigger navigation
-            this.sidebarCurrentView.setNavigationCallback(async (targetViewId: string, params?: any, panel?: 'sidebar' | 'editor') => {
-                const navigationTarget = panel || 'sidebar';
-                await this.navigateTo(targetViewId, params, navigationTarget);
+            this.sidebarCurrentView.setNavigationCallback(async (targetViewId: string, params?: Record<string, unknown>, panel: 'sidebar' | 'editor' = 'sidebar') => {
+                await this.navigateTo(targetViewId, params, panel);
             });            
 
             // Set refresh callback so view can update the webview HTML
-            this.sidebarCurrentView.setRefreshCallback(async (params: any) => {
+            this.sidebarCurrentView.setRefreshCallback(async (params?: Record<string, unknown>) => {
                 const enrichedParams = this.injectResourceUris(params, this.sidebarWebview);
                 await this.sidebarCurrentView?.render(enrichedParams, this.nonce).then(html => {
                     if (this.sidebarWebview) {
-                        this.sidebarWebview.html = this.getFullHtml(html, this.sidebarWebview);
+                        this.setWebviewHtml(this.sidebarWebview, this.getFullHtml(html, this.sidebarWebview), 'sidebar');
                         this.logger.trace('Sidebar webview HTML updated via refresh callback');
                     }
                 });
@@ -289,7 +297,7 @@ export class ZgxToolkitProvider implements vscode.WebviewViewProvider {
 
             // Update webview
             if (this.sidebarWebview) {
-                this.sidebarWebview.html = this.getFullHtml(html, this.sidebarWebview);
+                this.setWebviewHtml(this.sidebarWebview, this.getFullHtml(html, this.sidebarWebview), 'sidebar');
             }
 
             this.logger.debug('Sidebar navigation completed', { viewId });
@@ -308,7 +316,7 @@ export class ZgxToolkitProvider implements vscode.WebviewViewProvider {
      * @param viewId The view identifier
      * @param params Optional parameters to pass to the view
      */
-    private async navigateEditor(viewId: string, params?: any): Promise<void> {
+    private async navigateEditor(viewId: string, params?: Record<string, unknown>): Promise<void> {
         if (!this.editorPanel) {
             this.logger.warn('Cannot navigate editor panel: panel does not exist');
             return;
@@ -327,7 +335,7 @@ export class ZgxToolkitProvider implements vscode.WebviewViewProvider {
             this.editorCurrentViewId = viewId;
 
             // Set message callback so view can send async messages back
-            this.editorCurrentView.setMessageCallback((message: any) => {
+            this.editorCurrentView.setMessageCallback((message: Record<string, unknown>) => {
                 if (this.editorWebview) {
                     this.editorWebview.postMessage(message);
                     this.logger.trace('Sent message to editor webview', { type: message.type });
@@ -335,17 +343,16 @@ export class ZgxToolkitProvider implements vscode.WebviewViewProvider {
             });
 
             // Set navigation callback so view can trigger navigation
-            this.editorCurrentView.setNavigationCallback(async (targetViewId: string, params?: any, panel?: 'sidebar' | 'editor') => {
-                const navigationTarget = panel || 'editor';
-                await this.navigateTo(targetViewId, params, navigationTarget);
+            this.editorCurrentView.setNavigationCallback(async (targetViewId: string, params?: Record<string, unknown>, panel: 'sidebar' | 'editor' = 'editor') => {
+                await this.navigateTo(targetViewId, params, panel);
             });
 
             // Set refresh callback so view can update the webview HTML
-            this.editorCurrentView.setRefreshCallback(async (params: any) => {
+            this.editorCurrentView.setRefreshCallback(async (params?: Record<string, unknown>) => {
                 const enrichedParams = this.injectResourceUris(params, this.editorWebview);
                 await this.editorCurrentView?.render(enrichedParams, this.nonce).then(html => {
                     if (this.editorWebview) {
-                        this.editorWebview.html = this.getFullHtml(html, this.editorWebview);
+                        this.setWebviewHtml(this.editorWebview, this.getFullHtml(html, this.editorWebview), 'editor');
                         this.logger.trace('Editor webview HTML updated via refresh callback');
                     }
                 });
@@ -359,7 +366,7 @@ export class ZgxToolkitProvider implements vscode.WebviewViewProvider {
 
             // Update webview
             if (this.editorWebview) {
-                this.editorWebview.html = this.getFullHtml(html, this.editorWebview);
+                this.setWebviewHtml(this.editorWebview, this.getFullHtml(html, this.editorWebview), 'editor');
             }
             this.editorPanel.reveal();
 
@@ -391,7 +398,7 @@ export class ZgxToolkitProvider implements vscode.WebviewViewProvider {
 
             // Handle navigation messages
             if (message.type === 'navigate') {
-                const navMsg = message as NavigateMessage;
+                const navMsg = message;
                 // Use the message's panel if specified, otherwise use the context target
                 const navigationTarget = navMsg.panel || target;
                 await this.navigateTo(navMsg.targetView, navMsg.params, navigationTarget);
@@ -425,13 +432,10 @@ export class ZgxToolkitProvider implements vscode.WebviewViewProvider {
     private getFullHtml(bodyHtml: string, webview?: vscode.Webview): string {    
         // Generate URI for codicon resources
         let codiconCssUri = '';
-        let codiconFontUri = '';
-        
+
         if (webview) {
             const codiconCssPath = vscode.Uri.joinPath(this.context.extensionUri, 'resources', 'codicon.css');
-            const codiconFontPath = vscode.Uri.joinPath(this.context.extensionUri, 'resources', 'codicon.ttf');
             codiconCssUri = webview.asWebviewUri(codiconCssPath).toString();
-            codiconFontUri = webview.asWebviewUri(codiconFontPath).toString();
         }
         
         return `<!DOCTYPE html>
@@ -440,7 +444,7 @@ export class ZgxToolkitProvider implements vscode.WebviewViewProvider {
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src ${webview?.cspSource} 'nonce-${this.nonce}'; font-src ${webview?.cspSource}; img-src ${webview?.cspSource}; script-src ${webview?.cspSource} 'nonce-${this.nonce}';">
-    <title>ZGX Toolkit</title>
+    <title>Z Toolkit</title>
     ${codiconCssUri ? `<link rel="stylesheet" href="${codiconCssUri}">` : ''}
 </head>
 <body>
@@ -471,7 +475,7 @@ export class ZgxToolkitProvider implements vscode.WebviewViewProvider {
      * @param error The error to display
      * @param target The target display ('sidebar' or 'editor')
      */
-    private async showError(error: any, target: 'sidebar' | 'editor'): Promise<void> {
+    private async showError(error: unknown, target: 'sidebar' | 'editor'): Promise<void> {
         try {
             const errorView = this.viewFactory.create('common/error');
             const html = await errorView.render({
@@ -481,7 +485,7 @@ export class ZgxToolkitProvider implements vscode.WebviewViewProvider {
 
             const webview = target === 'sidebar' ? this.sidebarWebview : this.editorWebview;
             if (webview) {
-                webview.html = this.getFullHtml(html, webview);
+                this.setWebviewHtml(webview, this.getFullHtml(html, webview), target);
             }
         } catch (err) {
             this.logger.error('Failed to show error view', {
@@ -497,11 +501,29 @@ export class ZgxToolkitProvider implements vscode.WebviewViewProvider {
     }
 
     /**
+     * Assign a webview's HTML, guarding against VS Code's optimization that silently skips
+     * reloading a webview when the new HTML is identical to what's already loaded.
+     */
+    private setWebviewHtml(webview: vscode.Webview, html: string, target: 'sidebar' | 'editor'): void {
+        const isIdentical = target === 'sidebar'
+            ? html === this.lastSidebarHtml
+            : html === this.lastEditorHtml;
+
+        webview.html = isIdentical ? `${html}\n<!-- reload:${Date.now()} -->` : html;
+
+        if (target === 'sidebar') {
+            this.lastSidebarHtml = html;
+        } else {
+            this.lastEditorHtml = html;
+        }
+    }
+
+    /**
      * Get a simple error HTML page (fallback when error view fails)
      * @param error The error to display
      * @returns Simple HTML error page
      */
-    private getSimpleErrorHtml(error: any): string {
+    private getSimpleErrorHtml(error: unknown): string {
         const message = error instanceof Error ? error.message : String(error);
         return `<!DOCTYPE html>
 <html lang="en">
@@ -541,11 +563,11 @@ export class ZgxToolkitProvider implements vscode.WebviewViewProvider {
      */
     private escapeHtml(text: string): string {
         return text
-            .replace(/&/g, '&amp;')
-            .replace(/</g, '&lt;')
-            .replace(/>/g, '&gt;')
-            .replace(/"/g, '&quot;')
-            .replace(/'/g, '&#039;');
+            .replaceAll('&', '&amp;')
+            .replaceAll('<', '&lt;')
+            .replaceAll('>', '&gt;')
+            .replaceAll('"', '&quot;')
+            .replaceAll("'", '&#039;');
     }
 
     /**
@@ -553,10 +575,17 @@ export class ZgxToolkitProvider implements vscode.WebviewViewProvider {
      * @returns A random nonce string
      */
     private generateNonce(): string {
-        let text = '';
+        // Use a CSP-safe alphabet with cryptographically secure randomness (rejection sampling avoids modulo bias)
         const possible = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
-        for (let i = 0; i < 32; i++) {
-            text += possible.charAt(Math.floor(Math.random() * possible.length));
+        const length = 32;
+        let text = '';
+        while (text.length < length) {
+            const bytes = randomBytes(length - text.length);
+            for (const byte of bytes) {
+                if (byte < 248) { // 256 - (256 % 62) = 248, keeps distribution uniform
+                    text += possible.charAt(byte % possible.length);
+                }
+            }
         }
         return text;
     }

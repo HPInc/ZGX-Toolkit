@@ -35,16 +35,16 @@ export class UnpairDevicesViewController extends BaseViewController {
 
         this.groupService = deps.connectxGroupService;
 
-        this.template = this.loadTemplate('./unpairDevices.html', __dirname);
-        this.styles = this.loadTemplate('./unpairDevices.css', __dirname);
-        this.clientScript = this.loadTemplate('./unpairDevices.js', __dirname);
+        this.template = this.loadTemplate('groups/unpairDevices/unpairDevices.html');
+        this.styles = this.loadTemplate('groups/unpairDevices/unpairDevices.css');
+        this.clientScript = this.loadTemplate('groups/unpairDevices/unpairDevices.js');
 
         // Enable error overlay and password input overlay support
         this.enableErrorOverlay();
         this.enablePasswordInputOverlay();
     }
 
-    async render(params?: any, nonce?: string): Promise<string> {
+    async render(params?: { groupId?: string }, nonce?: string): Promise<string> {
         this.logger.debug('Rendering unpair devices view', params);
 
         // Store the groupId from params for later use
@@ -63,7 +63,7 @@ export class UnpairDevicesViewController extends BaseViewController {
             eventType: TelemetryEventType.View,
             action: 'navigate',
             properties: {
-                toView: 'groups.unpairDevices',
+                toView: 'groups.unpairDevices'
             },
             measurements: {
                 deviceCount: devices.length
@@ -77,7 +77,7 @@ export class UnpairDevicesViewController extends BaseViewController {
      * Load device information for the current group.
      * Returns an empty array if no groupId is set or if loading fails.
      */
-    private async loadGroupDevices(): Promise<Array<{ name: string }>> {
+    private async loadGroupDevices(): Promise<{ name: string }[]> {
         if (!this.groupId) {
             this.logger.warn('No groupId provided to unpair devices view');
             return [];
@@ -129,7 +129,7 @@ export class UnpairDevicesViewController extends BaseViewController {
                 await this.navigateTo(DeviceManagerViewController.viewId());
                 break;
             default:
-                this.logger.warn('Unknown message type', { type: (message as any).type });
+                this.logger.warn('Unknown message type', { type: message.type });
         }
     }
 
@@ -206,8 +206,8 @@ export class UnpairDevicesViewController extends BaseViewController {
             await this.navigateTo(DeviceManagerViewController.viewId());
 
             const notificationMessage = result.nonFatalError
-                ? `Devices have been unpaired. However, there were issues unconfiguring ConnectX NICs on one or more devices.`
-                : `Devices have been unpaired successfully.`;
+                ? 'Devices have been unpaired. However, there were issues unconfiguring ConnectX NICs on one or more devices.'
+                : 'Devices have been unpaired successfully.';
 
             await vscode.window.showInformationMessage(notificationMessage, { title: 'Dismiss' });
 

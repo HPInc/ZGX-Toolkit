@@ -1,5 +1,5 @@
 /*
- * Copyright ©2025 HP Development Company, L.P.
+ * Copyright ©2025-2026 HP Development Company, L.P.
  * Licensed under the X11 License. See LICENSE file in the project root for details.
  */
 
@@ -10,6 +10,7 @@ import { Device } from '../../../types/devices';
 import { Message } from '../../../types/messages';
 import { DeviceService } from '../../../services/deviceService';
 import { AppSelectionViewController } from '../../apps/selection/appSelectionViewController';
+import { SETUP_VIEW_IDS } from '../setupViewIds';
 import { DeviceManagerViewController } from '../../devices/manager/deviceManagerViewController';
 
 /**
@@ -21,7 +22,7 @@ type SetupType = 'automatic' | 'manual' | 'password';
  * Setup success view - displays success message after completing SSH setup
  */
 export class SetupSuccessViewController extends BaseViewController {
-    private deviceService: DeviceService;
+    private readonly deviceService: DeviceService;
     private currentDevice?: Device;
 
     private readonly setupMessages = {
@@ -43,7 +44,7 @@ export class SetupSuccessViewController extends BaseViewController {
     };
 
     public static viewId(): string {
-        return 'setup/success';
+        return SETUP_VIEW_IDS.success;
     }
 
     constructor(
@@ -55,9 +56,9 @@ export class SetupSuccessViewController extends BaseViewController {
     ) {
         super(deps.logger, deps.telemetry);
         this.deviceService = deps.deviceService;
-        this.template = this.loadTemplate('./setupSuccess.html', __dirname);
-        this.styles = this.loadTemplate('./setupSuccess.css', __dirname);
-        this.clientScript = this.loadTemplate('./setupSuccess.js', __dirname);
+        this.template = this.loadTemplate('setup/success/setupSuccess.html');
+        this.styles = this.loadTemplate('setup/success/setupSuccess.css');
+        this.clientScript = this.loadTemplate('setup/success/setupSuccess.js');
     }
 
     async render(params?: { device: Device; setupType?: SetupType }, nonce?: string): Promise<string> {
@@ -100,7 +101,7 @@ export class SetupSuccessViewController extends BaseViewController {
             properties: {
                 toView: 'setup.success',
                 setupType
-            },
+            }
         });
 
         return this.wrapHtml(html, nonce);

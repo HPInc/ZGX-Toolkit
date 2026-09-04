@@ -1,18 +1,18 @@
 /*
- * Copyright ©2025 HP Development Company, L.P.
+ * Copyright ©2025-2026 HP Development Company, L.P.
  * Licensed under the X11 License. See LICENSE file in the project root for details.
  */
 
 /**
- * Device service for ZGX Toolkit extension.
+ * Device service for Z Toolkit extension.
  * Provides business logic for device CRUD operations, validation, and discovery.
  * 
  * This is a clean, modern implementation built from scratch for the rewrite.
  */
 
-import * as net from 'net';
+import * as net from 'node:net';
 import ReadWriteLock from 'rwlock';
-import { Device, DeviceConfig } from '../types/devices';
+import { Device, DeviceConfig, DeviceFingerprint, DeviceType } from '../types/devices';
 import { deviceStore, DeviceStore } from '../store/deviceStore';
 import { logger } from '../utils/logger';
 import { ITelemetryService, TelemetryEventType } from '../types/telemetry';
@@ -34,7 +34,7 @@ export interface DeviceServiceConfig {
  * Handles creation, updates, deletion, and discovery of ZGX devices.
  */
 export class DeviceService {
-    private config: DeviceServiceConfig;
+    private readonly config: DeviceServiceConfig;
     private backgroundUpdaterInterval?: NodeJS.Timeout;
     private readonly storeLock: ReadWriteLock = new ReadWriteLock();
 
@@ -59,6 +59,12 @@ export class DeviceService {
                     // Validate configuration
                     this.validateDeviceConfig(deviceConfig);
 
+                    // Build fingerprint — spread any incoming fields, then backfill defaults.
+                    const fingerprint: DeviceFingerprint = { ...deviceConfig.fingerprint };
+                    if (!fingerprint.deviceType) {
+                        fingerprint.deviceType = DeviceType.Pending;
+                    }
+
                     // Create device with full data
                     const device: Device = {
                         id: this.generateId(),
@@ -71,9 +77,10 @@ export class DeviceService {
                         keySetup: {
                             keyGenerated: false,
                             keyCopied: false,
-                            connectionTested: false,
+                            connectionTested: false
                         },
-                        createdAt: new Date().toISOString(),
+                        fingerprint,
+                        createdAt: new Date().toISOString()
                     };
 
                     // Save to store
@@ -82,7 +89,7 @@ export class DeviceService {
                     logger.debug('device created successfully', { id: device.id, name: device.name });
                     this.config.telemetry.trackEvent({
                         eventType: TelemetryEventType.Device,
-                        action: 'create',
+                        action: 'create'
                     });
 
                     resolve(device);
@@ -330,7 +337,7 @@ export class DeviceService {
             logger.debug('device is setup, initiating connection', { id, name: device.name });
             
             // Import ConnectionService here to avoid circular dependencies
-            const { connectionService } = await import('./connectionService');
+            const { connectionService } = await import('./connectionService.js');
             
             // Update device preference if specified
             if (newWindow !== undefined) {
@@ -345,7 +352,7 @@ export class DeviceService {
                 eventType: TelemetryEventType.Device,
                 action: 'connect',
                 properties: {
-                    newWindow: String(newWindow),
+                    newWindow: String(newWindow)
                 }
             });
             
@@ -580,5 +587,5 @@ export class DeviceNeedsSetupError extends Error {
 export const deviceService = new DeviceService({
     store: deviceStore,
     telemetry: telemetryService,
-    discovery: deviceDiscoveryService,
+    discovery: deviceDiscoveryService
 });

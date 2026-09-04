@@ -10,7 +10,7 @@ import {
     executeSSHCommand,
     executeCommandOnClient,
     testSSHConnection,
-    SSHConnectionOptions,
+    SSHConnectionOptions
 } from '../../utils/sshConnection';
 import { getSSHConfig } from '../../utils/sshConfig';
 
@@ -19,10 +19,10 @@ jest.mock('../../utils/sshConfig');
 jest.mock('../../utils/logger');
 jest.mock('node:fs', () => ({
     existsSync: jest.fn(),
-    readFileSync: jest.fn(),
+    readFileSync: jest.fn()
 }));
 jest.mock('node:os', () => ({
-    homedir: jest.fn(() => '/home/testuser'),
+    homedir: jest.fn(() => '/home/testuser')
 }));
 
 describe('sshConnection utilities', () => {
@@ -44,7 +44,7 @@ describe('sshConnection utilities', () => {
                 connectionTested: true
             },
             createdAt: new Date().toISOString(),
-            updatedAt: new Date().toISOString(),
+            updatedAt: new Date().toISOString()
         };
 
         mockSSHClient = new SSHClient() as jest.Mocked<SSHClient>;
@@ -54,7 +54,7 @@ describe('sshConnection utilities', () => {
             host: mockDevice.host,
             port: mockDevice.port,
             username: mockDevice.username,
-            privateKey: Buffer.from('mock-private-key'),
+            privateKey: Buffer.from('mock-private-key')
         });
     });
 
@@ -158,7 +158,7 @@ describe('sshConnection utilities', () => {
                     return mockStream;
                 }),
                 stderr: {
-                    on: jest.fn((event: string, cb: any) => {
+                    on: jest.fn((_event: string, _cb: any) => {
                         return mockStream.stderr;
                     })
                 },
@@ -222,7 +222,7 @@ describe('sshConnection utilities', () => {
                     return mockStream;
                 }),
                 stderr: {
-                    on: jest.fn((event: string, cb: any) => {
+                    on: jest.fn((_event: string, _cb: any) => {
                         return mockStream.stderr;
                     })
                 },
@@ -253,7 +253,7 @@ describe('sshConnection utilities', () => {
                     return mockStream;
                 }),
                 stderr: {
-                    on: jest.fn((event: string, cb: any) => {
+                    on: jest.fn((_event: string, _cb: any) => {
                         return mockStream.stderr;
                     })
                 },
@@ -290,7 +290,7 @@ describe('sshConnection utilities', () => {
                     return mockStream;
                 }),
                 stderr: {
-                    on: jest.fn((event: string, cb: any) => {
+                    on: jest.fn((_event: string, _cb: any) => {
                         return mockStream.stderr;
                     })
                 },
@@ -552,7 +552,7 @@ describe('sshConnection utilities', () => {
                     return mockStream;
                 }),
                 stderr: {
-                    on: jest.fn((event: string, cb: any) => {
+                    on: jest.fn((_event: string, _cb: any) => {
                         return mockStream.stderr;
                     })
                 },
@@ -638,7 +638,7 @@ describe('sshConnection utilities', () => {
                     return mockStream;
                 }),
                 stderr: {
-                    on: jest.fn((event: string, cb: any) => {
+                    on: jest.fn((_event: string, _cb: any) => {
                         return mockStream.stderr;
                     })
                 },
@@ -679,7 +679,7 @@ describe('sshConnection utilities', () => {
                     return mockStream;
                 }),
                 stderr: {
-                    on: jest.fn((event: string, cb: any) => {
+                    on: jest.fn((_event: string, _cb: any) => {
                         return mockStream.stderr;
                     })
                 },
@@ -727,7 +727,7 @@ describe('sshConnection utilities', () => {
                     return mockStream;
                 }),
                 stderr: {
-                    on: jest.fn((event: string, cb: any) => {
+                    on: jest.fn((_event: string, _cb: any) => {
                         return mockStream.stderr;
                     })
                 },
@@ -904,7 +904,7 @@ describe('sshConnection utilities', () => {
         it('should not retry on non-retryable errors', async () => {
             let attemptCount = 0;
 
-            (mockSSHClient.on as any) = jest.fn((event: string, callback: any) => {
+            (mockSSHClient.on as any) = jest.fn((_event: string, _callback: any) => {
                 return mockSSHClient;
             });
 
@@ -1022,7 +1022,7 @@ describe('sshConnection utilities', () => {
         it('should cleanup SSH connection on error', async () => {
             // When createSSHConnection fails, the client is not fully initialized
             // so we test that the connection attempt handles errors gracefully
-            (mockSSHClient.on as any) = jest.fn((event: string, callback: any) => {
+            (mockSSHClient.on as any) = jest.fn((_event: string, _callback: any) => {
                 return mockSSHClient;
             });
 

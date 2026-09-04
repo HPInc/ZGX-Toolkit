@@ -1,0 +1,19 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "types": [
+      "node",
+      "jest"
+    ]
+  },
+  "include": [
+    "src/__tests__/**/*.ts",
+    "src/__mocks__/**/*.ts"
+  ],
+  "exclude": [
+    "node_modules",
+    ".vscode-test",
+    "src/__tests__/integrationSuite",
+    "src/__tests__/runIntegrationTest.ts"
+  ]
+}

@@ -69,7 +69,7 @@ describe('UnpairDevicesView', () => {
             info: jest.fn(),
             warn: jest.fn(),
             error: jest.fn(),
-            trace: jest.fn(),
+            trace: jest.fn()
         } as any;
 
         mockTelemetry = {
@@ -77,7 +77,7 @@ describe('UnpairDevicesView', () => {
             trackError: jest.fn(),
             isEnabled: jest.fn().mockReturnValue(false),
             setEnabled: jest.fn(),
-            dispose: jest.fn().mockResolvedValue(undefined),
+            dispose: jest.fn().mockResolvedValue(undefined)
         } as any;
 
         mockGroupService = {
@@ -90,7 +90,7 @@ describe('UnpairDevicesView', () => {
             deleteGroup: jest.fn(),
             removeGroup: jest.fn(),
             removeGroupAndUnconfigureNICs: jest.fn(),
-            subscribe: jest.fn().mockReturnValue(() => {}),
+            subscribe: jest.fn().mockReturnValue(() => {})
         } as any;
 
         mockNavigationCallback = jest.fn();
@@ -146,7 +146,7 @@ describe('UnpairDevicesView', () => {
                         eventType: TelemetryEventType.View,
                         action: 'navigate',
                         properties: {
-                            toView: 'groups.unpairDevices',
+                            toView: 'groups.unpairDevices'
                         },
                         measurements: {
                             deviceCount: 2

@@ -21,13 +21,8 @@ jest.mock('../../utils/logger', () => ({
         debug: jest.fn(),
         info: jest.fn(),
         warn: jest.fn(),
-        error: jest.fn(),
+        error: jest.fn()
     }
-}));
-
-// Mock uuid
-jest.mock('uuid', () => ({
-    v4: jest.fn(() => 'mock-uuid-' + Date.now())
 }));
 
 describe('ConnectXGroupService', () => {
@@ -165,12 +160,13 @@ describe('ConnectXGroupService', () => {
 
     describe('createGroup', () => {
         it('should create a group with valid configuration', async () => {
-             const config: ConnectXGroupConfig = {
+            const config: ConnectXGroupConfig = {
                 deviceIds: ['device-1', 'device-2']
             };
 
             const result = await service.createGroup(config);
 
+            expect(result.error).toBeUndefined();
             expect(result.success).toBe(true);
             expect(result.message).toBe(`Group "${result.group!.id}" created with ${result.group!.deviceIds.length} devices`);
             expect(result.group).toBeDefined();
@@ -200,7 +196,7 @@ describe('ConnectXGroupService', () => {
             expect(result.group?.deviceIds.length).toBe(3);
         });
 
-         it('should create a group with minimum 2 devices', async () => {
+        it('should create a group with minimum 2 devices', async () => {
             const result = await service.createGroup({
                 deviceIds: ['device-1', 'device-2']
             });
@@ -474,7 +470,7 @@ describe('ConnectXGroupService', () => {
             expect(group1.success).toBe(true);
             expect(group2.success).toBe(true); 
             expect(result.success).toBe(false); // device-2 is already in group1, cannot add to group2
-            expect(result.error).toContain(`Device device-2 is already in another group`);
+            expect(result.error).toContain('Device device-2 is already in another group');
             expect(result.message).toBe('Device is in another group');
         });
 
@@ -1800,7 +1796,7 @@ describe('ConnectXGroupService', () => {
         it('should escape backslashes in netplan config', async () => {
             const originalBuildNetplanConfig = (service as any).buildNetplanConfig;
             (service as any).buildNetplanConfig = jest.fn().mockReturnValue(
-                "network:\\ntest"
+                'network:\\ntest'
             );
 
             const lshwOutput = JSON.stringify([

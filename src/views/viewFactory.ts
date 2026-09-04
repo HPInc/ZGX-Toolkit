@@ -1,5 +1,5 @@
 /*
- * Copyright ©2025 HP Development Company, L.P.
+ * Copyright ©2025-2026 HP Development Company, L.P.
  * Licensed under the X11 License. See LICENSE file in the project root for details.
  */
 
@@ -17,6 +17,7 @@ import { AutomaticSetupViewController } from './setup/automatic/automaticSetupVi
 import { ManualSetupViewController } from './setup/manual/manualSetupViewController';
 import { DnsRegistrationViewController } from './setup/dnsRegistration/dnsRegistrationViewController';
 import { SetupSuccessViewController } from './setup/success/setupSuccessViewController';
+import { DetectDeviceTypeViewController } from './setup/detectDeviceType/detectDeviceTypeViewController';
 import { AppSelectionViewController } from './apps/selection/appSelectionViewController';
 import { AppProgressViewController } from './apps/progress/appProgressViewController';
 import { AppCompleteViewController } from './apps/complete/appCompleteViewController';
@@ -29,8 +30,11 @@ import { PairDetailsViewController } from './groups/pairDetails/pairDetailsViewC
 import { UnpairDevicesViewController } from './groups/unpairDevices/unpairDevicesViewController';
 
 /**
- * Type for view constructor functions
+ * Type for view constructor functions.
+ * Each registered view class has its own distinct `deps` shape, so this factory
+ * type can't be expressed without `any` — the whole point is heterogeneity.
  */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 type ViewConstructor = new (...args: any[]) => IView;
 
 /**
@@ -38,12 +42,12 @@ type ViewConstructor = new (...args: any[]) => IView;
  * Views are registered with a unique identifier and can be instantiated on demand.
  */
 export class ViewFactory {
-    private registry = new Map<string, ViewConstructor>();
+    private readonly registry = new Map<string, ViewConstructor>();
 
     constructor(
-        private logger: Logger,
-        private telemetry: ITelemetryService,
-        private dependencies: Record<string, any> = {}
+        private readonly logger: Logger,
+        private readonly telemetry: ITelemetryService,
+        private readonly dependencies: Record<string, unknown> = {}
     ) {
         this.registerViews();
     }
@@ -67,6 +71,7 @@ export class ViewFactory {
         this.register(ManualSetupViewController.viewId(), ManualSetupViewController);
         this.register(DnsRegistrationViewController.viewId(), DnsRegistrationViewController);
         this.register(SetupSuccessViewController.viewId(), SetupSuccessViewController);
+        this.register(DetectDeviceTypeViewController.viewId(), DetectDeviceTypeViewController);
 
         // App views
         this.register(AppSelectionViewController.viewId(), AppSelectionViewController);
@@ -112,7 +117,7 @@ export class ViewFactory {
      * @returns The created view instance
      * @throws Error if view is not registered
      */
-    create(viewId: string, additionalDeps: Record<string, any> = {}): IView {
+    create(viewId: string, additionalDeps: Record<string, unknown> = {}): IView {
         const ViewClass = this.registry.get(viewId);
 
         if (!ViewClass) {

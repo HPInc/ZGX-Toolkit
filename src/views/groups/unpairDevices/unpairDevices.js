@@ -83,7 +83,7 @@
                         cancelBtn.disabled = false;
                     }
                     if (window.showErrorOverlay) {
-                        var onClose = null;
+                        var onClose;
                         if (message.onClose) {
                             onClose = message.onClose;
                         } else {

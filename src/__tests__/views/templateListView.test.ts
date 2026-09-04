@@ -1,5 +1,5 @@
 /*
- * Copyright ©2025 HP Development Company, L.P.
+ * Copyright ©2025-2026 HP Development Company, L.P.
  * Licensed under the X11 License. See LICENSE file in the project root for details.
  */
 
@@ -9,6 +9,7 @@ import { FineTuningInstructionsViewController } from '../../views/instructions/f
 import { RagInstructionsViewController } from '../../views/instructions/rag/ragInstructionsViewController';
 import { Logger } from '../../utils/logger';
 import { ITelemetryService, TelemetryEventType } from '../../types/telemetry';
+import { Message } from '../../types/messages';
 import { jest } from '@jest/globals';
 
 describe('TemplateListViewController', () => {
@@ -49,10 +50,10 @@ describe('TemplateListViewController', () => {
             eventType: TelemetryEventType.View,
             action: 'navigate',
             properties: {
-                toView: 'templates.list',
+                toView: 'templates.list'
             },
             measurements: {
-                templateCount: expect.any(Number),
+                templateCount: expect.any(Number)
             }
         });
         
@@ -91,7 +92,7 @@ describe('TemplateListViewController', () => {
             eventType: TelemetryEventType.View,
             action: 'navigate',
             properties: {
-                toView: 'templates.inference',
+                toView: 'templates.inference'
             }
         });
         expect(navigateSpy).toHaveBeenCalledWith(
@@ -111,7 +112,7 @@ describe('TemplateListViewController', () => {
             eventType: TelemetryEventType.View,
             action: 'navigate',
             properties: {
-                toView: 'templates.fine-tuning',
+                toView: 'templates.fine-tuning'
             }
         });
         expect(navigateSpy).toHaveBeenCalledWith(
@@ -133,7 +134,7 @@ describe('TemplateListViewController', () => {
         const controller = createController();
         const navigateSpy = jest.spyOn(controller as any, 'navigateTo').mockResolvedValue(undefined);
 
-        await controller.handleMessage({ type: 'other-message', id: 'inference' });
+        await controller.handleMessage({ type: 'other-message', id: 'inference' } as unknown as Message);
         expect(navigateSpy).not.toHaveBeenCalled();
     });
 
@@ -164,7 +165,7 @@ describe('TemplateListViewController', () => {
     });
     test('no telemetry feature event fired for non-selection messages', async () => {
         const controller = createController();
-        await controller.handleMessage({ type: 'unrelated', foo: 'bar' });
+        await controller.handleMessage({ type: 'unrelated', foo: 'bar' } as unknown as Message);
         expect(mockTelemetry.trackEvent).not.toHaveBeenCalled();
     });
 
@@ -178,7 +179,7 @@ describe('TemplateListViewController', () => {
             eventType: TelemetryEventType.View,
             action: 'navigate',
             properties: {
-                toView: 'templates.rag',
+                toView: 'templates.rag'
             }
         });
         expect(navigateSpy).toHaveBeenCalledWith(

@@ -1,5 +1,5 @@
 <!--
-  Copyright ©2025 HP Development Company, L.P.
+  Copyright ©2025-2026 HP Development Company, L.P.
   Licensed under the X11 License. See LICENSE file in the project root for details.
 -->
 
@@ -12,36 +12,77 @@
     <div class="pair-devices-card">
         <div class="card-content">
             <h2>Pair 2 Devices to Enable NVIDIA ConnectX Networking</h2>
-            <p class="card-description">Select any two available devices below to create the pairing. You'll need to connect them with a cable using the dedicated NVIDIA ConnectX QSFP port.</p>
+            <p class="card-description">Select any two compatible devices of the <strong>same type</strong> below to create the pairing. You'll need to connect them with a cable using the dedicated NVIDIA ConnectX QSFP port. Pairing is currently only supported on HP ZGX Fury and Nano devices.</p>
 
             {{#if noDevices}}
             <div class="no-devices-message">
-                <p>No devices available for pairing.</p>
-                <p>No devices have been added yet.</p>
+                <i class="codicon codicon-info no-devices-icon" aria-hidden="true"></i>
+                <p class="no-devices-title">No devices available for pairing.</p>
+                <p>Add a compatible device to enable pairing and continue.</p>
             </div>
             {{else}}
             <div class="device-selection-section">
-                <div class="device-list" id="deviceList">
-                    {{#each devices}}
-                    <div class="device-item{{#if isPaired}} paired{{/if}}">
-                        <input type="checkbox" id="device-{{id}}" class="device-checkbox" value="{{id}}" data-device-name="{{name}}"{{#if isPaired}} disabled{{/if}}>
-                        <label for="device-{{id}}" class="device-label">
-                            <span class="device-name">{{name}}</span>
-                        </label>
-                        {{#if isPaired}}
-                        <span class="paired-badge" title="Unavailable for pairing. Device is already paired">
-                            <span class="paired-badge-text">Paired</span>
-                            <i class="codicon codicon-info"></i>
-                        </span>
-                        {{/if}}
+                <div class="device-filter-group form-group">
+                    <div class="device-type-filter" id="deviceTypeFilter">
+                        <button type="button" id="deviceTypeFilterToggle" class="device-type-filter-toggle" aria-haspopup="true" aria-expanded="false" aria-controls="deviceTypeFilterMenu">
+                            <span id="deviceTypeFilterLabel">Filter by</span>
+                            <span class="codicon codicon-chevron-down" aria-hidden="true"></span>
+                        </button>
+                        <div id="deviceTypeFilterMenu" class="device-type-filter-menu hidden" aria-label="Filter devices by type">
+                            {{#each filterDeviceTypeOptions}}
+                            <label class="device-type-filter-option" data-filter-label="{{label}}">
+                                <input type="checkbox" value="{{value}}" class="device-type-filter-checkbox" />
+                                <span>{{label}}</span>
+                            </label>
+                            {{/each}}
+                        </div>
                     </div>
-                    {{/each}}
+                </div>
+                <div class="device-list" id="deviceList">
+                    <div class="device-list-header">
+                        <div class="device-list-header-checkbox"></div>
+                        <div class="device-list-header-name">Device Name</div>
+                        <div class="device-list-header-type">Device Type</div>
+                        <div class="device-list-header-status"></div>
+                    </div>
+                    <div class="device-list-body" id="deviceListBody">
+                        {{#each devices}}
+                        <div class="device-item{{#if isPaired}} paired{{/if}}{{#unless isSupportedType}} disabled unsupported{{/unless}}">
+                            <input type="checkbox" id="device-{{id}}" class="device-checkbox" value="{{id}}" data-device-name="{{name}}" data-device-type="{{fingerprint.deviceType}}" data-is-paired="{{#if isPaired}}true{{else}}false{{/if}}" data-is-supported="{{#if isSupportedType}}true{{else}}false{{/if}}"{{#if isPaired}} disabled{{/if}}{{#unless isSupportedType}} disabled{{/unless}}>
+                            <label for="device-{{id}}" class="device-label">
+                                <span class="device-name">{{name}}</span>
+                            </label>
+                            <div class="device-type-column">
+                                <span class="device-type-badge {{deviceTypeBadgeClass}}"{{#unless isSupportedType}} title="Pairing not available. This device type does not support pairing."{{/unless}}>
+                                    <span class="device-type-badge-text">{{deviceTypeLabel}}</span>
+                                    {{#unless isSupportedType}}
+                                    <i class="codicon codicon-info device-type-badge-icon" aria-hidden="true"></i>
+                                    {{/unless}}
+                                </span>
+                            </div>
+                            <div class="device-status-column">
+                                {{#if isPaired}}
+                                <span class="paired-badge" title="Unavailable for pairing. Device is already paired">
+                                    <span class="paired-badge-text">Paired</span>
+                                    <i class="codicon codicon-info"></i>
+                                </span>
+                                {{/if}}
+                            </div>
+                        </div>
+                        {{/each}}
+                        <div id="filterEmptyMessage" class="filter-empty-message hidden" aria-live="polite">
+                            No devices match the selected filter.
+                        </div>
+                    </div>
+                    <output class="device-list-footer" aria-live="polite">
+                        <span id="deviceCount">{{deviceCount}} devices</span>
+                    </output>
                 </div>
             </div>
             {{/if}}
 
             <div class="diagram-section">
-                <img src="{{zgxNanoDiagramUri}}" alt="ZGX Nano ConnectX Port Diagram" class="zgx-diagram" />
+                <img id="pairDiagram" src="{{diagramUri}}" alt="ZGX ConnectX Port Diagram" class="zgx-diagram" data-nano-uri="{{zgxNanoDiagramUri}}" data-fury-uri="{{zgxFuryDiagramUri}}" data-default-type="{{initialDiagramType}}" />
             </div>
 
             <div class="pair-devices-actions">

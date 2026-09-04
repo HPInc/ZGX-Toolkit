@@ -1,5 +1,5 @@
 /*
- * Copyright ©2025 HP Development Company, L.P.
+ * Copyright ©2025-2026 HP Development Company, L.P.
  * Licensed under the X11 License. See LICENSE file in the project root for details.
  */
 
@@ -7,11 +7,10 @@ import { BaseViewController } from '../../baseViewController';
 import { Logger } from '../../../utils/logger';
 import { ITelemetryService, TelemetryEventType } from '../../../types/telemetry';
 import { Device } from '../../../types/devices';
-import { Message, ConnectDeviceMessage } from '../../../types/messages';
+import { Message } from '../../../types/messages';
 import { getAppById, AppDefinition, getAllApps } from '../../../constants/apps';
-import { AppInstallationService, ConnectionService, DeviceService } from '../../../services';
+import { ConnectionService, DeviceService } from '../../../services';
 import { InferenceInstructionsViewController } from '../../instructions/inference/inferenceInstructionsViewController';
-import { AppSelectionViewController } from '../selection/appSelectionViewController';
 import { DeviceManagerViewController } from '../../devices/manager/deviceManagerViewController';
 import { AppProgressViewController } from '../progress/appProgressViewController';
 
@@ -36,9 +35,9 @@ export class AppCompleteViewController extends BaseViewController {
         super(deps.logger, deps.telemetry);
         this.connectionService = deps.connectionService;
         this.deviceService = deps.deviceService;
-        this.template = this.loadTemplate('./appComplete.html', __dirname);
-        this.styles = this.loadTemplate('./appComplete.css', __dirname);
-        this.clientScript = this.loadTemplate('./appComplete.js', __dirname);
+        this.template = this.loadTemplate('apps/complete/appComplete.html');
+        this.styles = this.loadTemplate('apps/complete/appComplete.css');
+        this.clientScript = this.loadTemplate('apps/complete/appComplete.js');
 
         this.ollamaApp = getAppById('ollama')!;
     }
@@ -47,8 +46,10 @@ export class AppCompleteViewController extends BaseViewController {
         device: Device;
         installedApps?: string[];
         failedApps?: string[];
+        failureReasons?: Record<string, string>;
         errorReason?: string;
         operation?: 'install' | 'uninstall';
+        zrtLogoUri?: string;
     }, nonce?: string): Promise<string> {
         this.logger.debug('Rendering app complete view', {
             device: params?.device?.name,
@@ -68,6 +69,7 @@ export class AppCompleteViewController extends BaseViewController {
         
         const installedApps = params.installedApps || [];
         const failedApps = params.failedApps || [];
+        const failureReasons = params.failureReasons || {};
         const errorReason = params.errorReason;
         const operation = params.operation || 'install';
 
@@ -86,6 +88,7 @@ export class AppCompleteViewController extends BaseViewController {
             .map(app => ({
                 id: app.id,
                 icon: app.icon,
+                iconUri: app.id === 'zrt' ? params.zrtLogoUri : undefined,
                 name: app.name
             }));
 
@@ -94,7 +97,9 @@ export class AppCompleteViewController extends BaseViewController {
             .map(app => ({
                 id: app.id,
                 icon: app.icon,
-                name: app.name
+                iconUri: app.id === 'zrt' ? params.zrtLogoUri : undefined,
+                name: app.name,
+                reason: failureReasons[app.id]
             }));
 
         const hasAnyInstalls = successfulApps.length > 0;
@@ -128,7 +133,7 @@ export class AppCompleteViewController extends BaseViewController {
             eventType: TelemetryEventType.View,
             action: 'navigate',
             properties: {
-                toView: 'apps.complete',
+                toView: 'apps.complete'
             },
             measurements: {
                 successCount: successfulApps.length,
@@ -148,7 +153,7 @@ export class AppCompleteViewController extends BaseViewController {
             case 'connect-device': {
                 // Connect to device - delegate to connection service via navigation
                 this.logger.debug('Connect device request from apps/complete view', { deviceId: message.id });
-                let device = await this.deviceService.getDevice(message.id);
+                const device = await this.deviceService.getDevice(message.id);
                 if (!device) {
                     this.logger.error('device not found for connection', { deviceId: message.id });
                     return;

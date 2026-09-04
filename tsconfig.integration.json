@@ -1,0 +1,18 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "types": [
+      "node",
+      "mocha"
+    ]
+  },
+  "include": [
+    "src/__tests__/runIntegrationTest.ts",
+    "src/__tests__/integrationSuite/**/*.ts"
+  ],
+  "exclude": [
+    "node_modules",
+    ".vscode-test",
+    "src/__mocks__"
+  ]
+}

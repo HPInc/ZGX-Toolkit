@@ -1,0 +1,85 @@
+<!--
+  Copyright ©2026 HP Development Company, L.P.
+  Licensed under the X11 License. See LICENSE file in the project root for details.
+-->
+
+<div class="container">
+    <div class="detection-header">
+        <div class="detection-header-title">
+            <span class="codicon codicon-search"></span>
+            <h1>Device Type Detection</h1>
+        </div>
+        <p>Performing device type detection scan for <strong>{{deviceName}}</strong>.</p>
+    </div>
+
+    <div class="detection-card">
+
+        <!-- Loading State (shown by default while probe runs) -->
+        <div id="loadingState" class="detection-state">
+            <div class="detection-state-icon">
+                <span class="codicon codicon-search detection-icon-large detection-icon-scanning"></span>
+            </div>
+            <h2 class="detection-state-title">Detecting device type...</h2>
+            <p class="detection-state-subtitle">Scanning in progress. This helps the Z Toolkit tailor setup and pairing. This only takes a few seconds.</p>
+            <div class="detection-state-footer">
+                <button class="btn-text" id="cancelBtnLoading">Cancel</button>
+            </div>
+        </div>
+
+        <!-- Result State (shown after probe completes) -->
+        <div id="resultState" class="detection-state hidden">
+            <div class="detection-state-icon">
+                <span class="codicon codicon-pass detection-icon-large detection-icon-success"></span>
+            </div>
+            <h2 class="detection-state-title">Detection complete</h2>
+            <p id="subtitleKnown" class="detection-state-subtitle">We've identified the device type based on available system information. Confirm or update below.</p>
+            <p id="subtitleUnknown" class="detection-state-subtitle hidden">We couldn't match this device to a known type. Please select a device type from the list to continue. <strong>Tip:</strong> Z Toolkit works with non-HP and custom devices.</p>
+            <p id="detectedLine" class="detection-state-subtitle hidden">We detected: <strong id="detectedLabel"></strong></p>
+
+            <div class="detection-result-section">
+                <label class="detection-result-label" for="deviceTypeSelect">Device Type</label>
+
+                <!-- View Mode: readonly display of detected type -->
+                <div id="viewMode">
+                    <div class="device-type-display" id="deviceTypeDisplay"></div>
+                </div>
+
+                <!-- Edit Mode: dropdown for manual override -->
+                <div id="editMode" class="hidden">
+                    <div class="form-group">
+                        <select id="deviceTypeSelect">
+                            <option value="">&#8212; Select one &#8212;</option>
+                            {{#each deviceTypeOptions}}
+                            <option value="{{value}}">{{label}}</option>
+                            {{/each}}
+                        </select>
+                    </div>
+                </div>
+
+                <div id="hintKnown" class="device-type-hint">
+                    <span class="codicon codicon-info"></span>
+                    <span>This is the system's best guess. If it looks wrong, modify device type.</span>
+                </div>
+                <div id="hintUnknown" class="device-type-hint hidden">
+                    <span class="codicon codicon-info"></span>
+                    <span>Don't see your device? Select <strong>Other</strong>.</span>
+                </div>
+            </div>
+
+            <div class="detection-result-footer">
+                <button class="btn-text" id="cancelBtnResult">Cancel</button>
+                <div class="detection-result-footer-actions">
+                    <button class="btn btn-outlined" id="modifyBtn">
+                        <span class="codicon codicon-edit"></span>
+                        Modify
+                    </button>
+                    <button class="btn" id="confirmBtn">
+                        <span class="codicon codicon-pass"></span>
+                        Confirm
+                    </button>
+                </div>
+            </div>
+        </div>
+
+    </div>
+</div>

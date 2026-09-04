@@ -1,6 +1,6 @@
-# ZGX Toolkit Logging
+# Z Toolkit Logging
 
-The ZGX Toolkit extension maintains detailed logs to help troubleshoot connection issues, device discovery problems, and application installation errors.
+The Z Toolkit extension maintains detailed logs to help troubleshoot connection issues, device discovery problems, and application installation errors.
 
 ## Accessing Logs
 
@@ -9,13 +9,13 @@ There are two ways to access the extension logs:
 ### Method 1: Open Log File Directly
 
 1. Open the Command Palette (`Ctrl+Shift+P` on Windows/Linux, `Cmd+Shift+P` on macOS)
-2. Type and select: **ZGX Toolkit: Open Log File**
+2. Type and select: **Z Toolkit: Open Log File**
 3. The log file will open in a new editor tab
 
 ### Method 2: View Log File Location
 
 1. Open the Command Palette (`Ctrl+Shift+P` on Windows/Linux, `Cmd+Shift+P` on macOS)
-2. Type and select: **ZGX Toolkit: Show Log File Location**
+2. Type and select: **Z Toolkit: Show Log File Location**
 3. A message will appear showing the log file path with options to:
    - **Open Log**: Opens the log file directly
    - **Copy Path**: Copies the file path to your clipboard
@@ -24,9 +24,9 @@ There are two ways to access the extension logs:
 
 The log file is stored in a dedicated directory in your user profile:
 
-- **Windows**: `%USERPROFILE%\.zgx-toolkit\logs\zgx-toolkit.log`
-- **macOS**: `~/.zgx-toolkit/logs/zgx-toolkit.log`
-- **Linux**: `~/.zgx-toolkit/logs/zgx-toolkit.log`
+- **Windows**: `%USERPROFILE%\.ztk\logs\ztk.log`
+- **macOS**: `~/.ztk/logs/ztk.log`
+- **Linux**: `~/.ztk/logs/ztk.log`
 
 This location is **persistent across VS Code sessions**, meaning all logs are written to the same file regardless of how many times you restart VS Code.
 
@@ -36,8 +36,8 @@ This location is **persistent across VS Code sessions**, meaning all logs are wr
 
 The log file is automatically rotated when it exceeds 30MB in size:
 
-- The current log is renamed to `zgx-toolkit.log.old`
-- A new `zgx-toolkit.log` file is created
+- The current log is renamed to `ztk.log.old`
+- A new `ztk.log` file is created
 - Only the current and one backup file are kept
 
 ### Log Format
@@ -50,7 +50,7 @@ Each log entry includes:
 Example:
 
 ```text
-[2025-10-01T14:30:15.123Z] ZGX Toolkit extension initialized
+[2025-10-01T14:30:15.123Z] Z Toolkit extension initialized
 [2025-10-01T14:30:20.456Z] Starting device discovery...
 [2025-10-01T14:30:22.789Z] Discovery completed, found 2 device(s)
 ```

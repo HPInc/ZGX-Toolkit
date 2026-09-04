@@ -1,5 +1,5 @@
 /*
- * Copyright ©2025 HP Development Company, L.P.
+ * Copyright ©2025-2026 HP Development Company, L.P.
  * Licensed under the X11 License. See LICENSE file in the project root for details.
  */
 
@@ -89,8 +89,7 @@
             var lines = formattedMessage.split('\n');
             var result = [];
             var inList = false;
-            for (var i = 0; i < lines.length; i++) {
-                var line = lines[i];
+            for (var line of lines) {
                 if (/^- (.+)/.test(line)) {
                     if (!inList) { result.push('<ul>'); inList = true; }
                     result.push('<li>' + line.replace(/^- /, '') + '</li>');

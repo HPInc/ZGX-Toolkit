@@ -1,5 +1,5 @@
 /*
- * Copyright ©2025 HP Development Company, L.P.
+ * Copyright ©2025-2026 HP Development Company, L.P.
  * Licensed under the X11 License. See LICENSE file in the project root for details.
  */
 
@@ -18,204 +18,204 @@ jest.mock('vscode');
 jest.mock('../../utils/logger');
 
 describe('ConfigService', () => {
-  let configService: ConfigService;
-  let mockWorkspaceConfig: jest.Mocked<vscode.WorkspaceConfiguration>;
+    let configService: ConfigService;
+    let mockWorkspaceConfig: jest.Mocked<vscode.WorkspaceConfiguration>;
 
-  beforeEach(() => {
+    beforeEach(() => {
     // Create mock workspace configuration
-    mockWorkspaceConfig = {
-      get: jest.fn(),
-      update: jest.fn(),
-      has: jest.fn(),
-      inspect: jest.fn(),
-    } as any;
+        mockWorkspaceConfig = {
+            get: jest.fn(),
+            update: jest.fn(),
+            has: jest.fn(),
+            inspect: jest.fn()
+        } as any;
 
-    // Mock getConfiguration
-    (vscode.workspace.getConfiguration as jest.Mock).mockReturnValue(mockWorkspaceConfig);
+        // Mock getConfiguration
+        (vscode.workspace.getConfiguration as jest.Mock).mockReturnValue(mockWorkspaceConfig);
 
-    configService = new ConfigService();
-  });
-
-  afterEach(() => {
-    jest.clearAllMocks();
-  });
-
-  describe('Get Log Level', () => {
-    it('should get log level from configuration', () => {
-      mockWorkspaceConfig.get.mockReturnValue('Debug');
-      
-      const level = configService.getLogLevel();
-      
-      expect(level).toBe(LogLevel.DEBUG);
-      expect(mockWorkspaceConfig.get).toHaveBeenCalledWith('logLevel', 'Info');
+        configService = new ConfigService();
     });
 
-    it('should return INFO for invalid log level', () => {
-      mockWorkspaceConfig.get.mockReturnValue('InvalidLevel');
-      
-      const level = configService.getLogLevel();
-      
-      expect(level).toBe(LogLevel.INFO);
+    afterEach(() => {
+        jest.clearAllMocks();
     });
 
-    it('should use default value when not configured', () => {
-      mockWorkspaceConfig.get.mockReturnValue('Info');
+    describe('Get Log Level', () => {
+        it('should get log level from configuration', () => {
+            mockWorkspaceConfig.get.mockReturnValue('Debug');
       
-      const level = configService.getLogLevel();
+            const level = configService.getLogLevel();
       
-      expect(level).toBe(LogLevel.INFO);
+            expect(level).toBe(LogLevel.DEBUG);
+            expect(mockWorkspaceConfig.get).toHaveBeenCalledWith('logLevel', 'Info');
+        });
+
+        it('should return INFO for invalid log level', () => {
+            mockWorkspaceConfig.get.mockReturnValue('InvalidLevel');
+      
+            const level = configService.getLogLevel();
+      
+            expect(level).toBe(LogLevel.INFO);
+        });
+
+        it('should use default value when not configured', () => {
+            mockWorkspaceConfig.get.mockReturnValue('Info');
+      
+            const level = configService.getLogLevel();
+      
+            expect(level).toBe(LogLevel.INFO);
+        });
+
+        it('should handle case-insensitive log level names', () => {
+            mockWorkspaceConfig.get.mockReturnValue('trace');
+      
+            const level = configService.getLogLevel();
+      
+            expect(level).toBe(LogLevel.TRACE);
+        });
     });
 
-    it('should handle case-insensitive log level names', () => {
-      mockWorkspaceConfig.get.mockReturnValue('trace');
+    describe('Set Log Level', () => {
+        it('should set log level in configuration', async () => {
+            mockWorkspaceConfig.update.mockResolvedValue(undefined);
       
-      const level = configService.getLogLevel();
+            await configService.setLogLevel(LogLevel.DEBUG);
       
-      expect(level).toBe(LogLevel.TRACE);
-    });
-  });
+            expect(mockWorkspaceConfig.update).toHaveBeenCalledWith(
+                'logLevel',
+                'Debug',
+                vscode.ConfigurationTarget.Global
+            );
+        });
 
-  describe('Set Log Level', () => {
-    it('should set log level in configuration', async () => {
-      mockWorkspaceConfig.update.mockResolvedValue(undefined);
+        it('should log debug message', async () => {
+            mockWorkspaceConfig.update.mockResolvedValue(undefined);
       
-      await configService.setLogLevel(LogLevel.DEBUG);
+            await configService.setLogLevel(LogLevel.ERROR);
       
-      expect(mockWorkspaceConfig.update).toHaveBeenCalledWith(
-        'logLevel',
-        'Debug',
-        vscode.ConfigurationTarget.Global
-      );
-    });
-
-    it('should log debug message', async () => {
-      mockWorkspaceConfig.update.mockResolvedValue(undefined);
-      
-      await configService.setLogLevel(LogLevel.ERROR);
-      
-      expect(logger.debug).toHaveBeenCalledWith(
-        'Log level updated in configuration',
-        { level: 'Error' }
-      );
-    });
-  });
-
-  describe('Get Telemetry Enabled', () => {
-    it('should get telemetry enabled from configuration', () => {
-      mockWorkspaceConfig.get.mockReturnValue(true);
-      
-      const enabled = configService.getTelemetryEnabled();
-      
-      expect(enabled).toBe(true);
-      expect(mockWorkspaceConfig.get).toHaveBeenCalledWith('telemetry.enabled', true);
+            expect(logger.debug).toHaveBeenCalledWith(
+                'Log level updated in configuration',
+                { level: 'Error' }
+            );
+        });
     });
 
-    it('should return false when disabled', () => {
-      mockWorkspaceConfig.get.mockReturnValue(false);
+    describe('Get Telemetry Enabled', () => {
+        it('should get telemetry enabled from configuration', () => {
+            mockWorkspaceConfig.get.mockReturnValue(true);
       
-      const enabled = configService.getTelemetryEnabled();
+            const enabled = configService.getTelemetryEnabled();
       
-      expect(enabled).toBe(false);
+            expect(enabled).toBe(true);
+            expect(mockWorkspaceConfig.get).toHaveBeenCalledWith('telemetry.enabled', true);
+        });
+
+        it('should return false when disabled', () => {
+            mockWorkspaceConfig.get.mockReturnValue(false);
+      
+            const enabled = configService.getTelemetryEnabled();
+      
+            expect(enabled).toBe(false);
+        });
+
+        it('should default to true when not configured', () => {
+            mockWorkspaceConfig.get.mockImplementation((key, defaultValue) => defaultValue);
+      
+            const enabled = configService.getTelemetryEnabled();
+      
+            expect(enabled).toBe(true);
+        });
     });
 
-    it('should default to true when not configured', () => {
-      mockWorkspaceConfig.get.mockImplementation((key, defaultValue) => defaultValue);
+    describe('Set Telemetry Enabled', () => {
+        it('should set telemetry enabled in configuration', async () => {
+            mockWorkspaceConfig.update.mockResolvedValue(undefined);
       
-      const enabled = configService.getTelemetryEnabled();
+            await configService.setTelemetryEnabled(true);
       
-      expect(enabled).toBe(true);
-    });
-  });
+            expect(mockWorkspaceConfig.update).toHaveBeenCalledWith(
+                'telemetry.enabled',
+                true,
+                vscode.ConfigurationTarget.Global
+            );
+        });
 
-  describe('Set Telemetry Enabled', () => {
-    it('should set telemetry enabled in configuration', async () => {
-      mockWorkspaceConfig.update.mockResolvedValue(undefined);
+        it('should log debug message', async () => {
+            mockWorkspaceConfig.update.mockResolvedValue(undefined);
       
-      await configService.setTelemetryEnabled(true);
+            await configService.setTelemetryEnabled(false);
       
-      expect(mockWorkspaceConfig.update).toHaveBeenCalledWith(
-        'telemetry.enabled',
-        true,
-        vscode.ConfigurationTarget.Global
-      );
-    });
-
-    it('should log debug message', async () => {
-      mockWorkspaceConfig.update.mockResolvedValue(undefined);
-      
-      await configService.setTelemetryEnabled(false);
-      
-      expect(logger.debug).toHaveBeenCalledWith(
-        'Telemetry setting updated in configuration',
-        { enabled: false }
-      );
-    });
-  });
-
-  describe('Generic Get', () => {
-    it('should get configuration value', () => {
-      mockWorkspaceConfig.get.mockReturnValue('test-value');
-      
-      const value = configService.get<string>('someKey');
-      
-      expect(value).toBe('test-value');
-      expect(mockWorkspaceConfig.get).toHaveBeenCalledWith('someKey', undefined);
+            expect(logger.debug).toHaveBeenCalledWith(
+                'Telemetry setting updated in configuration',
+                { enabled: false }
+            );
+        });
     });
 
-    it('should use default value', () => {
-      mockWorkspaceConfig.get.mockImplementation((key, defaultValue) => defaultValue);
+    describe('Generic Get', () => {
+        it('should get configuration value', () => {
+            mockWorkspaceConfig.get.mockReturnValue('test-value');
       
-      const value = configService.get<string>('someKey', 'default');
+            const value = configService.get<string>('someKey');
       
-      expect(value).toBe('default');
+            expect(value).toBe('test-value');
+            expect(mockWorkspaceConfig.get).toHaveBeenCalledWith('someKey', undefined);
+        });
+
+        it('should use default value', () => {
+            mockWorkspaceConfig.get.mockImplementation((key, defaultValue) => defaultValue);
+      
+            const value = configService.get<string>('someKey', 'default');
+      
+            expect(value).toBe('default');
+        });
+
+        it('should work with different types', () => {
+            mockWorkspaceConfig.get.mockReturnValue(42);
+      
+            const value = configService.get<number>('numberKey');
+      
+            expect(value).toBe(42);
+        });
     });
 
-    it('should work with different types', () => {
-      mockWorkspaceConfig.get.mockReturnValue(42);
+    describe('Generic Set', () => {
+        it('should set configuration value', async () => {
+            mockWorkspaceConfig.update.mockResolvedValue(undefined);
       
-      const value = configService.get<number>('numberKey');
+            await configService.set('someKey', 'test-value');
       
-      expect(value).toBe(42);
-    });
-  });
+            expect(mockWorkspaceConfig.update).toHaveBeenCalledWith(
+                'someKey',
+                'test-value',
+                vscode.ConfigurationTarget.Global
+            );
+        });
 
-  describe('Generic Set', () => {
-    it('should set configuration value', async () => {
-      mockWorkspaceConfig.update.mockResolvedValue(undefined);
+        it('should work with different types', async () => {
+            mockWorkspaceConfig.update.mockResolvedValue(undefined);
       
-      await configService.set('someKey', 'test-value');
+            await configService.set('numberKey', 42);
       
-      expect(mockWorkspaceConfig.update).toHaveBeenCalledWith(
-        'someKey',
-        'test-value',
-        vscode.ConfigurationTarget.Global
-      );
+            expect(mockWorkspaceConfig.update).toHaveBeenCalledWith(
+                'numberKey',
+                42,
+                vscode.ConfigurationTarget.Global
+            );
+        });
     });
 
-    it('should work with different types', async () => {
-      mockWorkspaceConfig.update.mockResolvedValue(undefined);
+    describe('Configuration Section', () => {
+        it('should use correct configuration section', () => {
+            configService.get('test');
       
-      await configService.set('numberKey', 42);
-      
-      expect(mockWorkspaceConfig.update).toHaveBeenCalledWith(
-        'numberKey',
-        42,
-        vscode.ConfigurationTarget.Global
-      );
+            expect(vscode.workspace.getConfiguration).toHaveBeenCalledWith('zToolkit');
+        });
     });
-  });
 
-  describe('Configuration Section', () => {
-    it('should use correct configuration section', () => {
-      configService.get('test');
-      
-      expect(vscode.workspace.getConfiguration).toHaveBeenCalledWith('zgxToolkit');
+    describe('Default Values', () => {
+        it('zToolkit.telemetry.enabled should default to true', () => {
+            expect(CONFIG_DEFAULTS.TELEMETRY_ENABLED).toBe(true);
+        });
     });
-  });
-
-  describe('Default Values', () => {
-    it('zgxToolkit.telemetry.enabled should default to true', () => {
-      expect(CONFIG_DEFAULTS.TELEMETRY_ENABLED).toBe(true);
-    });
-  });
 });

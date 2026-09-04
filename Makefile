@@ -1,7 +1,6 @@
-# Makefile for ZGX Toolkit VS Code Extension 
-# Equivalent to GitHub Actions CI/CD Pipeline
+# Makefile for HP Z Toolkit VS Code Extension 
 
-.PHONY: help clean install install-system-deps lint compile test unit-tests integration-tests coverage package release all all-ci ci ci-full debug-display
+.PHONY: help clean install install-system-deps lint compile test unit-tests integration-tests coverage package release all all-ci ci ci-full
 
 # Configuration
 SHELL := /bin/bash
@@ -15,7 +14,6 @@ VSCE := $(NPXCMD) @vscode/vsce
 
 # Directories
 SRC_DIR := src
-OUT_DIR := out
 COVERAGE_DIR := coverage
 DIST_DIR := dist
 
@@ -39,7 +37,7 @@ COLOR_RED := \033[31m
 
 # Default target
 help: ## Show this help message
-	@echo "$(COLOR_BOLD)ZGX Toolkit - Makefile targets:$(COLOR_RESET)"
+	@echo "$(COLOR_BOLD)Z Toolkit - Makefile targets:$(COLOR_RESET)"
 	@echo ""
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | sort | awk 'BEGIN {FS = ":.*?## "}; {printf "  $(COLOR_BLUE)%-20s$(COLOR_RESET) %s\n", $$1, $$2}'
 	@echo ""
@@ -81,12 +79,12 @@ install-dev: ## Install dependencies (npm install)
 # Linting
 lint: ## Run ESLint on source files
 	@echo "$(COLOR_BOLD)Running linting...$(COLOR_RESET)"
-	$(ESLINT) $(SRC_DIR) --ext ts
+	$(ESLINT) $(SRC_DIR)
 	@echo "$(COLOR_GREEN)✓ Linting passed$(COLOR_RESET)"
 
 lint-fix: ## Run ESLint with auto-fix
 	@echo "$(COLOR_BOLD)Running linting with auto-fix...$(COLOR_RESET)"
-	$(ESLINT) $(SRC_DIR) --ext ts --fix
+	$(ESLINT) $(SRC_DIR)  --fix
 	@echo "$(COLOR_GREEN)✓ Linting completed with fixes$(COLOR_RESET)"
 
 # Compilation
@@ -141,7 +139,7 @@ package: compile ## Package extension as VSIX
 	PACKAGE_NAME=$$(node -p "require('./package.json').name"); \
 	OUTPUT_FILE="$$PACKAGE_NAME-$$CLEAN_VERSION.vsix"; \
 	echo "Creating package: $$OUTPUT_FILE"; \
-	npx --yes @vscode/vsce package --out $(DIST_DIR)/$$OUTPUT_FILE
+	npx --yes @vscode/vsce package --no-dependencies --out $(DIST_DIR)/$$OUTPUT_FILE
 	@echo "$(COLOR_GREEN)✓ Extension packaged$(COLOR_RESET)"
 	@ls -lh $(DIST_DIR)/*.vsix 2>/dev/null || ls -lh *.vsix
 
@@ -176,18 +174,16 @@ release-tag: ## Create git tag for release (main branch only)
 # Cleanup
 clean: ## Remove build artifacts and dependencies
 	@echo "$(COLOR_BOLD)Cleaning build artifacts...$(COLOR_RESET)"
-	rm -rf $(OUT_DIR)
-	rm -rf $(COVERAGE_DIR)
 	rm -rf $(DIST_DIR)
+	rm -rf $(COVERAGE_DIR)
 	rm -rf node_modules
 	rm -f *.vsix
 	@echo "$(COLOR_GREEN)✓ Cleaned$(COLOR_RESET)"
 
 clean-build: ## Remove only build artifacts (keep node_modules)
 	@echo "$(COLOR_BOLD)Cleaning build artifacts...$(COLOR_RESET)"
-	rm -rf $(OUT_DIR)
-	rm -rf $(COVERAGE_DIR)
 	rm -rf $(DIST_DIR)
+	rm -rf $(COVERAGE_DIR)
 	rm -f *.vsix
 	@echo "$(COLOR_GREEN)✓ Build artifacts cleaned$(COLOR_RESET)"
 
@@ -203,8 +199,8 @@ dev: install compile ## Setup development environment
 archive-logs: ## Archive integration test logs
 	@echo "$(COLOR_BOLD)Archiving integration test logs...$(COLOR_RESET)"
 	@mkdir -p logs-archive
-	@if [ -d "$(OUT_DIR)/__tests__" ]; then \
-		find $(OUT_DIR)/__tests__ -name "*.log" -o -name "*.txt" | while read file; do \
+	@if [ -d "$(DIST_DIR)/__tests__" ]; then \
+		find $(DIST_DIR)/__tests__ -name "*.log" -o -name "*.txt" | while read file; do \
 			cp "$$file" logs-archive/ 2>/dev/null || true; \
 		done; \
 		echo "$(COLOR_GREEN)✓ Logs archived to logs-archive/$(COLOR_RESET)"; \
@@ -239,7 +235,7 @@ test-ubuntu-22: ## Simulate Ubuntu 22.04 environment tests (requires Docker)
 			echo 'Ubuntu 22.04 simulation' && \
 			node --version && npm --version && \
 			npm ci && \
-			npx eslint src --ext ts && \
+			npx eslint src && \
 			npx tsc -p ./ && \
 			npx jest && \
 			npx jest --coverage"; \
@@ -259,7 +255,7 @@ test-ubuntu-24: ## Simulate Ubuntu 24.04 environment tests (requires Docker)
 			apt-get install -y nodejs && \
 			node --version && npm --version && \
 			npm ci && \
-			npx eslint src --ext ts && \
+			npx eslint src && \
 			npx tsc -p ./ && \
 			npx jest && \
 			npx jest --coverage"; \

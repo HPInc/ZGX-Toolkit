@@ -1,10 +1,10 @@
 /*
- * Copyright ©2025 HP Development Company, L.P.
+ * Copyright ©2025-2026 HP Development Company, L.P.
  * Licensed under the X11 License. See LICENSE file in the project root for details.
  */
 
 /**
- * Telemetry service for the ZGX Toolkit extension.
+ * Telemetry service for the Z Toolkit extension.
  * 
  * This service provides a clean interface for tracking usage, performance,
  * and errors throughout the extension.
@@ -22,7 +22,7 @@ import * as telemetry from '../types/telemetry';
  * Tracks extension usage.
  */
 class TelemetryService implements ITelemetryService {
-    private enabled: boolean = false;
+    private enabled = false;
     private reporter: TelemetryReporter | null = null;
 
     constructor() {
@@ -47,10 +47,10 @@ class TelemetryService implements ITelemetryService {
 
         try {
             // Setup our reporter
-            let topts: TelemetryLoggerOptions = {
-                ignoreBuiltInCommonProperties: true,
+            const topts: TelemetryLoggerOptions = {
+                ignoreBuiltInCommonProperties: true
             };
-            let ropts: ReplacementOption[] = [];
+            const ropts: ReplacementOption[] = [];
             
             this.reporter = new TelemetryReporter(connectionString, ropts, topts);
         } catch (error) {
@@ -85,8 +85,8 @@ class TelemetryService implements ITelemetryService {
                 event.eventType,
                 {
                     errorMsg: event.error.message,
-                    context: event.context ?? '',
-                },
+                    context: event.context ?? ''
+                }
             );
         }
     }

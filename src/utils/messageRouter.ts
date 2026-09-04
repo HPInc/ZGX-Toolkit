@@ -1,5 +1,5 @@
 /*
- * Copyright ©2025 HP Development Company, L.P.
+ * Copyright ©2025-2026 HP Development Company, L.P.
  * Licensed under the X11 License. See LICENSE file in the project root for details.
  */
 
@@ -12,7 +12,7 @@ import { Message } from '../types/messages';
  * Handles errors and logging for message routing.
  */
 export class MessageRouter {
-    constructor(private logger: Logger) {}
+    constructor(private readonly logger: Logger) {}
 
     /**
      * Route a message to the current view
@@ -45,13 +45,15 @@ export class MessageRouter {
      * @param message The message to validate
      * @returns True if the message is valid
      */
-    validateMessage(message: any): message is Message {
+    validateMessage(message: unknown): message is Message {
         if (!message || typeof message !== 'object') {
             this.logger.warn('Invalid message: not an object', { message });
             return false;
         }
 
-        if (!message.type || typeof message.type !== 'string') {
+        const candidate = message as Record<string, unknown>;
+
+        if (!candidate.type || typeof candidate.type !== 'string') {
             this.logger.warn('Invalid message: missing or invalid type', { message });
             return false;
         }

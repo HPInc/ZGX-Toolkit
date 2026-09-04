@@ -38,13 +38,13 @@ describe('DnsRegistrationViewController', () => {
     const mockConnectionService: jest.Mocked<ConnectionService> = {
         checkDNSServiceFileExists: jest.fn(),
         validatePasswordForDNS: jest.fn(),
-        registerDNSServiceWithAvahi: jest.fn(),
+        registerDNSServiceWithAvahi: jest.fn()
     } as any;
 
     // Mock device service
     const mockDeviceService = {
         updateDevice: jest.fn(),
-        getDevice: jest.fn(),
+        getDevice: jest.fn()
     } as any;
 
     const mockDevice: Device = {
@@ -102,8 +102,8 @@ describe('DnsRegistrationViewController', () => {
                 eventType: TelemetryEventType.View,
                 action: 'navigate',
                 properties: {
-                    toView: 'setup.dnsRegistration',
-                },
+                    toView: 'setup.dnsRegistration'
+                }
             });
         });
 

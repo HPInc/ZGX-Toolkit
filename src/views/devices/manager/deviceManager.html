@@ -1,12 +1,12 @@
 <!--
-  Copyright ©2025 HP Development Company, L.P.
+  Copyright ©2025-2026 HP Development Company, L.P.
   Licensed under the X11 License. See LICENSE file in the project root for details.
 -->
 
 <div class="container">
     <div class="header">
-        <h1>ZGX Device Manager</h1>
-        <p>Manage your SSH connections to remote HP ZGX devices</p>
+        <h1>ZTK Device Manager</h1>
+        <p>Manage your SSH connections to remote devices</p>
     </div>
 
     <div class="add-device-section">
@@ -15,10 +15,21 @@
                 <i class="codicon codicon-plus"></i>
                 Add New Device
             </button>
-            <button class="show-form-btn" id="pairDevicesBtn">
-                <i class="codicon codicon-link"></i>
-                Pair Devices
-            </button>
+            <div class="pair-devices-control">
+                <button class="show-form-btn pair-devices-button" id="pairDevicesBtn" aria-describedby="pairDevicesTooltip">
+                    <i class="codicon codicon-link" aria-hidden="true"></i>
+                    Pair Devices
+                </button>
+                <button type="button" class="pair-devices-info" aria-label="Pair devices information" aria-describedby="pairDevicesTooltip">
+                    <i class="codicon codicon-info" aria-hidden="true"></i>
+                </button>
+                <span id="pairDevicesTooltip" class="pair-devices-tooltip" role="tooltip">
+                    <span class="pair-devices-tooltip-content">
+                        <span class="pair-devices-tooltip-title">Pair devices</span>
+                        <span class="pair-devices-tooltip-description">Connect <b>two</b> compatible devices to work together and scale local compute resources. Devices must be the <b>same type</b> and support NVIDIA® ConnectX™ Networking.</span>
+                    </span>
+                </span>
+            </div>
         </div>
         
         <div class="add-device-form {{#if hiddenForm}}hidden{{/if}}" id="addDeviceForm" data-editing-id="{{editingDeviceId}}">
@@ -46,14 +57,39 @@
                                 <div id="devicesDropdown" class="devices-dropdown"></div>
                             </div>
                             <button type="button" id="discoverBtn" class="btn btn-secondary discover-btn" data-dns-instance-name="{{editingDeviceDnsInstanceName}}">
+                                <i class="codicon codicon-search-sparkle" aria-hidden="true"></i>
                                 <span id="discoverBtnText">{{#if editingDeviceDnsInstanceName}}Rediscover Device{{else}}Discover Devices{{/if}}</span>
                                 <span id="discoverSpinner" class="spinner hidden"></span>
+                            </button>
+                            <button type="button" id="discoverInfoBtn" class="btn-info-link" aria-describedby="discoverTooltip">
+                                <i class="codicon codicon-info" aria-hidden="true"></i>
+                                <span class="btn-info-link-text">What's this?</span>
+                                <span id="discoverTooltip" class="discover-tooltip" role="tooltip">
+                                    <span class="discover-tooltip-arrow" aria-hidden="true"></span>
+                                    <span class="discover-tooltip-content">
+                                        <span class="discover-tooltip-title">Find devices on your network.</span>
+                                        <span class="discover-tooltip-body">Works automatically for supported devices (like ZGX Nano and ZGX Fury) when you’re on the <b>same subnet</b>. Devices that advertise via mDNS will also appear automatically. For other devices, discovery becomes available <b>after</b> setup is complete.</span>
+                                    </span>
+                                </span>
                             </button>
                         </div>
                         <div id="discoveryStatus" class="discovery-status hidden"></div>
                     </div>
                 </div>
                 <div class="form-row">
+                    <div class="form-group {{#unless editingDevice}}hidden{{/unless}}" id="deviceTypeGroup">
+                        <label for="deviceType">Select Device Type</label>
+                        <select id="deviceType">
+                            <option value="" {{#unless selectedDeviceType}}selected{{/unless}}>— Select one —</option>
+                            {{#each deviceTypeOptions}}
+                            <option value="{{value}}" {{#if (eq value ../selectedDeviceType)}}selected{{/if}}>{{label}}</option>
+                            {{/each}}
+                        </select>
+                        <div class="field-hint hidden" id="deviceTypeHint">
+                            <i class="codicon codicon-warning" aria-hidden="true"></i>
+                            <span>Please select a device type before updating.</span>
+                        </div>
+                    </div>
                     <div class="form-group">
                         <label for="deviceUsername">Username</label>
                         <input type="text" id="deviceUsername" placeholder="root" value="{{deviceUsername}}" required>
@@ -63,9 +99,22 @@
                         <input type="number" id="devicePort" value="{{devicePort}}" min="1" max="65535" required>
                     </div>
                 </div>
+                <div id="discoveryErrorCard" class="discovery-error-card hidden">
+                    <div class="discovery-error-top">
+                        <span class="discovery-error-icon-wrap">
+                            <i class="codicon codicon-warning" aria-hidden="true"></i>
+                        </span>
+                        <div class="discovery-error-content">
+                            <div>
+                                <span class="discovery-error-title">No devices found.</span>
+                                <p class="discovery-error-body">Device discovery works automatically for supported devices on the same subnet. Compatible devices that advertise over mDNS appear automatically, while some devices, may not appear until setup is complete. If your device is not listed, input the target device address manually to continue. <a class="discovery-error-inline-link" href="https://github.com/HPInc/ZGX-Toolkit/issues" target="_blank" rel="noopener noreferrer">Having an issue?</a><span id="discoveryErrorCode" class="discovery-error-code hidden"><span id="discoveryErrorCodeValue"></span></span></p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
                 <div class="form-actions">
-                    <button type="button" class="btn btn-secondary" id="cancelBtn">Cancel</button>
-                    <button type="submit" class="btn" id="submitBtn">{{submitButtonText}}</button>
+                    <button type="button" class="btn btn-ghost" id="cancelBtn">Cancel</button>
+                    <button type="submit" class="btn btn-blue" id="submitBtn">{{submitButtonText}}</button>
                 </div>
             </form>
         </div>
@@ -74,6 +123,13 @@
     <div class="devices-section">
         <h2>Your Devices</h2>
         <div class="device-grid" id="deviceGrid">
+            {{#unless noDevices}}
+            <section class="device-section paired-devices-section" aria-labelledby="paired-devices-heading">
+                <div class="device-section-header">
+                    <span class="codicon codicon-link device-section-icon" aria-hidden="true"></span>
+                    <h3 id="paired-devices-heading">Paired Devices ({{pairedDeviceCount}})</h3>
+                </div>
+                <div class="paired-device-groups">
             {{#if pairedGroups}}
             {{#each pairedGroups}}
             <div class="paired-group-container" data-group-id="{{groupId}}">
@@ -84,7 +140,7 @@
                 <div class="paired-group-content">
                 <div class="paired-group-devices">
                     {{#each devices}}
-                    <div class="device-card paired" data-id="{{id}}" data-name="{{name}}" data-host="{{host}}" data-username="{{username}}" data-port="{{port}}" data-dns-instance-name="{{dnsInstanceName}}">
+                    <div class="device-card paired" data-id="{{id}}" data-name="{{name}}" data-host="{{host}}" data-username="{{username}}" data-port="{{port}}" data-dns-instance-name="{{dnsInstanceName}}" data-device-type="{{deviceType}}">
                         <div class="device-card-icons">
                             {{#if needsDnsRegistration}}
                             <button class="device-card-icon dns-warning-icon" data-action="register-dns" data-id="{{id}}" title="mDNS service not registered. Click to register for device discovery.">
@@ -107,6 +163,7 @@
                         <h3>{{name}}</h3>
                         <div class="device-details">
                             <div><strong>Host:</strong> {{host}}:{{port}}</div>
+                            <div><strong>Device type:</strong> {{deviceTypeLabel}}</div>
                             <div><strong>Username:</strong> {{username}}</div>
                             <div><strong>Status:</strong> {{#if isSetup}}Ready{{else}}Not Setup{{/if}}</div>
                             {{#if isSetup}}
@@ -147,9 +204,23 @@
             </div>
             {{/each}}
             {{/if}}
+            {{#unless pairedGroups}}
+            <div class="device-section-empty-state" role="status">
+                <p>No paired devices</p>
+            </div>
+            {{/unless}}
+                </div>
+            </section>
+
+            <section class="device-section unpaired-devices-section" aria-labelledby="unpaired-devices-heading">
+                <div class="device-section-header">
+                    <span class="codicon codicon-debug-disconnect device-section-icon" aria-hidden="true"></span>
+                    <h3 id="unpaired-devices-heading">Unpaired Devices ({{unpairedDeviceCount}})</h3>
+                </div>
+                <div class="unpaired-device-grid">
             {{#if unpairedDevices}}
             {{#each unpairedDevices}}
-            <div class="device-card" data-id="{{id}}" data-name="{{name}}" data-host="{{host}}" data-username="{{username}}" data-port="{{port}}" data-dns-instance-name="{{dnsInstanceName}}">
+            <div class="device-card" data-id="{{id}}" data-name="{{name}}" data-host="{{host}}" data-username="{{username}}" data-port="{{port}}" data-dns-instance-name="{{dnsInstanceName}}" data-device-type="{{deviceType}}">
                 <div class="device-card-icons">
                     {{#if needsDnsRegistration}}
                     <button class="device-card-icon dns-warning-icon" data-action="register-dns" data-id="{{id}}" title="mDNS service not registered. Click to register for device discovery.">
@@ -166,6 +237,7 @@
                 <h3>{{name}}</h3>
                 <div class="device-details">
                     <div><strong>Host:</strong> {{host}}:{{port}}</div>
+                    <div><strong>Device type:</strong> {{deviceTypeLabel}}</div>
                     <div><strong>Username:</strong> {{username}}</div>
                     <div><strong>Status:</strong> {{#if isSetup}}Ready{{else}}Not Setup{{/if}}</div>
                     {{#if isSetup}}
@@ -198,6 +270,14 @@
             </div>
             {{/each}}
             {{/if}}
+            {{#unless unpairedDevices}}
+            <div class="device-section-empty-state" role="status">
+                <p>No unpaired devices</p>
+            </div>
+            {{/unless}}
+                </div>
+            </section>
+            {{/unless}}
             
             {{#if noDevices}}
             <div class="empty-state">

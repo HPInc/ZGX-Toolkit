@@ -1,5 +1,5 @@
 <!--
-  Copyright ©2025 HP Development Company, L.P.
+  Copyright ©2025-2026 HP Development Company, L.P.
   Licensed under the X11 License. See LICENSE file in the project root for details.
 -->
 
@@ -29,15 +29,15 @@
     <div class="device-actions">
         {{#if isSetup}}
         {{#if useKeyAuth}}
-        <div class="split-button" role="group" aria-label="Connection options for {{name}}">
+        <fieldset class="split-button" aria-label="Connection options for {{name}}">
             <button class="split-button-main" data-action="connect-default" data-id="{{id}}" aria-label="Connect to {{name}} using default method">Connect</button>
             <button class="split-button-dropdown" data-action="toggle-dropdown" data-id="{{id}}" aria-label="Show connection options" aria-haspopup="true" aria-expanded="false"></button>
             <div class="dropdown-content" id="dropdown-{{id}}" role="menu" aria-label="Connection options">
                 <button class="dropdown-item" data-action="connect-current" data-id="{{id}}" role="menuitem">Current Window</button>
                 <button class="dropdown-item" data-action="connect-new" data-id="{{id}}" role="menuitem">New Window</button>
             </div>
-        </div>
-        <button class="btn btn-secondary manage-apps-button" data-action="manage-apps" data-id="{{id}}" title="Manage applications" aria-label="Manage applications for {{name}}">
+        </fieldset>
+        <button class="btn btn-secondary manage-apps-button" data-action="manage-apps" data-id="{{id}}" title="Manage applications" aria-label="Manage Apps for {{name}}">
             Manage Apps
         </button>
         {{else}}

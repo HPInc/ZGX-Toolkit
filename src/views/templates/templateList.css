@@ -1,5 +1,5 @@
 /*
- * Copyright ©2025 HP Development Company, L.P.
+ * Copyright ©2025-2026 HP Development Company, L.P.
  * Licensed under the X11 License. See LICENSE file in the project root for details.
  */
 
@@ -95,6 +95,11 @@
     margin-bottom: 12px;
     border: 2px solid transparent;
     transition: background .12s ease, border-color .12s ease;
+    padding: 0;
+    font: inherit;
+    color: inherit;
+    text-align: inherit;
+    appearance: none;
 }
 
 .template-card:hover {

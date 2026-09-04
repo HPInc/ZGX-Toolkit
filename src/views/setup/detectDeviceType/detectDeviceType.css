@@ -1,0 +1,261 @@
+/*
+ * Copyright ©2026 HP Development Company, L.P.
+ * Licensed under the X11 License. See LICENSE file in the project root for details.
+ */
+
+/* Detect Device Type view specific styles */
+
+.detection-header {
+    margin: var(--spacing-xl) 0 var(--spacing-lg) 0;
+}
+
+.detection-header-title {
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-sm);
+    margin-bottom: var(--spacing-xs);
+}
+
+.detection-header-title h1 {
+    margin: 0;
+    font-size: 1.5em;
+}
+
+.detection-header > p {
+    color: var(--vscode-foreground);
+    margin: 0;
+}
+
+/* Detection card */
+.detection-card {
+    background: var(--vscode-list-inactiveSelectionBackground);
+    border: 1px solid var(--vscode-panel-border);
+    border-radius: var(--border-radius-lg);
+    padding: var(--spacing-xl) var(--spacing-lg);
+    min-height: 240px;
+}
+
+/* State layout */
+.detection-state {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+}
+
+.detection-state-icon {
+    margin-bottom: var(--spacing-md);
+}
+
+.detection-icon-large.codicon[class*='codicon-'] {
+    font-size: 40px;
+    color: var(--hp-cyan-blue);
+}
+
+.detection-icon-scanning {
+    animation: scanning-pulse 1.8s ease-in-out infinite;
+    transform-origin: center;
+}
+
+@keyframes scanning-pulse {
+    0%   { opacity: 1;    transform: scale(1); }
+    50%  { opacity: 0.55; transform: scale(1.12); }
+    100% { opacity: 1;    transform: scale(1); }
+}
+
+.detection-icon-success.codicon[class*='codicon-'] {
+    font-size: 40px;
+    line-height: 1;
+    display: inline-block;
+    color: var(--vscode-testing-iconPassed);
+}
+
+.detection-state-title {
+    font-size: 1.2em;
+    font-weight: 700;
+    margin-bottom: var(--spacing-sm);
+}
+
+.detection-state-subtitle {
+    max-width: 500px;
+    margin-bottom: var(--spacing-lg);
+}
+
+#subtitleKnown {
+    max-width: none;
+    white-space: nowrap;
+    font-style: normal;
+}
+
+@media (max-width: 960px) {
+    #subtitleKnown {
+        white-space: normal;
+    }
+}
+
+.detection-state-footer {
+    margin-top: var(--spacing-md);
+    display: flex;
+    justify-content: flex-end;
+    width: 100%;
+}
+
+/* Result section */
+.detection-result-section {
+    width: 100%;
+    max-width: 420px;
+    margin-left: auto;
+    margin-right: auto;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+    margin-bottom: var(--spacing-lg);
+}
+
+.detection-result-label {
+    display: block;
+    font-size: 0.9em;
+    color: var(--vscode-foreground);
+    margin-bottom: var(--spacing-xs);
+    width: 100%;
+    text-align: left;
+}
+
+.device-type-display {
+    background: var(--vscode-input-background);
+    color: var(--vscode-input-foreground);
+    border: 1px solid var(--vscode-input-border);
+    padding: var(--spacing-sm) var(--spacing-md);
+    border-radius: var(--border-radius-lg);
+    min-height: 36px;
+    display: flex;
+    align-items: center;
+    font-size: inherit;
+}
+
+#viewMode,
+#editMode {
+    width: 100%;
+    max-width: 420px;
+}
+
+#editMode .form-group {
+    width: 100%;
+    max-width: none;
+}
+
+.device-type-hint {
+    display: flex;
+    align-items: center;
+    justify-content: flex-start;
+    gap: var(--spacing-xs);
+    margin-top: var(--spacing-sm);
+    color: var(--vscode-foreground);
+    font-size: 0.9em;
+    width: 100%;
+    text-align: left;
+}
+
+.device-type-hint .codicon {
+    -webkit-text-stroke: 0.4px currentColor;
+}
+
+/* Result footer */
+.detection-result-footer {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    width: 100%;
+    max-width: 520px;
+    gap: var(--spacing-md);
+}
+
+.detection-result-footer-actions {
+    display: flex;
+    gap: var(--spacing-sm);
+}
+
+/* Text-only button (Cancel) */
+.btn-text {
+    background: none;
+    border: none;
+    color: var(--vscode-foreground);
+    cursor: pointer;
+    font-size: inherit;
+    font-family: inherit;
+    padding: var(--spacing-xs) var(--spacing-sm);
+    border-radius: var(--border-radius);
+    transition: color var(--transition-fast);
+}
+
+.btn-text:hover {
+    color: var(--vscode-textLink-activeForeground);
+    text-decoration: underline;
+}
+
+.btn-text:focus {
+    outline: 2px solid var(--vscode-focusBorder);
+    outline-offset: 2px;
+}
+
+.btn-text:focus:not(:focus-visible) {
+    outline: none;
+}
+
+/* Outlined button (Modify) */
+.btn-outlined {
+    background: var(--vscode-button-secondaryBackground);
+    color: var(--vscode-button-secondaryForeground);
+    border: 1px solid var(--vscode-button-secondaryBackground);
+    padding: var(--spacing-xs) var(--spacing-md);
+    border-radius: var(--border-radius);
+    cursor: pointer;
+    font-size: inherit;
+    font-family: inherit;
+    transition: background var(--transition-fast), border-color var(--transition-fast);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: var(--spacing-xs);
+    min-height: 28px;
+}
+
+.btn-outlined:hover {
+    background: var(--vscode-button-secondaryHoverBackground);
+    border-color: var(--vscode-button-secondaryHoverBackground);
+}
+
+.btn-outlined:focus {
+    outline: 2px solid var(--vscode-focusBorder);
+    outline-offset: 2px;
+}
+
+.btn-outlined:focus:not(:focus-visible) {
+    outline: none;
+}
+
+/* Form select inside detection result section */
+.detection-result-section .form-group {
+    margin-bottom: 0;
+    position: relative;
+}
+
+/* Custom dropdown arrow — replaces the native one so we can control spacing */
+.detection-result-section .form-group::after {
+    content: '\eab4'; /* codicon-chevron-down */
+    font-family: codicon, monospace;
+    font-size: 14px;
+    position: absolute;
+    right: 10px;
+    top: 50%;
+    transform: translateY(-50%);
+    color: var(--vscode-input-foreground);
+    pointer-events: none;
+}
+
+.detection-result-section .form-group select {
+    width: 100%;
+    appearance: none;
+    padding-right: 32px;
+}

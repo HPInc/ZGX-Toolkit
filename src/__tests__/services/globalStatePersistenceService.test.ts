@@ -1,5 +1,5 @@
 /*
- * Copyright ©2025 HP Development Company, L.P.
+ * Copyright ©2025-2026 HP Development Company, L.P.
  * Licensed under the X11 License. See LICENSE file in the project root for details.
  */
 
@@ -11,7 +11,7 @@
 import { GlobalStatePersistenceService } from '../../services/globalStatePersistenceService';
 import { DeviceStore } from '../../store/deviceStore';
 import { GroupStore } from '../../store/groupStore';
-import { Device } from '../../types/devices';
+import { Device, DeviceType } from '../../types/devices';
 import { ConnectXGroup } from '../../types/connectxGroup';
 import * as vscode from 'vscode';
 
@@ -22,7 +22,7 @@ jest.mock('../../utils/logger', () => ({
         info: jest.fn(),
         warn: jest.fn(),
         error: jest.fn(),
-        trace: jest.fn(),
+        trace: jest.fn()
     }
 }));
 
@@ -243,7 +243,7 @@ describe('GlobalStatePersistenceService', () => {
         it('should skip groups with missing required fields', async () => {
             const invalidGroups = [
                 mockGroups[0],
-                { id: 'invalid', deviceIds: ['device-1'] }, // Missing createdAt/updatedAt
+                { id: 'invalid', deviceIds: ['device-1'] } // Missing createdAt/updatedAt
             ];
             mockGlobalState.set('HPInc.zgx-toolkit.groups', invalidGroups);
 
@@ -444,7 +444,7 @@ describe('GlobalStatePersistenceService', () => {
         it('should skip invalid devices during import', async () => {
             const invalidDevices = [
                 mockDevices[0],
-                { id: 'invalid', name: 'Invalid' }, // Missing required fields
+                { id: 'invalid', name: 'Invalid' } // Missing required fields
             ];
             const json = JSON.stringify(invalidDevices);
 
@@ -502,6 +502,54 @@ describe('GlobalStatePersistenceService', () => {
             
             // No new update calls should have been made
             expect(updateCallsAfter).toBe(updateCallsBefore);
+        });
+    });
+
+    describe('migrateDevicesOnLoad', () => {
+        const baseDevice = (): Device => ({
+            id: 'device-1',
+            name: 'Device 1',
+            host: '192.168.1.101', // NOSONAR
+            username: 'user1',
+            port: 22,
+            isSetup: true,
+            useKeyAuth: true,
+            keySetup: { keyGenerated: true, keyCopied: true, connectionTested: true },
+            createdAt: '2025-01-01T00:00:00.000Z'
+        });
+
+        it('backfills Unknown when legacy device has no fingerprint', async () => {
+            const legacyDevice = baseDevice();
+            mockGlobalState.set('HPInc.zgx-toolkit.devices', [legacyDevice]);
+
+            await service.loadDevices();
+
+            const saved = mockGlobalState.get('HPInc.zgx-toolkit.devices');
+            expect(saved[0].fingerprint.deviceType).toBe(DeviceType.Unknown);
+        });
+
+        it('does not trigger a save for already-clean devices', async () => {
+            const cleanDevice: Device = {
+                ...baseDevice(),
+                fingerprint: { deviceType: DeviceType.ZGXNano }
+            };
+            mockGlobalState.set('HPInc.zgx-toolkit.devices', [cleanDevice]);
+
+            await service.loadDevices();
+
+            expect(mockContext.globalState.update).not.toHaveBeenCalled();
+        });
+
+        it('migrates each device independently — only changed devices trigger a save', async () => {
+            const legacyDevice = baseDevice();
+            const cleanDevice: Device = { ...baseDevice(), id: 'device-2', fingerprint: { deviceType: DeviceType.Z8 } };
+            mockGlobalState.set('HPInc.zgx-toolkit.devices', [legacyDevice, cleanDevice]);
+
+            await service.loadDevices();
+
+            const saved = mockGlobalState.get('HPInc.zgx-toolkit.devices');
+            expect(saved[0].fingerprint.deviceType).toBe(DeviceType.Unknown);
+            expect(saved[1].fingerprint.deviceType).toBe(DeviceType.Z8);
         });
     });
 });

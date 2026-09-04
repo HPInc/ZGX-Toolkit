@@ -1,5 +1,5 @@
 /*
- * Copyright ©2025 HP Development Company, L.P.
+ * Copyright ©2025-2026 HP Development Company, L.P.
  * Licensed under the X11 License. See LICENSE file in the project root for details.
  */
 
@@ -11,10 +11,10 @@ import { getSSHConfig } from '../../utils/sshConfig';
 jest.mock('ssh2');
 jest.mock('node:fs', () => ({
     existsSync: jest.fn(),
-    readFileSync: jest.fn(),
+    readFileSync: jest.fn()
 }));
 jest.mock('node:os', () => ({
-    homedir: jest.fn(() => '/home/testuser'),
+    homedir: jest.fn(() => '/home/testuser')
 }));
 jest.mock('../../utils/logger');
 
@@ -40,7 +40,7 @@ describe('DNSServiceRegistration', () => {
                 connectionTested: true
             },
             createdAt: new Date().toISOString(),
-            updatedAt: new Date().toISOString(),
+            updatedAt: new Date().toISOString()
         };
 
         // Mock SSH Client
@@ -70,7 +70,7 @@ describe('DNSServiceRegistration', () => {
                     return mockStream;
                 }),
                 stderr: {
-                    on: jest.fn((event: string, cb: any) => {
+                    on: jest.fn((_event: string, _cb: any) => {
                         return mockStream.stderr;
                     })
                 },
@@ -151,7 +151,7 @@ describe('DNSServiceRegistration', () => {
             (mockSSHClient.exec as any) = jest.fn((command: string, callback: any) => {
                 execCallCount++;
                 
-                const createMockStream = (stdoutData: string, exitCode: number = 0) => {
+                const createMockStream = (stdoutData: string, exitCode = 0) => {
                     const mockStream: any = {
                         on: jest.fn((event: string, cb: any) => {
                             if (event === 'data') {
@@ -162,7 +162,7 @@ describe('DNSServiceRegistration', () => {
                             return mockStream;
                         }),
                         stderr: {
-                            on: jest.fn((event: string, cb: any) => {
+                            on: jest.fn((_event: string, _cb: any) => {
                                 return mockStream.stderr;
                             })
                         },
@@ -282,7 +282,7 @@ describe('DNSServiceRegistration', () => {
             (mockSSHClient.exec as any) = jest.fn((command: string, callback: any) => {
                 execCallCount++;
                 
-                const createMockStream = (stdoutData: string, exitCode: number = 0, stderrData: string = '') => {
+                const createMockStream = (stdoutData: string, exitCode = 0, stderrData = '') => {
                     const stream: any = {
                         on: jest.fn((event: string, cb: any) => {
                             if (event === 'data') {
@@ -345,7 +345,7 @@ describe('DNSServiceRegistration', () => {
             (mockSSHClient.exec as any) = jest.fn((command: string, callback: any) => {
                 execCallCount++;
                 
-                const createMockStream = (stdoutData: string, exitCode: number = 0, stderrData: string = '') => {
+                const createMockStream = (stdoutData: string, exitCode = 0, stderrData = '') => {
                     const stream: any = {
                         on: jest.fn((event: string, cb: any) => {
                             if (event === 'data') {
@@ -568,7 +568,7 @@ describe('DNSServiceRegistration', () => {
                 return false;
             });
 
-            fs.readFileSync.mockImplementation((path: string, encoding?: string) => {
+            fs.readFileSync.mockImplementation((path: string, _encoding?: string) => {
                 if (path.includes('.ssh/config')) {
                     return `
                     Host 192.168.1.100
@@ -622,7 +622,7 @@ describe('DNSServiceRegistration', () => {
                 }),
                 connect: jest.fn(),
                 end: jest.fn(),
-                exec: jest.fn((command: string, callback: any) => {
+                exec: jest.fn((_command: string, _callback: any) => {
                     // Throw an error to trigger the catch block
                     throw new Error('SSH exec failed with ECONNREFUSED');
                 })
@@ -650,7 +650,7 @@ describe('DNSServiceRegistration', () => {
                 }),
                 connect: jest.fn(),
                 end: jest.fn(),
-                exec: jest.fn((command: string, callback: any) => {
+                exec: jest.fn((_command: string, _callback: any) => {
                     throw new Error('Connection ETIMEDOUT after 30s');
                 })
             };
@@ -677,7 +677,7 @@ describe('DNSServiceRegistration', () => {
                 }),
                 connect: jest.fn(),
                 end: jest.fn(),
-                exec: jest.fn((command: string, callback: any) => {
+                exec: jest.fn((_command: string, _callback: any) => {
                     throw new Error('Network error EHOSTUNREACH');
                 })
             };
@@ -704,7 +704,7 @@ describe('DNSServiceRegistration', () => {
                 }),
                 connect: jest.fn(),
                 end: jest.fn(),
-                exec: jest.fn((command: string, callback: any) => {
+                exec: jest.fn((_command: string, _callback: any) => {
                     throw new Error('Failed to establish connection');
                 })
             };
@@ -731,7 +731,7 @@ describe('DNSServiceRegistration', () => {
                 }),
                 connect: jest.fn(),
                 end: jest.fn(),
-                exec: jest.fn((command: string, callback: any) => {
+                exec: jest.fn((_command: string, _callback: any) => {
                     throw new Error('Cannot connect to remote host');
                 })
             };
@@ -758,7 +758,7 @@ describe('DNSServiceRegistration', () => {
                 }),
                 connect: jest.fn(),
                 end: jest.fn(),
-                exec: jest.fn((command: string, callback: any) => {
+                exec: jest.fn((_command: string, _callback: any) => {
                     throw new Error('Permission denied reading file');
                 })
             };
@@ -785,7 +785,7 @@ describe('DNSServiceRegistration', () => {
                 }),
                 connect: jest.fn(),
                 end: jest.fn(),
-                exec: jest.fn((command: string, callback: any) => {
+                exec: jest.fn((_command: string, _callback: any) => {
                     throw Buffer.from('Buffer error data');
                 })
             };
@@ -812,7 +812,7 @@ describe('DNSServiceRegistration', () => {
                 }),
                 connect: jest.fn(),
                 end: jest.fn(),
-                exec: jest.fn((command: string, callback: any) => {
+                exec: jest.fn((_command: string, _callback: any) => {
                     throw 'String error message';
                 })
             };
@@ -828,14 +828,9 @@ describe('DNSServiceRegistration', () => {
     });
 
     describe('migrateExistingDevices', () => {
-        let mockDeviceStore: any;
         let mockDeviceService: any;
 
         beforeEach(() => {
-            mockDeviceStore = {
-                getAll: jest.fn()
-            };
-
             mockDeviceService = {
                 getAllDevices: jest.fn(),
                 updateDevice: jest.fn()
@@ -916,7 +911,7 @@ describe('DNSServiceRegistration', () => {
             (mockSSHClient.exec as any) = jest.fn((command: string, callback: any) => {
                 execCallCount++;
                 
-                const createMockStream = (stdoutData: string, exitCode: number = 0) => {
+                const createMockStream = (stdoutData: string, exitCode = 0) => {
                     const mockStream: any = {
                         on: jest.fn((event: string, cb: any) => {
                             if (event === 'data') {
@@ -927,7 +922,7 @@ describe('DNSServiceRegistration', () => {
                             return mockStream;
                         }),
                         stderr: {
-                            on: jest.fn((event: string, cb: any) => {
+                            on: jest.fn((_event: string, _cb: any) => {
                                 return mockStream.stderr;
                             })
                         },
@@ -997,7 +992,7 @@ describe('DNSServiceRegistration', () => {
 
             mockDeviceService.getAllDevices.mockResolvedValue([device1, device2]);
 
-            const mockWindow = { showInformationMessage: jest.fn() };
+            const mockWindow = { showInformationMessage: jest.fn() } as unknown as NonNullable<Parameters<typeof service.migrateExistingDevices>[1]>;
             await service.migrateExistingDevices(mockDeviceService, mockWindow);
 
             // Should show notification for both devices needing registration
@@ -1020,12 +1015,12 @@ describe('DNSServiceRegistration', () => {
                 { ...mockDevice, id: '2', name: 'Device 2', dnsInstanceName: undefined, isSetup: false, useKeyAuth: true, keySetup: { keyGenerated: true, keyCopied: true, connectionTested: true } }, // Not setup
                 { ...mockDevice, id: '3', name: 'Device 3', dnsInstanceName: undefined, isSetup: true, useKeyAuth: false, keySetup: { keyGenerated: true, keyCopied: true, connectionTested: true } }, // No key auth
                 { ...mockDevice, id: '4', name: 'Device 4', dnsInstanceName: undefined, isSetup: true, useKeyAuth: true, keySetup: { keyGenerated: true, keyCopied: true, connectionTested: false } }, // Connection not tested
-                { ...mockDevice, id: '5', name: 'Device 5', dnsInstanceName: 'abc123', isSetup: true, useKeyAuth: true, keySetup: { keyGenerated: true, keyCopied: true, connectionTested: true } }, // Has dnsInstanceName - skip
+                { ...mockDevice, id: '5', name: 'Device 5', dnsInstanceName: 'abc123', isSetup: true, useKeyAuth: true, keySetup: { keyGenerated: true, keyCopied: true, connectionTested: true } } // Has dnsInstanceName - skip
             ];
 
             mockDeviceService.getAllDevices.mockResolvedValue(devices);
 
-            const mockWindow = { showInformationMessage: jest.fn() };
+            const mockWindow = { showInformationMessage: jest.fn() } as unknown as NonNullable<Parameters<typeof service.migrateExistingDevices>[1]>;
             await service.migrateExistingDevices(mockDeviceService, mockWindow);
 
             // Only device 1 should be identified (eligible and no dnsInstanceName)
@@ -1039,12 +1034,12 @@ describe('DNSServiceRegistration', () => {
             const devices = [
                 { ...mockDevice, id: 'device-1', name: 'Device 1', dnsInstanceName: 'abc123', isSetup: true, useKeyAuth: true, keySetup: { keyGenerated: true, keyCopied: true, connectionTested: true } }, // Has dnsInstanceName - skip
                 { ...mockDevice, id: 'device-2', name: 'Device 2', dnsInstanceName: '', isSetup: true, useKeyAuth: true, keySetup: { keyGenerated: true, keyCopied: true, connectionTested: true } }, // Empty string - needs registration
-                { ...mockDevice, id: 'device-3', name: 'Device 3', dnsInstanceName: undefined, isSetup: true, useKeyAuth: true, keySetup: { keyGenerated: true, keyCopied: true, connectionTested: true } }, // Undefined - needs registration
+                { ...mockDevice, id: 'device-3', name: 'Device 3', dnsInstanceName: undefined, isSetup: true, useKeyAuth: true, keySetup: { keyGenerated: true, keyCopied: true, connectionTested: true } } // Undefined - needs registration
             ];
 
             mockDeviceService.getAllDevices.mockResolvedValue(devices);
 
-            const mockWindow = { showInformationMessage: jest.fn() };
+            const mockWindow = { showInformationMessage: jest.fn() } as unknown as NonNullable<Parameters<typeof service.migrateExistingDevices>[1]>;
             await service.migrateExistingDevices(mockDeviceService, mockWindow);
 
             // Device 1 has dnsInstanceName - should be skipped
@@ -1059,12 +1054,12 @@ describe('DNSServiceRegistration', () => {
             const devices = [
                 { ...mockDevice, id: 'device-1', name: 'Device 1', dnsInstanceName: null as any, isSetup: true, useKeyAuth: true, keySetup: { keyGenerated: true, keyCopied: true, connectionTested: true } }, // null - needs registration
                 { ...mockDevice, id: 'device-2', name: 'Device 2', dnsInstanceName: '   ', isSetup: true, useKeyAuth: true, keySetup: { keyGenerated: true, keyCopied: true, connectionTested: true } }, // Whitespace only - needs registration
-                { ...mockDevice, id: 'device-3', name: 'Device 3', dnsInstanceName: 'valid123', isSetup: true, useKeyAuth: true, keySetup: { keyGenerated: true, keyCopied: true, connectionTested: true } }, // Valid - skip
+                { ...mockDevice, id: 'device-3', name: 'Device 3', dnsInstanceName: 'valid123', isSetup: true, useKeyAuth: true, keySetup: { keyGenerated: true, keyCopied: true, connectionTested: true } } // Valid - skip
             ];
 
             mockDeviceService.getAllDevices.mockResolvedValue(devices);
 
-            const mockWindow = { showInformationMessage: jest.fn() };
+            const mockWindow = { showInformationMessage: jest.fn() } as unknown as NonNullable<Parameters<typeof service.migrateExistingDevices>[1]>;
             await service.migrateExistingDevices(mockDeviceService, mockWindow);
 
             // Devices 1 and 2 need registration (null and whitespace-only)

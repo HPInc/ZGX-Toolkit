@@ -4,10 +4,9 @@
  */
 
 import { ViewFactory } from '../../views/viewFactory';
-import { BaseViewController, IView } from '../../views/baseViewController';
+import { BaseViewController } from '../../views/baseViewController';
 import { Logger } from '../../utils/logger';
 import { ITelemetryService } from '../../types/telemetry';
-import { Message } from '../../types/messages';
 
 // Mock view for testing
 class MockView extends BaseViewController {
@@ -15,7 +14,7 @@ class MockView extends BaseViewController {
         super(deps.logger, deps.telemetry);
     }
 
-    async render(params?: any): Promise<string> {
+    async render(_params?: any): Promise<string> {
         return '<div>Mock View</div>';
     }
 }
@@ -31,7 +30,7 @@ describe('ViewFactory', () => {
             debug: jest.fn(),
             info: jest.fn(),
             warn: jest.fn(),
-            error: jest.fn(),
+            error: jest.fn()
         } as any;
 
         mockTelemetry = {
@@ -40,7 +39,7 @@ describe('ViewFactory', () => {
             trackFeature: jest.fn(),
             trackError: jest.fn(),
             trackPerformance: jest.fn(),
-            flush: jest.fn(),
+            flush: jest.fn()
         } as any;
 
         factory = new ViewFactory(mockLogger, mockTelemetry, {});

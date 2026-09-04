@@ -1,42 +1,13 @@
 /*
- * Copyright ©2025 HP Development Company, L.P.
+ * Copyright ©2025-2026 HP Development Company, L.P.
  * Licensed under the X11 License. See LICENSE file in the project root for details.
  */
 
-import * as assert from 'assert';
+import * as assert from 'node:assert';
 import * as vscode from 'vscode';
-import { ZgxToolkitProvider } from '../../providers/zgxToolkitProvider';
-import { TelemetryReporter } from '@vscode/extension-telemetry';
 
 const EXTENSION_ID = 'HPInc.zgx-toolkit';
-const LEGACY_DISPLAY_NAMES = ['HP ZGX', 'ZGX Toolkit'];
-
-// Emulates VS Code's Webview + WebviewView for integration-style testing
-class TempWebview implements vscode.Webview {
-    html = '';
-    options: vscode.WebviewOptions = {};
-    asWebviewUri(uri: vscode.Uri) { return uri; }
-    cspSource = 'vscode-resource://test';
-    onDidReceiveMessage = () => ({ dispose() {} });
-    postMessage = async () => true;
-}
-
-// Simple no-op event factory
-function noopEvent<T>(): vscode.Event<T> {
-    return () => ({ dispose() {} });
-}
-
-class TempWebviewView implements vscode.WebviewView {
-    constructor(public webview: vscode.Webview) {}
-    viewType = 'remoteDevicesList';
-    title = 'Devices';
-    description = undefined;
-    badge = undefined;
-    visible = true; // Added to satisfy interface
-    onDidDispose = noopEvent<void>();
-    onDidChangeVisibility = noopEvent<void>();
-    show() {}
-}
+const LEGACY_DISPLAY_NAMES = ['HP ZGX', 'Z Toolkit'];
 
 suite('ZgxToolkitProvider Integration', () => {
     let ext: vscode.Extension<any>;
@@ -45,7 +16,7 @@ suite('ZgxToolkitProvider Integration', () => {
         ext =
             vscode.extensions.getExtension(EXTENSION_ID) ||
             vscode.extensions.all.find(e =>
-            LEGACY_DISPLAY_NAMES.includes(e.packageJSON.displayName)
+                LEGACY_DISPLAY_NAMES.includes(e.packageJSON.displayName)
             ) as any;
     
         if (!ext) {

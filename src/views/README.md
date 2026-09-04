@@ -2,7 +2,7 @@
 
 ## Overview
 
-This document describes the view architecture implemented in Phase 3.1 of the ZGX Toolkit rewrite. The architecture provides a clean, testable, and maintainable way to build webview-based UIs in VS Code.
+This document describes the view architecture implemented in Phase 3.1 of the Z Toolkit rewrite. The architecture provides a clean, testable, and maintainable way to build webview-based UIs in VS Code.
 
 ## Architecture Principles
 
@@ -182,10 +182,10 @@ export class ViewNameView extends BaseView {
     }) {
         super(deps.logger, deps.telemetry);
         
-        this.template = this.loadTemplate('./viewname.html');
+        this.template = this.loadTemplate('viewname.html');
         this.styles = this.loadTemplate('../common.css') + '\n' 
-                    + this.loadTemplate('./viewname.css');
-        this.clientScript = this.loadTemplate('./viewname.js');
+                    + this.loadTemplate('viewname.css');
+        this.clientScript = this.loadTemplate('viewname.js');
     }
 
     async render(params?: any): Promise<string> {

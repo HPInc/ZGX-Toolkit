@@ -1,5 +1,5 @@
 /*
- * Copyright ©2025 HP Development Company, L.P.
+ * Copyright ©2025-2026 HP Development Company, L.P.
  * Licensed under the X11 License. See LICENSE file in the project root for details.
  */
 
@@ -18,7 +18,7 @@
             window.vscodeApi = acquireVsCodeApi();
         } catch (error) {
             console.error('Failed to acquire VS Code API. It may have already been acquired by another script.', error);
-            throw new Error('VS Code API already acquired. Base overlay script must load first.');
+            throw new Error('VS Code API already acquired. Base overlay script must load first.', { cause: error });
         }
     }
     const vscode = window.vscodeApi;

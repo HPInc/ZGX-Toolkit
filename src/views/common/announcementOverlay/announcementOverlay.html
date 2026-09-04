@@ -1,0 +1,27 @@
+<!--
+  Copyright ©2026 HP Development Company, L.P.
+  Licensed under the X11 License. See LICENSE file in the project root for details.
+  
+  Announcement overlay template - Reusable product announcement dialog with
+  Dismiss and Learn More actions.
+  Uses base overlay classes with announcement-specific overrides.
+-->
+
+<template id="announcement-overlay-template">
+    <div class="overlay-backdrop" id="announcement-overlay-backdrop">
+        <div class="overlay-widget" id="announcement-overlay-widget">
+            <div class="overlay-header announcement-overlay-header">
+                <i class="codicon codicon-star-full overlay-icon announcement-overlay-icon"></i>
+                <img class="overlay-icon announcement-overlay-icon-img hidden" id="announcement-overlay-icon-img" alt="" />
+                <h2 class="overlay-title" id="announcement-overlay-title">Announcement</h2>
+            </div>
+
+            <div class="overlay-content announcement-overlay-content" id="announcement-overlay-message"></div>
+
+            <div class="overlay-actions announcement-overlay-actions">
+                <button class="overlay-btn overlay-btn-secondary" id="announcement-overlay-dismiss-btn">Dismiss</button>
+                <button class="overlay-btn overlay-btn-secondary" id="announcement-overlay-learn-more-btn">Learn More</button>
+            </div>
+        </div>
+    </div>
+</template>

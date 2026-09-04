@@ -1,5 +1,5 @@
 /*
- * Copyright ©2025 HP Development Company, L.P.
+ * Copyright ©2025-2026 HP Development Company, L.P.
  * Licensed under the X11 License. See LICENSE file in the project root for details.
  */
 
@@ -38,6 +38,16 @@ export interface GroupServiceConfig {
  * Minimum number of devices required in a group
  */
 const MIN_GROUP_SIZE = 2;
+
+/**
+ * Shape of a single network interface entry parsed from `lshw -class network -json` output.
+ * Only the fields we actually inspect are declared; lshw emits many more.
+ */
+interface LshwNetworkInterface {
+    product?: string;
+    vendor?: string;
+    logicalname?: string;
+}
 const NETPLAN_CONNECTX_CONFIG_PATH = '/etc/netplan/40-zgx-connectx.yaml';
 
 export class ConnectXGroupService {
@@ -78,7 +88,7 @@ export class ConnectXGroupService {
             
             this.config.telemetry.trackEvent({
                 eventType: TelemetryEventType.Group,
-                action: 'create',
+                action: 'create'
             });
 
             return {
@@ -121,26 +131,11 @@ export class ConnectXGroupService {
             return {
                 success: true,
                 group: group,
-                message: `Created group and configured ConnectX NICs for all devices`
+                message: 'Created group and configured ConnectX NICs for all devices'
             };
         } catch (error) {
             // Roll back group creation if NIC configuration fails.
-            // Make a best effort to unconfigure any devices that were successfully configured before the failure.
-            try {
-                await this.unconfigureConnectXNICsForGroup(group.id, password);
-                logger.info('Devices unconfigured after NIC configuration failure', { groupId: group.id });
-            } catch (unconfigureError) {
-                const unconfigureErrorMessage = unconfigureError instanceof Error ? unconfigureError.message : String(unconfigureError);
-                logger.error('Failed to unconfigure devices after NIC configuration failure', { groupId: group.id, error: unconfigureErrorMessage });
-            }
-            // Remove group.
-            try {
-                await this.removeGroup(group.id);
-                logger.info('Group rolled back after NIC configuration failure', { groupId: group.id });
-            } catch (removeError) {
-                const removeErrorMessage = removeError instanceof Error ? removeError.message : String(removeError);
-                logger.error('Failed to roll back group after NIC configuration failure', { groupId: group.id, error: removeErrorMessage });
-            }
+            await this.rollbackGroupCreationAfterNICFailure(group.id, password);
 
             const errorMessage = error instanceof Error ? error.message : String(error);
             logger.error('Failed to configure ConnectX NICs after group creation', { groupId: group.id, error: errorMessage });
@@ -151,8 +146,30 @@ export class ConnectXGroupService {
                 success: false,
                 group: group,
                 error: `Failed to configure ConnectX NICs for devices in group: ${errorMessage}`,
-                message: `Failed to configure ConnectX NICs for devices in group. Group creation has been rolled back.`
+                message: 'Failed to configure ConnectX NICs for devices in group. Group creation has been rolled back.'
             };
+        }
+    }
+
+    /**
+     * Best-effort rollback of NIC configuration and group creation after a failed NIC configuration attempt.
+     * Makes a best effort to unconfigure any devices that were successfully configured before the failure.
+     */
+    private async rollbackGroupCreationAfterNICFailure(groupId: string, password: string): Promise<void> {
+        try {
+            await this.unconfigureConnectXNICsForGroup(groupId, password);
+            logger.info('Devices unconfigured after NIC configuration failure', { groupId });
+        } catch (unconfigureError) {
+            const unconfigureErrorMessage = unconfigureError instanceof Error ? unconfigureError.message : String(unconfigureError);
+            logger.error('Failed to unconfigure devices after NIC configuration failure', { groupId, error: unconfigureErrorMessage });
+        }
+
+        try {
+            await this.removeGroup(groupId);
+            logger.info('Group rolled back after NIC configuration failure', { groupId });
+        } catch (removeError) {
+            const removeErrorMessage = removeError instanceof Error ? removeError.message : String(removeError);
+            logger.error('Failed to roll back group after NIC configuration failure', { groupId, error: removeErrorMessage });
         }
     }
 
@@ -219,7 +236,7 @@ export class ConnectXGroupService {
 
             this.config.telemetry.trackEvent({
                 eventType: TelemetryEventType.Group,
-                action: 'add-device',
+                action: 'add-device'
             });
 
             return {
@@ -284,7 +301,7 @@ export class ConnectXGroupService {
 
                 this.config.telemetry.trackEvent({
                     eventType: TelemetryEventType.Group,
-                    action: 'remove-device',
+                    action: 'remove-device'
                 });
 
                 return {
@@ -311,7 +328,7 @@ export class ConnectXGroupService {
 
             this.config.telemetry.trackEvent({
                 eventType: TelemetryEventType.Group,
-                action: 'remove-device',
+                action: 'remove-device'
             });
 
             return {
@@ -360,7 +377,7 @@ export class ConnectXGroupService {
 
             this.config.telemetry.trackEvent({
                 eventType: TelemetryEventType.Group,
-                action: 'remove',
+                action: 'remove'
             });
 
             return {
@@ -589,72 +606,11 @@ export class ConnectXGroupService {
     public async getConnectXNICsForDevice(device: Device): Promise<ConnectXNIC[]> {
         logger.debug('Discovering ConnectX NICs for device', { device: device.name });
 
-        let client: SSHClient | undefined;
+        // Create a single SSH connection for all operations
+        const client = await this.connectForNICDiscovery(device);
+
         try {
-            // Create a single SSH connection for all operations
-            try {
-                client = await createSSHConnection(device, { readyTimeout: 10000, timeout: 10000 });
-            } catch (connectionError) {
-                const errorMessage = connectionError instanceof Error ? connectionError.message : String(connectionError);
-                logger.error('SSH connection failed during ConnectX NIC discovery', {
-                    device: device.name,
-                    error: errorMessage
-                });
-                throw new Error(`Failed to establish SSH connection to ${device.name}: ${errorMessage}`);
-            }
-
-            // Discover ConnectX NICs using lshw
-            const lshwCommand = 'lshw -class network -json';
-            const lshwResult = await executeCommandOnClient(
-                client,
-                lshwCommand,
-                { operationName: 'Discover ConnectX NICs', timeoutSeconds: 15 }
-            );
-
-            if (!lshwResult.success) {
-                const errorMessage = `lshw command failed: ${lshwResult.stderr}`;
-                logger.error('Failed to discover NICs via lshw', {
-                    device: device.name,
-                    error: lshwResult.stderr
-                });
-                throw new Error(`Failed to discover NICs on ${device.name}: ${errorMessage}`);
-            }
-
-            // Parse JSON output
-            let networkInterfaces: any[];
-            try {
-                const parsed = JSON.parse(lshwResult.stdout);
-                // lshw can return either an array or a single object
-                networkInterfaces = Array.isArray(parsed) ? parsed : [parsed];
-            } catch (parseError) {
-                const errorMessage = parseError instanceof Error ? parseError.message : String(parseError);
-                logger.error('Failed to parse lshw JSON output', {
-                    device: device.name,
-                    error: errorMessage
-                });
-                throw new Error(`Failed to parse lshw output for ${device.name}: ${errorMessage}`);
-            }
-
-            // Filter for Mellanox ConnectX NICs
-            const mellanoxNICs = networkInterfaces.filter(nic => {
-                const product = nic.product?.toLowerCase() || '';
-                const vendor = nic.vendor?.toLowerCase() || '';
-                const logicalName = nic.logicalname || '';
-
-                // Must have Mellanox in product or vendor
-                const isMellanox = product.includes('mellanox') || vendor.includes('mellanox');
-                
-                // Must have a logical name that starts with "enp" (lowercase)
-                const hasValidName = typeof logicalName === 'string' && logicalName.startsWith('enp');
-
-                return isMellanox && hasValidName;
-            });
-
-            logger.debug('Found Mellanox ConnectX NICs', {
-                device: device.name,
-                count: mellanoxNICs.length,
-                nics: mellanoxNICs.map(nic => nic.logicalname)
-            });
+            const mellanoxNICs = await this.discoverMellanoxNICs(client, device);
 
             // If no ConnectX NICs found, return empty array (this is a valid result)
             if (mellanoxNICs.length === 0) {
@@ -665,43 +621,7 @@ export class ConnectXGroupService {
             }
 
             // Get IPv4 addresses for each NIC using the same connection
-            const connectXNICs: ConnectXNIC[] = [];
-
-            for (const nic of mellanoxNICs) {
-                const linuxDeviceName = nic.logicalname;
-                
-                // Get IPv4 address
-                const ipCommand = `ip a l ${linuxDeviceName} | awk '/inet / {print $2}'`;
-                const ipResult = await executeCommandOnClient(
-                    client,
-                    ipCommand,
-                    { operationName: `Get IP for ${linuxDeviceName}`, timeoutSeconds: 10 }
-                );
-
-                let ipv4Address = '';
-                if (ipResult.success && ipResult.stdout.trim()) {
-                    // Extract just the IP address without CIDR notation
-                    const ipWithCidr = ipResult.stdout.trim().split('\n')[0];
-                    ipv4Address = ipWithCidr.split('/')[0];
-                } else if (!ipResult.success) {
-                    logger.debug('Could not get IP address for NIC (may not have IP assigned)', {
-                        device: device.name,
-                        nic: linuxDeviceName,
-                        error: ipResult.stderr
-                    });
-                }
-
-                connectXNICs.push({
-                    linuxDeviceName,
-                    ipv4Address
-                });
-
-                logger.debug('ConnectX NIC discovered', {
-                    device: device.name,
-                    linuxDeviceName,
-                    ipv4Address: ipv4Address || 'none'
-                });
-            }
+            const connectXNICs = await this.resolveNICIPAddresses(client, device, mellanoxNICs);
 
             logger.info('ConnectX NIC discovery complete', {
                 device: device.name,
@@ -712,16 +632,147 @@ export class ConnectXGroupService {
 
         } finally {
             // Always close the SSH connection
-            if (client) {
-                try {
-                    client.end();
-                } catch (err) {
-                    logger.debug('Error closing SSH client for ConnectX NIC discovery', {
-                        device: device.name,
-                        error: err instanceof Error ? err.message : String(err)
-                    });
-                }
+            this.closeSSHClient(client, device, 'ConnectX NIC discovery');
+        }
+    }
+
+    /**
+     * Establish the SSH connection used for ConnectX NIC discovery.
+     */
+    private async connectForNICDiscovery(device: Device): Promise<SSHClient> {
+        try {
+            return await createSSHConnection(device, { readyTimeout: 10000, timeout: 10000 });
+        } catch (connectionError) {
+            const errorMessage = connectionError instanceof Error ? connectionError.message : String(connectionError);
+            logger.error('SSH connection failed during ConnectX NIC discovery', {
+                device: device.name,
+                error: errorMessage
+            });
+            throw new Error(`Failed to establish SSH connection to ${device.name}: ${errorMessage}`, { cause: connectionError });
+        }
+    }
+
+    /**
+     * Discover Mellanox ConnectX NICs on a device by parsing `lshw` output over an existing SSH connection.
+     */
+    private async discoverMellanoxNICs(client: SSHClient, device: Device): Promise<LshwNetworkInterface[]> {
+        // Discover ConnectX NICs using lshw
+        const lshwCommand = 'lshw -class network -json';
+        const lshwResult = await executeCommandOnClient(
+            client,
+            lshwCommand,
+            { operationName: 'Discover ConnectX NICs', timeoutSeconds: 15 }
+        );
+
+        if (!lshwResult.success) {
+            const errorMessage = `lshw command failed: ${lshwResult.stderr}`;
+            logger.error('Failed to discover NICs via lshw', {
+                device: device.name,
+                error: lshwResult.stderr
+            });
+            throw new Error(`Failed to discover NICs on ${device.name}: ${errorMessage}`);
+        }
+
+        // Parse JSON output
+        let networkInterfaces: LshwNetworkInterface[];
+        try {
+            const parsed: unknown = JSON.parse(lshwResult.stdout);
+            // lshw can return either an array or a single object
+            networkInterfaces = Array.isArray(parsed) ? parsed : [parsed];
+        } catch (parseError) {
+            const errorMessage = parseError instanceof Error ? parseError.message : String(parseError);
+            logger.error('Failed to parse lshw JSON output', {
+                device: device.name,
+                error: errorMessage
+            });
+            throw new Error(`Failed to parse lshw output for ${device.name}: ${errorMessage}`, { cause: parseError });
+        }
+
+        // Filter for Mellanox ConnectX NICs
+        const mellanoxNICs = networkInterfaces.filter(nic => {
+            const product = nic.product?.toLowerCase() || '';
+            const vendor = nic.vendor?.toLowerCase() || '';
+            const logicalName = nic.logicalname || '';
+
+            // Must have Mellanox in product or vendor
+            const isMellanox = product.includes('mellanox') || vendor.includes('mellanox');
+
+            // Must have a logical name that starts with "enp" (lowercase)
+            const hasValidName = typeof logicalName === 'string' && logicalName.startsWith('enp');
+
+            return isMellanox && hasValidName;
+        });
+
+        logger.debug('Found Mellanox ConnectX NICs', {
+            device: device.name,
+            count: mellanoxNICs.length,
+            nics: mellanoxNICs.map(nic => nic.logicalname)
+        });
+
+        return mellanoxNICs;
+    }
+
+    /**
+     * Resolve the IPv4 address (if any) for each discovered NIC over an existing SSH connection.
+     */
+    private async resolveNICIPAddresses(client: SSHClient, device: Device, mellanoxNICs: LshwNetworkInterface[]): Promise<ConnectXNIC[]> {
+        const connectXNICs: ConnectXNIC[] = [];
+
+        for (const nic of mellanoxNICs) {
+            // Guaranteed to be a non-empty string here: discoverMellanoxNICs only keeps
+            // entries whose logicalname passed the "enp*" string check.
+            const linuxDeviceName = nic.logicalname ?? '';
+
+            // Get IPv4 address
+            const ipCommand = `ip a l ${linuxDeviceName} | awk '/inet / {print $2}'`;
+            const ipResult = await executeCommandOnClient(
+                client,
+                ipCommand,
+                { operationName: `Get IP for ${linuxDeviceName}`, timeoutSeconds: 10 }
+            );
+
+            let ipv4Address = '';
+            if (ipResult.success && ipResult.stdout.trim()) {
+                // Extract just the IP address without CIDR notation
+                const ipWithCidr = ipResult.stdout.trim().split('\n')[0];
+                ipv4Address = ipWithCidr.split('/')[0];
+            } else if (!ipResult.success) {
+                logger.debug('Could not get IP address for NIC (may not have IP assigned)', {
+                    device: device.name,
+                    nic: linuxDeviceName,
+                    error: ipResult.stderr
+                });
             }
+
+            connectXNICs.push({
+                linuxDeviceName,
+                ipv4Address
+            });
+
+            logger.debug('ConnectX NIC discovered', {
+                device: device.name,
+                linuxDeviceName,
+                ipv4Address: ipv4Address || 'none'
+            });
+        }
+
+        return connectXNICs;
+    }
+
+    /**
+     * Close an SSH client, swallowing and logging any error encountered while doing so.
+     */
+    private closeSSHClient(client: SSHClient | undefined, device: Device, context: string): void {
+        if (!client) {
+            return;
+        }
+        try {
+            client.end();
+        } catch (err) {
+            logger.debug(`Error closing SSH client for ${context}`, {
+                device: device.name,
+                error: err instanceof Error ? err.message : String(err)
+            });
         }
     }
 
@@ -765,7 +816,7 @@ export class ConnectXGroupService {
                     device: device.name,
                     error: errorMessage
                 });
-                throw new Error(`Failed to establish SSH connection to ${device.name}: ${errorMessage}`);
+                throw new Error(`Failed to establish SSH connection to ${device.name}: ${errorMessage}`, { cause: connectionError });
             }
 
             // Build netplan configuration content
@@ -880,7 +931,7 @@ export class ConnectXGroupService {
         }
 
         const devices = deviceResults.filter((device): device is Device => device !== null);
-        const failures: Array<{ deviceId: string; deviceName: string; error: string }> = [];
+        const failures: { deviceId: string; deviceName: string; error: string }[] = [];
 
         for (const device of devices) {
             try {
@@ -1048,7 +1099,7 @@ export class ConnectXGroupService {
         }
 
         const devices = deviceResults.filter((device): device is Device => device !== null);
-        const failures: Array<{ deviceId: string; deviceName: string; error: string }> = [];
+        const failures: { deviceId: string; deviceName: string; error: string }[] = [];
 
         for (const device of devices) {
             try {
@@ -1110,8 +1161,7 @@ export class ConnectXGroupService {
                     `Invalid linuxDeviceName for netplan configuration: ${nic.linuxDeviceName}`
                 );
             }
-            lines.push(`    ${nic.linuxDeviceName}:`);
-            lines.push('      link-local: [ ipv4 ]');
+            lines.push(`    ${nic.linuxDeviceName}:`, '      link-local: [ ipv4 ]');
         }
 
         return lines.join('\n');

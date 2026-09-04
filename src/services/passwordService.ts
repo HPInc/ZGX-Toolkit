@@ -1,5 +1,5 @@
 /*
- * Copyright ©2025 HP Development Company, L.P.
+ * Copyright ©2025-2026 HP Development Company, L.P.
  * Licensed under the X11 License. See LICENSE file in the project root for details.
  */
 
@@ -21,7 +21,7 @@ export class PasswordService {
         logger.info('Prompting user for password');
 
         const password = await vscode.window.showInputBox({
-            prompt: message || 'Enter your user password for your ZGX device',
+            prompt: message || 'Enter your user password for your device',
             password: true,
             placeHolder: 'Password',
             ignoreFocusOut: true,
@@ -68,7 +68,7 @@ export class PasswordService {
         logger.warn('Password required but not provided');
 
         const selection = await vscode.window.showWarningMessage(
-            'A password is required to install these applications on your ZGX device.',
+            'A password is required to install these applications on your device.',
             'Retry',
             'Cancel'
         );

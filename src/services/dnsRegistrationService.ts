@@ -1,5 +1,5 @@
 /*
- * Copyright ©2025 HP Development Company, L.P.
+ * Copyright ©2025-2026 HP Development Company, L.P.
  * Licensed under the X11 License. See LICENSE file in the project root for details.
  */
 
@@ -12,6 +12,8 @@ import { Device } from '../types/devices';
 import { logger } from '../utils/logger';
 import { executeSSHCommand } from '../utils/sshConnection';
 import { NET_DNSSD_SERVICES, NET_PROTOCOLS } from '../constants/net';
+import type * as vscode from 'vscode';
+import type { DeviceService } from './deviceService';
 
 export enum RegistrationErrorType {
     NONE = 'none',
@@ -110,7 +112,7 @@ export class DNSServiceRegistration {
      */
     private async calculateDeviceIdentifier(device: Device): Promise<string | null> {
         logger.debug('Calculating device unique identifier from MAC address hash');
-        const identifierCommand = `ip route show default | awk '/default/ { print $5 }' | head -1 | xargs -I {} cat /sys/class/net/{}/address | tr -d ':' | sha256sum | cut -c1-8`;
+        const identifierCommand = 'ip route show default | awk \'/default/ { print $5 }\' | head -1 | xargs -I {} cat /sys/class/net/{}/address | tr -d \':\' | sha256sum | cut -c1-8';
         const identifierResult = await executeSSHCommand(
             device,
             identifierCommand,
@@ -142,7 +144,7 @@ export class DNSServiceRegistration {
         const serviceFileContent = this.generateServiceFileXML(deviceIdentifier);
         logger.debug('Creating hpzgx.service file on the ZGX device');
         
-        const innerCommand = "echo '" + serviceFileContent + "' | tee " + DNSServiceRegistration.SERVICE_FILE_PATH + " > /dev/null";
+        const innerCommand = "echo '" + serviceFileContent + "' | tee " + DNSServiceRegistration.SERVICE_FILE_PATH + ' > /dev/null';
         const createFileCommand = 'sudo -S bash -c ' + this.escapeShellArg(innerCommand);
         const createResult = await executeSSHCommand(
             device,
@@ -160,7 +162,7 @@ export class DNSServiceRegistration {
             });
             return this.createFailureResult(
                 RegistrationErrorType.SERVICE_FILE_CREATION_FAILED,
-                `Failed to create the DNS service file on the device.`
+                'Failed to create the DNS service file on the device.'
             );
         }
         
@@ -250,8 +252,8 @@ export class DNSServiceRegistration {
      * @param vscodeWindow Optional VS Code window API for password prompting (defaults to vscode.window)
      */
     public async migrateExistingDevices(
-        deviceService: any,
-        vscodeWindow?: any
+        deviceService: DeviceService,
+        vscodeWindow?: typeof vscode.window
     ): Promise<void> {
         logger.info('Starting mDNS service migration for existing devices');
 
@@ -266,7 +268,7 @@ export class DNSServiceRegistration {
                 return;
             }
 
-            const devicesToMigrate = await this.checkAndUpdateDeviceStatus(candidateDevices, deviceService);
+            const devicesToMigrate = await this.checkAndUpdateDeviceStatus(candidateDevices);
 
             if (devicesToMigrate.length === 0) {
                 logger.info('All eligible devices already have mDNS service registered');
@@ -314,7 +316,7 @@ export class DNSServiceRegistration {
      * Check device status based on internal data (dnsInstanceName property)
      * Returns devices that need DNS registration (no dnsInstanceName or empty)
      */
-    private async checkAndUpdateDeviceStatus(candidateDevices: Device[], deviceService: any): Promise<Device[]> {
+    private async checkAndUpdateDeviceStatus(candidateDevices: Device[]): Promise<Device[]> {
         const devicesToMigrate: Device[] = [];
 
         for (const device of candidateDevices) {
@@ -348,7 +350,7 @@ export class DNSServiceRegistration {
             .replaceAll("'", '&apos;');
     }
 
-     /**
+    /**
     * Generate the XML content for the DNS service file.
     * 
     * @param deviceIdentifier The unique identifier for the device

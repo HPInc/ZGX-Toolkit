@@ -1,5 +1,5 @@
 <!--
-  Copyright ©2025 HP Development Company, L.P.
+  Copyright ©2025-2026 HP Development Company, L.P.
   Licensed under the X11 License. See LICENSE file in the project root for details.
 -->
 
@@ -14,23 +14,36 @@
     </div>
 
     {{#each categories}}
-    <div class="category">
+    <div class="category {{#if disabled}}category-disabled{{/if}}">
         <div class="category-header">
             <h2 class="category-title">{{name}}</h2>
             <p class="category-description">{{description}}</p>
         </div>
+        {{#if disabled}}
+        <div class="category-unsupported-banner">
+            <span class="category-unsupported-icon-wrap" aria-hidden="true">
+                <span class="category-unsupported-triangle"></span>
+                <span class="category-unsupported-exclamation">!</span>
+            </span>
+            <div class="category-unsupported-content">
+                <div class="category-unsupported-title">Unsupported on current device</div>
+                <p class="category-unsupported-body">{{unsupportedMessage}}</p>
+            </div>
+        </div>
+        {{/if}}
         <div class="app-grid">
             {{#each apps}}
-            <div class="app-widget {{#if installed}}app-installed{{/if}} {{#if selected}}app-selected{{/if}} {{#if isBaseSystemInstalled}}base-system-installed{{/if}}" 
+            <div class="app-widget {{#if installed}}app-installed{{/if}} {{#if selected}}app-selected{{/if}} {{#if isBaseSystemInstalled}}base-system-installed{{/if}} {{#if disabled}}app-disabled{{/if}}" 
                  data-app-id="{{id}}" 
-                 {{#if installed}}data-installed="true"{{/if}}>
+                 {{#if installed}}data-installed="true"{{/if}}
+                 {{#if disabled}}data-disabled="true"{{/if}}>
                 {{#if selected}}
                 <div class="checkmark">✓</div>
                 {{/if}}
                 {{#if installed}}
                 <div class="installed-badge">Installed</div>
                 {{/if}}
-                <div class="app-icon">{{icon}}</div>
+                <div class="app-icon">{{#if iconUri}}<img src="{{iconUri}}" alt="{{name}} icon" class="app-icon-img" />{{else}}{{icon}}{{/if}}</div>
                 <div class="app-title">{{name}}</div>
                 <div class="app-description">{{description}}</div>
                 <div class="app-features">

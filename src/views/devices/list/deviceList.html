@@ -1,19 +1,16 @@
 <!--
-  Copyright ©2025 HP Development Company, L.P.
+  Copyright ©2025-2026 HP Development Company, L.P.
   Licensed under the X11 License. See LICENSE file in the project root for details.
 -->
 
 <div class="container fill-vertical">
     <div class="header-buttons">
-        <button class="btn btn-block mb-2" id="add-device-btn" aria-label="Add a new device">Add Device</button>
-        <button class="btn btn-secondary btn-block mb-2" id="open-editor-btn" aria-label="Open the ZGX Device Manager in a new editor">Open ZGX Device Manager</button>
+        <button class="btn btn-block mb-2" id="add-device-btn">Add Device</button>
+        <button class="btn btn-secondary btn-block mb-2" id="open-editor-btn">Open ZTK Device Manager</button>
     </div>
     
     <div class="content-area">
         {{#unless noDevices}}
-
-        {{#if pairedGroups}}
-        <!-- Sectioned layout: shown when paired groups exist -->
 
         <!-- Paired Devices Section -->
         <div class="section-header" data-section="paired" aria-expanded="true">
@@ -23,11 +20,12 @@
             </div>
             <button class="section-toggle" data-section="paired" aria-label="Toggle paired devices section">
                 <span class="section-toggle-text">Show less</span>
+                <span class="codicon codicon-chevron-up section-toggle-icon" aria-hidden="true"></span>
             </button>
         </div>
         <div class="section-content" id="section-paired">
             {{#each pairedGroups}}
-            <div class="sidebar-paired-group-container collapsed" data-group-id="{{groupId}}">
+            <div class="sidebar-paired-group-container" data-group-id="{{groupId}}">
                 <div class="sidebar-paired-group-header"></div>
                 <div class="paired-group-content">
                 <ul class="list device-list" aria-label="Paired devices">
@@ -42,6 +40,9 @@
                 </div>
             </div>
             {{/each}}
+            {{#unless pairedGroups}}
+            <output class="section-empty-state">No paired devices</output>
+            {{/unless}}
         </div>
 
         <!-- Unpaired Devices Section -->
@@ -52,50 +53,46 @@
             </div>
             <button class="section-toggle" data-section="unpaired" aria-label="Toggle unpaired devices section">
                 <span class="section-toggle-text">Show less</span>
+                <span class="codicon codicon-chevron-up section-toggle-icon" aria-hidden="true"></span>
             </button>
         </div>
         <div class="section-content" id="section-unpaired">
-            {{#if unpairedDevices}}
             <ul class="list device-list" aria-label="List of unpaired devices">
                 {{#each unpairedDevices}}
                 {{> deviceListItem}}
                 {{/each}}
             </ul>
-            {{else}}
-            <div class="section-empty-state" role="status">
-                <p>No unpaired devices</p>
-            </div>
-            {{/if}}
+            {{#unless unpairedDevices}}
+            <output class="section-empty-state">No unpaired devices</output>
+            {{/unless}}
         </div>
-
-        {{else}}
-        <!-- Flat layout: shown when no paired groups exist -->
-        <ul class="list device-list" id="deviceList" aria-label="List of devices">
-            {{#each devices}}
-            {{> deviceListItem}}
-            {{/each}}
-        </ul>
-        {{/if}}
 
         {{/unless}}
 
         {{#if noDevices}}
-        <div class="empty-state" role="status">
+        <output class="empty-state">
             <p>No devices added yet</p>
-        </div>
+        </output>
         {{/if}}
     </div>
 
     <div class="quick-links-root">
         <h2 class="quick-links-header">Quick Links</h2>
         <ul class="quick-links-list">
+            <li class="quick-links-item" data-link="zrt-info">
+                <span class="codicon codicon-lightbulb quick-links-icon" aria-hidden="true"></span>
+                <span class="quick-links-text">Learn About HP Z Runtime</span>
+                {{#unless zrtQuickLinkSeen}}
+                <span class="quick-links-badge">New!</span>
+                {{/unless}}
+            </li>
             <li class="quick-links-item" data-link="templates">
                 <span class="codicon codicon-rocket quick-links-icon" aria-hidden="true"></span>
                 <span class="quick-links-text">Quick Start Templates</span>
             </li>
             <li class="quick-links-item" data-link="docs">
                 <span class="codicon codicon-link-external quick-links-icon" aria-hidden="true"></span>
-                <span class="quick-links-text">ZGX Documentation</span>
+                <span class="quick-links-text">Z Toolkit Documentation</span>
             </li>
         </ul>
     </div>

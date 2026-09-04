@@ -1,5 +1,5 @@
 /*
- * Copyright ©2025 HP Development Company, L.P.
+ * Copyright ©2025-2026 HP Development Company, L.P.
  * Licensed under the X11 License. See LICENSE file in the project root for details.
  */
 
@@ -35,7 +35,7 @@ export function getSSHConfig(device: Device, options?: SSHConfigOptions): Connec
         port: device.port || 22,
         username: device.username,
         readyTimeout: options?.readyTimeout,
-        timeout: options?.timeout,
+        timeout: options?.timeout
     };
 
     const hostConfig = loadSSHConfigForHost(device.host);
@@ -52,7 +52,7 @@ export function getSSHConfig(device: Device, options?: SSHConfigOptions): Connec
 /**
  * Load SSH config file and get host-specific configuration
  */
-function loadSSHConfigForHost(host: string): any {
+function loadSSHConfigForHost(host: string): Record<string, string | string[]> | null {
     const sshConfigPath = path.join(os.homedir(), '.ssh', 'config');
 
     if (!fs.existsSync(sshConfigPath)) {
@@ -80,7 +80,7 @@ function loadSSHConfigForHost(host: string): any {
 /**
  * Apply SSH config settings to connection config
  */
-function applyHostConfigToConnection(config: ConnectConfig, hostConfig: any): void {
+function applyHostConfigToConnection(config: ConnectConfig, hostConfig: Record<string, string | string[]>): void {
     applyHostName(config, hostConfig);
     applyPort(config, hostConfig);
     applyUsername(config, hostConfig);
@@ -91,7 +91,7 @@ function applyHostConfigToConnection(config: ConnectConfig, hostConfig: any): vo
 /**
  * Apply HostName from SSH config
  */
-function applyHostName(config: ConnectConfig, hostConfig: any): void {
+function applyHostName(config: ConnectConfig, hostConfig: Record<string, string | string[]>): void {
     if (hostConfig.HostName) {
         config.host = typeof hostConfig.HostName === 'string' 
             ? hostConfig.HostName 
@@ -102,7 +102,7 @@ function applyHostName(config: ConnectConfig, hostConfig: any): void {
 /**
  * Apply Port from SSH config
  */
-function applyPort(config: ConnectConfig, hostConfig: any): void {
+function applyPort(config: ConnectConfig, hostConfig: Record<string, string | string[]>): void {
     if (hostConfig.Port) {
         config.port = typeof hostConfig.Port === 'string'
             ? Number.parseInt(hostConfig.Port)
@@ -113,7 +113,7 @@ function applyPort(config: ConnectConfig, hostConfig: any): void {
 /**
  * Apply User from SSH config
  */
-function applyUsername(config: ConnectConfig, hostConfig: any): void {
+function applyUsername(config: ConnectConfig, hostConfig: Record<string, string | string[]>): void {
     if (hostConfig.User) {
         config.username = typeof hostConfig.User === 'string'
             ? hostConfig.User
@@ -124,7 +124,7 @@ function applyUsername(config: ConnectConfig, hostConfig: any): void {
 /**
  * Apply IdentityFile from SSH config
  */
-function applyIdentityFiles(config: ConnectConfig, hostConfig: any): void {
+function applyIdentityFiles(config: ConnectConfig, hostConfig: Record<string, string | string[]>): void {
     if (!hostConfig.IdentityFile) {
         return;
     }
@@ -146,7 +146,7 @@ function applyIdentityFiles(config: ConnectConfig, hostConfig: any): void {
 /**
  * Apply IdentitiesOnly setting from SSH config
  */
-function applyIdentitiesOnly(config: ConnectConfig, hostConfig: any): void {
+function applyIdentitiesOnly(config: ConnectConfig, hostConfig: Record<string, string | string[]>): void {
     if (!hostConfig.IdentitiesOnly) {
         return;
     }
@@ -181,7 +181,7 @@ function tryCommonKeyLocations(config: ConnectConfig): void {
     const commonKeys = [
         path.join(os.homedir(), '.ssh', 'id_ed25519'),
         path.join(os.homedir(), '.ssh', 'id_rsa'),
-        path.join(os.homedir(), '.ssh', 'id_ecdsa'),
+        path.join(os.homedir(), '.ssh', 'id_ecdsa')
     ];
 
     for (const keyPath of commonKeys) {

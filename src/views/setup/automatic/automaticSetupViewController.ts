@@ -1,27 +1,28 @@
 /*
- * Copyright ©2025 HP Development Company, L.P.
+ * Copyright ©2025-2026 HP Development Company, L.P.
  * Licensed under the X11 License. See LICENSE file in the project root for details.
  */
 
-import { BaseViewController } from '../../baseViewController';
+import { BaseSetupViewController } from '../baseSetupViewController';
+import { SETUP_VIEW_IDS } from '../setupViewIds';
 import { Logger } from '../../../utils/logger';
 import { ITelemetryService, TelemetryEventType } from '../../../types/telemetry';
 import { Device } from '../../../types/devices';
 import { Message } from '../../../types/messages';
 import { ConnectionService } from '../../../services/connectionService';
 import { SetupOptionsViewController } from '../options/setupOptionsViewController';
-import { DnsRegistrationViewController } from '../dnsRegistration/dnsRegistrationViewController';
+import { DetectDeviceTypeViewController } from '../detectDeviceType/detectDeviceTypeViewController';
 
 
 /**
  * Automatic SSH setup view - guides users through automated SSH key setup
  */
-export class AutomaticSetupViewController extends BaseViewController {
-    private connectionService: ConnectionService;
+export class AutomaticSetupViewController extends BaseSetupViewController {
+
     private currentDevice?: Device;
 
     public static viewId(): string {
-        return 'setup/automatic';
+        return SETUP_VIEW_IDS.automatic;
     }
 
     constructor(
@@ -31,11 +32,10 @@ export class AutomaticSetupViewController extends BaseViewController {
             connectionService: ConnectionService;
         }
     ) {
-        super(deps.logger, deps.telemetry);
-        this.connectionService = deps.connectionService;
-        this.template = this.loadTemplate('./automaticSetup.html', __dirname);
-        this.styles = this.loadTemplate('./automaticSetup.css', __dirname);
-        this.clientScript = this.loadTemplate('./automaticSetup.js', __dirname);
+        super(deps);
+        this.template = this.loadTemplate('setup/automatic/automaticSetup.html');
+        this.styles = this.loadTemplate('setup/automatic/automaticSetup.css');
+        this.clientScript = this.loadTemplate('setup/automatic/automaticSetup.js');
     }
 
     async render(params?: { device: Device }, nonce?: string): Promise<string> {
@@ -57,8 +57,8 @@ export class AutomaticSetupViewController extends BaseViewController {
             eventType: TelemetryEventType.View,
             action: 'navigate',
             properties: {
-                toView: 'setup.automatic',
-            },
+                toView: 'setup.automatic'
+            }
         });
 
         return this.wrapHtml(html, nonce);
@@ -79,9 +79,19 @@ export class AutomaticSetupViewController extends BaseViewController {
                 await this.handleAutomaticRun(this.currentDevice);
                 break;
 
-            case 'testConnection':
-                await this.handleTestConnection(this.currentDevice);
+            case 'testConnection': {
+                const success = await this.handleTestConnection(
+                    this.currentDevice,
+                    'Failed to verify SSH connection. Please try again or use manual setup.'
+                );
+                if (success) {
+                    await this.navigateTo(DetectDeviceTypeViewController.viewId(), {
+                        device: this.currentDevice,
+                        setupType: 'automatic'
+                    }, 'editor');
+                }
                 break;
+            }
 
             case 'back':
                 // Navigate back to setup options
@@ -90,42 +100,6 @@ export class AutomaticSetupViewController extends BaseViewController {
 
             default:
                 this.logger.debug('Unhandled message type in automatic setup', { type: message.type });
-        }
-    }
-
-    /**
-     * Handle test connection - verify SSH connectivity
-     */
-    private async handleTestConnection(device: Device): Promise<void> {
-        this.logger.info('Testing SSH connection', { device: device.name });
-
-        try {
-            // Test SSH connectivity
-            const testSuccessful = await this.connectionService.testSSHKeyConnectivity(device);
-
-            if (testSuccessful) {
-                this.logger.info('SSH connection test successful', { device: device.name });
-                
-                // Navigate to DNS registration view
-                await this.navigateTo(DnsRegistrationViewController.viewId(), { 
-                    device: device,
-                    setupType: 'automatic'
-                }, 'editor');
-                return;
-            } else {
-                throw new Error('SSH connection test failed - could not connect to device');
-            }
-
-        } catch (error) {
-            this.logger.error('Connection test failed', {
-                error: error instanceof Error ? error.message : String(error),
-                device: device.name
-            });
-
-            this.sendMessageToWebview({
-                type: 'connectionTestFailed',
-                error: error instanceof Error ? error.message : 'Failed to verify SSH connection. Please try again or use manual setup.'
-            });
         }
     }
 

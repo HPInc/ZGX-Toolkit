@@ -1,5 +1,5 @@
 /*
- * Copyright ©2025 HP Development Company, L.P.
+ * Copyright ©2025-2026 HP Development Company, L.P.
  * Licensed under the X11 License. See LICENSE file in the project root for details.
  */
 
@@ -13,7 +13,7 @@ import { URLS } from '../../../constants/config';
 import * as vscode from 'vscode';
 import { SetupOptionsViewController } from '../../setup/options/setupOptionsViewController';
 import { AppSelectionViewController } from '../../apps/selection/appSelectionViewController';
-import { DeviceService, ConnectXGroupService } from '../../../services';
+import { DeviceService, ConnectXGroupService, extensionStateService } from '../../../services';
 import { TemplateListViewController } from '../../templates/templateListViewController';
 import { DnsRegistrationViewController } from '../../setup/dnsRegistration/dnsRegistrationViewController';
 import { DeviceManagerViewController } from '../manager/deviceManagerViewController';
@@ -28,7 +28,7 @@ export class DeviceListViewController extends BaseViewController {
     private readonly unsubscribes: (() => void)[] = [];
     private readonly connectxGroupService: ConnectXGroupService;
     private readonly deviceService: DeviceService;
-    private lastRenderParams?: any;
+    private lastRenderParams?: Record<string, unknown>;
 
     public static viewId(): string {
         return 'devices/list';
@@ -45,32 +45,33 @@ export class DeviceListViewController extends BaseViewController {
         this.connectxGroupService = deps.connectxGroupService;
         
         // Load templates
-        this.template = this.loadTemplate('./deviceList.html', __dirname);
-        this.styles = this.loadTemplate('./deviceList.css', __dirname);
-        this.clientScript = this.loadTemplate('./deviceList.js', __dirname);
+        this.template = this.loadTemplate('devices/list/deviceList.html');
+        this.styles = this.loadTemplate('devices/list/deviceList.css');
+        this.clientScript = this.loadTemplate('devices/list/deviceList.js');
 
         // Register device list item partial for template reuse
-        const deviceListItemPartial = this.loadTemplate('./deviceListItem.html', __dirname);
+        const deviceListItemPartial = this.loadTemplate('devices/list/deviceListItem.html');
         Handlebars.registerPartial('deviceListItem', deviceListItemPartial);
 
-        // Subscribe to device updates
-        this.unsubscribes.push(this.deviceService.subscribe(() => {
-            this.logger.trace('Device store updated, refreshing device list view');
-            this.refresh(this.lastRenderParams).catch(error => {
-                this.logger.error('Failed to refresh device list view after store update', { error });
-            });
-        }));
-
-        // Subscribe to group store updates
-        this.unsubscribes.push(this.connectxGroupService.subscribe(() => {
-            this.logger.trace('Group store updated, refreshing device list view');
-            this.refresh(this.lastRenderParams).catch(error => {
-                this.logger.error('Failed to refresh device list view after group store update', { error });
-            });
-        }));
+        this.unsubscribes.push(
+            // Subscribe to device updates
+            this.deviceService.subscribe(() => {
+                this.logger.trace('Device store updated, refreshing device list view');
+                this.refresh(this.lastRenderParams).catch(error => {
+                    this.logger.error('Failed to refresh device list view after store update', { error });
+                });
+            }),
+            // Subscribe to group store updates
+            this.connectxGroupService.subscribe(() => {
+                this.logger.trace('Group store updated, refreshing device list view');
+                this.refresh(this.lastRenderParams).catch(error => {
+                    this.logger.error('Failed to refresh device list view after group store update', { error });
+                });
+            })
+        );
     }
 
-    async render(params?: any, nonce?: string): Promise<string> {
+    async render(params?: Record<string, unknown>, nonce?: string): Promise<string> {
         this.logger.debug('Rendering device list view');
 
         // Store params for later use in refresh
@@ -134,7 +135,8 @@ export class DeviceListViewController extends BaseViewController {
             unpairedDevices: unpairedDevices.length > 0 ? unpairedDevices : null,
             pairedDeviceCount: pairedGroups.reduce((sum, g) => sum + g.devices.length, 0),
             unpairedDeviceCount: unpairedDevices.length,
-            noDevices: devices.length === 0
+            noDevices: devices.length === 0,
+            zrtQuickLinkSeen: extensionStateService.hasSeenQuickLinkBadge('zrt-info')
         };
 
         const html = this.renderTemplate(this.template, templateData);
@@ -144,7 +146,7 @@ export class DeviceListViewController extends BaseViewController {
             eventType: TelemetryEventType.View,
             action: 'navigate',
             properties: {
-                toView: 'devices.list',
+                toView: 'devices.list'
             },
             measurements: {
                 deviceCount: devices.length,
@@ -199,7 +201,7 @@ export class DeviceListViewController extends BaseViewController {
             case 'unpair-devices':
                 await this.navigateToUnpairDevices(message.groupId);
                 break;
-            
+
             // Other message types are handled by the provider or services
         }
     }
@@ -224,7 +226,34 @@ export class DeviceListViewController extends BaseViewController {
             case 'templates':
                 await this.templateGallery();
                 break;
+
+            case 'zrt-info':
+                await this.showZrtInfoModal();
+                break;
         }
+    }
+
+    /**
+     * Show the ZRT info modal triggered from the corresponding Quick Links entry in the sidebar. 
+     * Marks the entry's "New" badge as seen.
+     */
+    private async showZrtInfoModal(): Promise<void> {
+        this.logger.info('Opening ZRT info modal from Quick Links');
+
+        this.telemetry.trackEvent({
+            eventType: TelemetryEventType.View,
+            action: 'navigate',
+            properties: {
+                toView: 'external.zrt-info'
+            }
+        });
+
+        await extensionStateService.setQuickLinkBadgeSeen('zrt-info');
+
+        await this.navigateTo(DeviceManagerViewController.viewId(), {
+            showZrtInfoModal: true,
+            zrtLogoUri: this.lastRenderParams?.zrtLogoUri
+        }, 'editor');
     }
 
     /**
@@ -236,15 +265,15 @@ export class DeviceListViewController extends BaseViewController {
     }
 
     /**
-     * Open ZGX technical documentation
+     * Open Z Toolkit technical documentation
      */
     private async openTechDocs(): Promise<void> {
-        this.logger.info('Opening ZGX technical documentation', { url: URLS.ZGX_DOCS });
+        this.logger.info('Opening Z Toolkit technical documentation', { url: URLS.ZGX_DOCS });
         this.telemetry.trackEvent({
             eventType: TelemetryEventType.View,
             action: 'navigate',
             properties: {
-                toView: 'external.docs',
+                toView: 'external.docs'
             }
         });
         await vscode.env.openExternal(vscode.Uri.parse(URLS.ZGX_DOCS));
@@ -261,7 +290,7 @@ export class DeviceListViewController extends BaseViewController {
             this.logger.debug('Connection initiated', { id });
         } catch (error) {
             // Import DeviceNeedsSetupError type
-            const { DeviceNeedsSetupError } = await import('../../../services/deviceService');
+            const { DeviceNeedsSetupError } = await import('../../../services/deviceService.js');
             
             // If device needs setup, navigate to setup flow
             if (error instanceof DeviceNeedsSetupError) {
@@ -368,7 +397,7 @@ export class DeviceListViewController extends BaseViewController {
      */
     private async navigateToUnpairDevices(groupId: string): Promise<void> {
         this.logger.info('Navigating to unpair devices view', { groupId });
-        const { UnpairDevicesViewController } = await import('../../groups/unpairDevices/unpairDevicesViewController');
+        const { UnpairDevicesViewController } = await import('../../groups/unpairDevices/unpairDevicesViewController.js');
         await this.navigateTo(UnpairDevicesViewController.viewId(), { groupId }, 'editor');
     }
 

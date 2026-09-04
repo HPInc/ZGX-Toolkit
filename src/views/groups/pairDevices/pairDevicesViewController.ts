@@ -1,5 +1,5 @@
 /*
- * Copyright ©2025 HP Development Company, L.P.
+ * Copyright ©2025-2026 HP Development Company, L.P.
  * Licensed under the X11 License. See LICENSE file in the project root for details.
  */
 
@@ -8,7 +8,7 @@ import { BaseViewController } from '../../baseViewController';
 import { Logger } from '../../../utils/logger';
 import { ITelemetryService, TelemetryEventType } from '../../../types/telemetry';
 import { Message, PasswordSubmittedMessage } from '../../../types/messages';
-import { Device } from '../../../types/devices';
+import { Device, DeviceType, getDeviceTypeLabel, getDeviceTypeOptions } from '../../../types/devices';
 import { DeviceService, ConnectXGroupService, DeviceHealthCheckService } from '../../../services';
 import { DeviceManagerViewController } from '../../devices/manager/deviceManagerViewController';
 
@@ -18,8 +18,12 @@ import { DeviceManagerViewController } from '../../devices/manager/deviceManager
  * Enforces exactly 2 device selection before allowing pairing.
  */
 export class PairDevicesViewController extends BaseViewController {
-    private unsubscribes: Array<() => void> = [];
-    private pairingInProgress: boolean = false;
+    private unsubscribes: (() => void)[] = [];
+    private pairingInProgress = false;
+    private static readonly SUPPORTED_PAIR_DEVICE_TYPES = new Set<DeviceType>([
+        DeviceType.ZGXFury,
+        DeviceType.ZGXNano
+    ]);
 
     public static viewId(): string {
         return 'groups/pairDevices';
@@ -38,9 +42,9 @@ export class PairDevicesViewController extends BaseViewController {
         this.groupService = deps.connectxGroupService;
         this.healthCheckService = deps.deviceHealthCheckService;
 
-        this.template = this.loadTemplate('./pairDevices.html', __dirname);
-        this.styles = this.loadTemplate('./pairDevices.css', __dirname);
-        this.clientScript = this.loadTemplate('./pairDevices.js', __dirname);
+        this.template = this.loadTemplate('groups/pairDevices/pairDevices.html');
+        this.styles = this.loadTemplate('groups/pairDevices/pairDevices.css');
+        this.clientScript = this.loadTemplate('groups/pairDevices/pairDevices.js');
 
         // Enable error overlay support
         this.enableErrorOverlay();
@@ -48,8 +52,8 @@ export class PairDevicesViewController extends BaseViewController {
         // Enable password input overlay support
         this.enablePasswordInputOverlay();
 
-        // Subscribe to device store updates to refresh available devices
-        this.unsubscribes.push(
+        this.unsubscribes.push(            
+            // Subscribe to device store updates to refresh available devices
             this.deviceService.subscribe(() => {
                 if (this.pairingInProgress) {
                     this.logger.trace('Device store updated during pairing, skipping refresh');
@@ -59,11 +63,8 @@ export class PairDevicesViewController extends BaseViewController {
                 this.refresh().catch(error => {
                     this.logger.error('Failed to refresh pair devices view after store update', { error });
                 });
-            })
-        );
-
-        // Subscribe to group store updates for paired/unpaired states
-        this.unsubscribes.push(
+            }),
+            // Subscribe to group store updates for paired/unpaired states
             this.groupService.subscribe((_groups) => {
                 if (this.pairingInProgress) {
                     this.logger.trace('Group store updated during pairing, skipping refresh');
@@ -77,16 +78,15 @@ export class PairDevicesViewController extends BaseViewController {
         );
     }
 
-    private deviceService: DeviceService;
-    private groupService: ConnectXGroupService;
-    private healthCheckService: DeviceHealthCheckService;
+    private readonly deviceService: DeviceService;
+    private readonly groupService: ConnectXGroupService;
+    private readonly healthCheckService: DeviceHealthCheckService;
 
-    async render(params?: any, nonce?: string): Promise<string> {
+    async render(params?: { zgxFuryDiagramUri?: string; zgxNanoDiagramUri?: string }, nonce?: string): Promise<string> {
         this.logger.debug('Rendering pair devices view', params);
 
-        // Get all devices, excluding those that have not completed initial setup
-        const allDevices = (await this.deviceService.getAllDevices())
-            .filter(device => device.isSetup);
+        // Show all setup-complete devices in the table.
+        const setupDevices = (await this.deviceService.getAllDevices()).filter(device => device.isSetup);
 
         // Get all groups to identify devices already in groups
         const allGroups = await this.groupService.getAllGroups();
@@ -98,25 +98,51 @@ export class PairDevicesViewController extends BaseViewController {
         }
 
         // Map devices with isPaired flag
-        const devicesWithStatus = allDevices
-            .map(device => ({
-                ...device,
-                isPaired: devicesInGroups.has(device.id)
-            }))
+        const devicesWithStatus = setupDevices
+            .map(device => {
+                const deviceType = device.fingerprint?.deviceType;
+                const isSupportedType = !!deviceType && PairDevicesViewController.SUPPORTED_PAIR_DEVICE_TYPES.has(deviceType);
+                const deviceTypeLabel = getDeviceTypeLabel(deviceType) || 'Other';
+                let deviceTypeBadgeClass = 'other';
+                if (deviceType === DeviceType.ZGXNano) {
+                    deviceTypeBadgeClass = 'nano';
+                } else if (deviceType === DeviceType.ZGXFury) {
+                    deviceTypeBadgeClass = 'fury';
+                }
+
+                return {
+                    ...device,
+                    isPaired: devicesInGroups.has(device.id),
+                    isSupportedType,
+                    deviceTypeLabel,
+                    deviceTypeBadgeClass
+                };
+            })
             .sort((a, b) => {
                 // Unpaired devices first, then paired devices
                 if (a.isPaired === b.isPaired) return 0;
                 return a.isPaired ? 1 : -1;
             });
 
-        const availableCount = devicesWithStatus.filter(d => !d.isPaired).length;
+        const availableCount = devicesWithStatus.filter(d => !d.isPaired && d.isSupportedType).length;
+        const selectableDevices = devicesWithStatus.filter(d => !d.isPaired && d.isSupportedType);
+        const hasSelectableNanos = selectableDevices.some(device => device.fingerprint?.deviceType === DeviceType.ZGXNano);
+        const hasSelectableFurys = selectableDevices.some(device => device.fingerprint?.deviceType === DeviceType.ZGXFury);
+        const initialDiagramType = hasSelectableFurys && !hasSelectableNanos ? 'fury' : 'nano';
+        const initialDiagramUri = initialDiagramType === 'fury'
+            ? (params?.zgxFuryDiagramUri || params?.zgxNanoDiagramUri || '')
+            : (params?.zgxNanoDiagramUri || params?.zgxFuryDiagramUri || '');
 
         const data = {
-            devices: allDevices.length > 0 ? devicesWithStatus : null,
-            noDevices: allDevices.length === 0,
-            deviceCount: allDevices.length,
+            devices: setupDevices.length > 0 ? devicesWithStatus : null,
+            noDevices: setupDevices.length === 0,
+            deviceCount: setupDevices.length,
             availableCount: availableCount,
-            zgxNanoDiagramUri: params?.zgxNanoDiagramUri || ''
+            filterDeviceTypeOptions: getDeviceTypeOptions(),
+            diagramUri: initialDiagramUri,
+            initialDiagramType,
+            zgxNanoDiagramUri: params?.zgxNanoDiagramUri || '',
+            zgxFuryDiagramUri: params?.zgxFuryDiagramUri || ''
         };
 
         // Render the main template with device data
@@ -126,11 +152,11 @@ export class PairDevicesViewController extends BaseViewController {
             eventType: TelemetryEventType.View,
             action: 'navigate',
             properties: {
-                toView: 'groups.pairDevices',
+                toView: 'groups.pairDevices'
             },
             measurements: {
                 availableDeviceCount: availableCount,
-                totalDeviceCount: allDevices.length
+                totalDeviceCount: setupDevices.length
             }
         });
 
@@ -170,7 +196,7 @@ export class PairDevicesViewController extends BaseViewController {
                 await this.navigateTo(DeviceManagerViewController.viewId());
                 break;
             default:
-                this.logger.warn('Unknown message type', { type: (message as any).type });
+                this.logger.warn('Unknown message type', { type: message.type });
         }
     }
 
@@ -183,7 +209,7 @@ export class PairDevicesViewController extends BaseViewController {
 
         try {
             // Validate we have exactly 2 devices
-            if (!deviceIds || deviceIds.length !== 2) {
+            if (deviceIds?.length !== 2) {
                 this.sendMessageToWebview({
                     type: 'pair-error',
                     error: 'Please select exactly 2 devices to pair'
@@ -213,7 +239,7 @@ export class PairDevicesViewController extends BaseViewController {
 
                 this.showPairingErrorOverlay(
                     'Device Not Available',
-                    `One or more selected devices is no longer available. The device may have been removed.\n*Please refresh the view and try again.*`,
+                    'One or more selected devices is no longer available. The device may have been removed.\n*Please refresh the view and try again.*',
                     errorMsg,
                     'Return to Device Manager',
                     'cancel',
@@ -280,7 +306,7 @@ export class PairDevicesViewController extends BaseViewController {
 
             this.showPairingErrorOverlay(
                 'Unexpected Error',
-                `An unexpected error occurred while preparing to pair devices.\n*Please try again or contact support if the problem persists.*`,
+                'An unexpected error occurred while preparing to pair devices.\n*Please try again or contact support if the problem persists.*',
                 errorMessage,
                 'Retry'
             );
@@ -323,7 +349,7 @@ export class PairDevicesViewController extends BaseViewController {
 
                 this.showPairingErrorOverlay(
                     'Failed to Pair Devices',
-                    `Device pairing was unsuccessful due to an unexpected failure.\n*The devices were not paired. Please verify your sudo password and network configuration, then try again.*`,
+                    'Device pairing was unsuccessful due to an unexpected failure.\n*The devices were not paired. Please verify your sudo password and network configuration, then try again.*',
                     errorMessage,
                     'Retry Pairing'
                 );
@@ -363,7 +389,7 @@ export class PairDevicesViewController extends BaseViewController {
 
             this.showPairingErrorOverlay(
                 'Failed to Pair Devices',
-                `An unexpected error occurred during device pairing.\n*Please verify your network configuration and try again.*`,
+                'An unexpected error occurred during device pairing.\n*Please verify your network configuration and try again.*',
                 errorMessage,
                 'Retry Pairing'
             );

@@ -1,11 +1,12 @@
 {
   "compilerOptions": {
-    "module": "commonjs",
+    "module": "nodenext",
     "target": "ES2021",
-    "outDir": "out",
+    "outDir": "dist",
     "lib": [
       "ES2021",
-      "DOM"
+      "ES2022.Error",
+      "ES2022.Object"
     ],
     "sourceMap": true,
     "rootDir": "src",
@@ -13,10 +14,9 @@
     "skipLibCheck": true,
     "esModuleInterop": true,
     "forceConsistentCasingInFileNames": true,
-    "moduleResolution": "node",
+    "moduleResolution": "nodenext",
     "types": [
-      "node",
-      "jest"
+      "node"
     ]
   },
   "include": [
@@ -25,6 +25,7 @@
   "exclude": [
     "node_modules", 
     ".vscode-test",
-    "src/__mocks__"
+    "src/__mocks__",
+    "src/__tests__"
   ]
 }

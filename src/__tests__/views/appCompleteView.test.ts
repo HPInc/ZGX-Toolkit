@@ -30,7 +30,7 @@ describe('AppCompleteViewController', () => {
             keyCopied: true,
             connectionTested: true
         },
-        createdAt: '2025-01-01T00:00:00Z',
+        createdAt: '2025-01-01T00:00:00Z'
     };
 
     beforeEach(() => {
@@ -40,7 +40,7 @@ describe('AppCompleteViewController', () => {
             info: jest.fn(),
             warn: jest.fn(),
             error: jest.fn(),
-            trace: jest.fn(),
+            trace: jest.fn()
         } as any;
 
         // Create mock telemetry
@@ -49,7 +49,7 @@ describe('AppCompleteViewController', () => {
             trackError: jest.fn(),
             isEnabled: jest.fn().mockReturnValue(false),
             setEnabled: jest.fn(),
-            dispose: jest.fn().mockResolvedValue(undefined),
+            dispose: jest.fn().mockResolvedValue(undefined)
         } as any;
 
         // Create mock device service
@@ -60,19 +60,19 @@ describe('AppCompleteViewController', () => {
             connectToDevice: jest.fn(),
             getDevice: jest.fn().mockResolvedValue(mockDevice),
             getAllDevices: jest.fn().mockResolvedValue([]),
-            subscribe: jest.fn().mockReturnValue(() => {}),
+            subscribe: jest.fn().mockReturnValue(() => {})
         } as any;
 
         // Create mock connection service
         mockConnectionService = {
-            connectViaRemoteSSH: jest.fn().mockResolvedValue(undefined),
+            connectViaRemoteSSH: jest.fn().mockResolvedValue(undefined)
         } as any;
 
         view = new AppCompleteViewController({
             logger: mockLogger,
             telemetry: mockTelemetry,
             deviceService: mockDeviceService,
-            connectionService: mockConnectionService,
+            connectionService: mockConnectionService
         });
     });
 
@@ -107,7 +107,7 @@ describe('AppCompleteViewController', () => {
                 eventType: TelemetryEventType.View,
                 action: 'navigate',
                 properties: {
-                    toView: 'apps.complete',
+                    toView: 'apps.complete'
                 },
                 measurements: {
                     successCount: 1,

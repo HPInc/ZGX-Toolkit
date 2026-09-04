@@ -1,5 +1,5 @@
 /*
- * Copyright ©2025 HP Development Company, L.P.
+ * Copyright ©2025-2026 HP Development Company, L.P.
  * Licensed under the X11 License. See LICENSE file in the project root for details.
  */
 
@@ -121,18 +121,6 @@
             });
         });
 
-        // Paired group container toggle (collapse/expand)
-        document.querySelectorAll('.sidebar-paired-group-container').forEach(container => {
-            container.addEventListener('click', function(e) {
-                // Don't toggle when clicking interactive elements inside the container
-                const target = e.target;
-                if (target.closest('button') || target.closest('a') || target.closest('.split-button')) {
-                    return;
-                }
-                this.classList.toggle('collapsed');
-            });
-        });
-
         // Pairing details buttons
         document.querySelectorAll('[data-action="pairing-details"]').forEach(btn => {
             btn.addEventListener('click', function() {
@@ -174,6 +162,12 @@
     }
 
     function openQuickLink(link) {
+        const item = document.querySelector('.quick-links-item[data-link="' + link + '"]');
+        const badge = item && item.querySelector('.quick-links-badge');
+        if (badge) {
+            badge.remove();
+        }
+
         vscode.postMessage({ 
             type: 'quick-links', 
             link: link
@@ -256,6 +250,11 @@
         if (toggleText) {
             toggleText.textContent = isCollapsed ? 'Show more' : 'Show less';
         }
+        const toggleIcon = header.querySelector('.section-toggle-icon');
+        if (toggleIcon) {
+            toggleIcon.classList.toggle('codicon-chevron-up', !isCollapsed);
+            toggleIcon.classList.toggle('codicon-chevron-down', isCollapsed);
+        }
         header.setAttribute('aria-expanded', String(!isCollapsed));
     }
 
@@ -295,3 +294,4 @@
         }
     }
 })();
+

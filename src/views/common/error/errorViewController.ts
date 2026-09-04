@@ -1,5 +1,5 @@
 /*
- * Copyright ©2025 HP Development Company, L.P.
+ * Copyright ©2025-2026 HP Development Company, L.P.
  * Licensed under the X11 License. See LICENSE file in the project root for details.
  */
 
@@ -14,14 +14,14 @@ import { Message } from '../../../types/messages';
 export class ErrorViewController extends BaseViewController {
 
     public static viewId(): string {
-        return "common/error";
+        return 'common/error';
     }
 
     constructor(deps: { logger: Logger; telemetry: ITelemetryService }) {
         super(deps.logger, deps.telemetry);
-        this.template = this.loadTemplate('./error.html', __dirname);
-        this.styles = this.loadTemplate('./error.css', __dirname);
-        this.clientScript = this.loadTemplate('./error.js', __dirname);
+        this.template = this.loadTemplate('common/error/error.html');
+        this.styles = this.loadTemplate('common/error/error.css');
+        this.clientScript = this.loadTemplate('common/error/error.js');
     }
 
     async render(params?: { message: string; canRetry?: boolean; canGoBack?: boolean }, nonce?: string): Promise<string> {

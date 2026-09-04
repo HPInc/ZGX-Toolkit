@@ -9,6 +9,7 @@ import { ITelemetryService, TelemetryEventType } from '../../../types/telemetry'
 import { Message } from '../../../types/messages';
 import { ConnectXGroupService } from '../../../services';
 import { DeviceManagerViewController } from '../../devices/manager/deviceManagerViewController';
+import { Device } from '../../../types/devices';
 
 /**
  * Network table entry representing a single row in the pair details table.
@@ -43,12 +44,12 @@ export class PairDetailsViewController extends BaseViewController {
 
         this.groupService = deps.connectxGroupService;
 
-        this.template = this.loadTemplate('./pairDetails.html', __dirname);
-        this.styles = this.loadTemplate('./pairDetails.css', __dirname);
-        this.clientScript = this.loadTemplate('./pairDetails.js', __dirname);
+        this.template = this.loadTemplate('groups/pairDetails/pairDetails.html');
+        this.styles = this.loadTemplate('groups/pairDetails/pairDetails.css');
+        this.clientScript = this.loadTemplate('groups/pairDetails/pairDetails.js');
     }
 
-    async render(params?: any, nonce?: string): Promise<string> {
+    async render(params?: { groupId?: string }, nonce?: string): Promise<string> {
         this.logger.debug('Rendering pair details view', params);
 
         // Store the groupId from params for later use
@@ -68,7 +69,7 @@ export class PairDetailsViewController extends BaseViewController {
             eventType: TelemetryEventType.View,
             action: 'navigate',
             properties: {
-                toView: 'groups.pairDetails',
+                toView: 'groups.pairDetails'
             },
             measurements: {
                 networkEntryCount: networkEntries.length
@@ -111,9 +112,9 @@ export class PairDetailsViewController extends BaseViewController {
      * Discover ConnectX NICs for a single device and return table entries.
      * Returns a fallback entry if no NICs with IPs are found or if discovery fails.
      */
-    private async discoverNICsForDevice(device: { name: string }): Promise<NetworkTableEntry[]> {
+    private async discoverNICsForDevice(device: Device): Promise<NetworkTableEntry[]> {
         try {
-            const nics = await this.groupService.getConnectXNICsForDevice(device as any);
+            const nics = await this.groupService.getConnectXNICsForDevice(device);
             const nicsWithIp = nics.filter(nic => nic.ipv4Address);
 
             if (nicsWithIp.length > 0) {
@@ -154,7 +155,7 @@ export class PairDetailsViewController extends BaseViewController {
             this.logger.debug('Pair details closed, navigating to device manager');
             await this.navigateTo(DeviceManagerViewController.viewId());
         } else {
-            this.logger.warn('Unknown message type', { type: (message as any).type });
+            this.logger.warn('Unknown message type', { type: message.type });
         }
     }
 }

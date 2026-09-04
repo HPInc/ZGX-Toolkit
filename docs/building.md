@@ -1,6 +1,6 @@
-# Building the ZGX Toolkit Extension Locally
+# Building the Z Toolkit Extension Locally
 
-This guide provides instructions for building ZGX Toolkit VS Code extension on your local development device.
+This guide provides instructions for building Z Toolkit VS Code extension on your local development device.
 
 ## Prerequisites
 
@@ -13,7 +13,7 @@ Before you can build the extension locally, ensure you have the following instal
    - Windows: Download from [nodejs.org](https://nodejs.org/) (Windows/Mac)
    - Verify installation: `node --version` and `npm --version`
 
-2. **VS Code** (version 1.74.0 or later)
+2. **VS Code** (version 1.102.3 or later)
    - Download from [code.visualstudio.com](https://code.visualstudio.com/)
    - Required for the Extension Development Host
 
@@ -31,10 +31,10 @@ Before you can build the extension locally, ensure you have the following instal
 
 The following will be installed automatically via npm:
 
-- **TypeScript** (^4.9.4) - Language compiler
-- **ESLint** (^8.50.0) - Code linting
-- **Jest** (^29.7.0) - Unit testing framework
-- **VS Code Extension API Types** (@types/vscode ^1.74.0)
+- **TypeScript** (^6.0.3) - Language compiler
+- **ESLint** (^10.8.1) - Code linting
+- **Jest** (^30.4.2) - Unit testing framework
+- **VS Code Extension API Types** (@types/vscode ^1.102.x)
 
 ## Getting Started
 
@@ -65,7 +65,7 @@ npm run compile
 
 This command:
 
-- Compiles TypeScript source files from `src/` to JavaScript in `out/`
+- Compiles TypeScript source files from `src/` to JavaScript in `dist/`
 - Uses the configuration defined in `tsconfig.json`
 - Targets ES2020 with CommonJS modules
 - Generates source maps for debugging

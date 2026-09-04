@@ -1,5 +1,5 @@
 /*
- * Copyright ©2025 HP Development Company, L.P.
+ * Copyright ©2025-2026 HP Development Company, L.P.
  * Licensed under the X11 License. See LICENSE file in the project root for details.
  */
 
@@ -17,12 +17,12 @@ import { Logger } from '../utils/logger';
  */
 export function sanitizeHtml(html: string): string {
     return html
-        .replace(/&/g, '&amp;')
-        .replace(/</g, '&lt;')
-        .replace(/>/g, '&gt;')
-        .replace(/"/g, '&quot;')
-        .replace(/'/g, '&#x27;')
-        .replace(/\//g, '&#x2F;');
+        .replaceAll('&', '&amp;')
+        .replaceAll('<', '&lt;')
+        .replaceAll('>', '&gt;')
+        .replaceAll('"', '&quot;')
+        .replaceAll("'", '&#x27;')
+        .replaceAll('/', '&#x2F;');
 }
 
 /**
@@ -32,8 +32,8 @@ export function sanitizeHtml(html: string): string {
  */
 export function escapeAttribute(value: string): string {
     return value
-        .replace(/"/g, '&quot;')
-        .replace(/'/g, '&#x27;');
+        .replaceAll('"', '&quot;')
+        .replaceAll("'", '&#x27;');
 }
 
 /**
@@ -43,7 +43,7 @@ export function escapeAttribute(value: string): string {
  * @param maxLength Maximum length (default 30)
  * @returns Formatted name
  */
-export function formatDeviceName(name: string, maxLength: number = 30): string {
+export function formatDeviceName(name: string, maxLength = 30): string {
     if (name.length <= maxLength) {
         return name;
     }
@@ -81,8 +81,8 @@ export function formatHostAddress(host: string, username?: string, port?: number
 export function formatTimestamp(timestamp: string): string {
     try {
         const date = new Date(timestamp);
-        if (isNaN(date.getTime())) {
-            throw new Error('Invalid date');
+        if (Number.isNaN(date.getTime())) {
+            throw new TypeError('Invalid date');
         }
         const now = new Date();
         const diffMs = now.getTime() - date.getTime();
@@ -101,7 +101,7 @@ export function formatTimestamp(timestamp: string): string {
         } else {
             return date.toLocaleDateString();
         }
-    } catch (error) {
+    } catch {
         return 'Unknown';
     }
 }
@@ -111,8 +111,8 @@ export function formatTimestamp(timestamp: string): string {
  * @param prefix Optional prefix
  * @returns Unique ID string
  */
-export function generateElementId(prefix: string = 'el'): string {
-    return `${prefix}-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+export function generateElementId(prefix = 'el'): string {
+    return `${prefix}-${Date.now()}-${Math.random().toString(36).substring(2, 11)}`;
 }
 
 /**
@@ -121,7 +121,7 @@ export function generateElementId(prefix: string = 'el'): string {
  * @param requiredFields Array of required field names
  * @throws Error if validation fails
  */
-export function validateRequiredFields(data: any, requiredFields: string[]): void {
+export function validateRequiredFields(data: Record<string, unknown>, requiredFields: string[]): void {
     const missing = requiredFields.filter(field => !(field in data) || data[field] === null || data[field] === undefined);
     
     if (missing.length > 0) {
@@ -161,8 +161,8 @@ export function createPerformanceTimer(logger: Logger, operationName: string) {
  */
 export async function retryOperation<T>(
     operation: () => Promise<T>,
-    maxRetries: number = 3,
-    delayMs: number = 1000,
+    maxRetries = 3,
+    delayMs = 1000,
     logger?: Logger
 ): Promise<T> {
     let lastError: Error | undefined;
@@ -208,7 +208,8 @@ export function isValidUrl(value: string): boolean {
  * @returns True if the value is a valid IPv4 address
  */
 export function isValidIPv4(value: string): boolean {
-    const ipv4Regex = /^(?:(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.){3}(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)$/;
+    const octet = String.raw`(25[0-5]|2[0-4]\d|1\d{2}|[1-9]?\d)`;
+    const ipv4Regex = new RegExp(String.raw`^${octet}(\.${octet}){3}$`);
     return ipv4Regex.test(value);
 }
 
@@ -246,17 +247,17 @@ export function deepClone<T>(obj: T): T {
     }
     
     if (obj instanceof Date) {
-        return new Date(obj.getTime()) as any;
+        return new Date(obj) as unknown as T;
     }
-    
-    if (obj instanceof Array) {
-        return obj.map(item => deepClone(item)) as any;
+
+    if (Array.isArray(obj)) {
+        return obj.map(item => deepClone(item)) as unknown as T;
     }
     
     if (obj instanceof Object) {
         const clonedObj = {} as T;
         for (const key in obj) {
-            if (obj.hasOwnProperty(key)) {
+            if (Object.hasOwn(obj, key)) {
                 clonedObj[key] = deepClone(obj[key]);
             }
         }

@@ -1,10 +1,10 @@
 /*
- * Copyright ©2025 HP Development Company, L.P.
+ * Copyright ©2025-2026 HP Development Company, L.P.
  * Licensed under the X11 License. See LICENSE file in the project root for details.
  */
 
 /**
- * Logging level constants for the ZGX Toolkit extension.
+ * Logging level constants for the Z Toolkit extension.
  * Provides mapping between string values and LogLevel enum.
  */
 
@@ -15,35 +15,35 @@ import { LogLevel } from '../types/logger';
  * Used for configuration and UI display.
  */
 export const LOG_LEVEL_NAMES = {
-  [LogLevel.ERROR]: 'Error',
-  [LogLevel.WARN]: 'Warn',
-  [LogLevel.INFO]: 'Info',
-  [LogLevel.DEBUG]: 'Debug',
-  [LogLevel.TRACE]: 'Trace',
+    [LogLevel.ERROR]: 'Error',
+    [LogLevel.WARN]: 'Warn',
+    [LogLevel.INFO]: 'Info',
+    [LogLevel.DEBUG]: 'Debug',
+    [LogLevel.TRACE]: 'Trace'
 } as const;
 
 /**
  * Reverse mapping from string names to LogLevel enum values.
  */
 export const LOG_LEVEL_FROM_NAME: Record<string, LogLevel> = {
-  'Error': LogLevel.ERROR,
-  'error': LogLevel.ERROR,
-  'ERROR': LogLevel.ERROR,
-  'Warn': LogLevel.WARN,
-  'warn': LogLevel.WARN,
-  'WARN': LogLevel.WARN,
-  'Warning': LogLevel.WARN,
-  'warning': LogLevel.WARN,
-  'WARNING': LogLevel.WARN,
-  'Info': LogLevel.INFO,
-  'info': LogLevel.INFO,
-  'INFO': LogLevel.INFO,
-  'Debug': LogLevel.DEBUG,
-  'debug': LogLevel.DEBUG,
-  'DEBUG': LogLevel.DEBUG,
-  'Trace': LogLevel.TRACE,
-  'trace': LogLevel.TRACE,
-  'TRACE': LogLevel.TRACE,
+    'Error': LogLevel.ERROR,
+    'error': LogLevel.ERROR,
+    'ERROR': LogLevel.ERROR,
+    'Warn': LogLevel.WARN,
+    'warn': LogLevel.WARN,
+    'WARN': LogLevel.WARN,
+    'Warning': LogLevel.WARN,
+    'warning': LogLevel.WARN,
+    'WARNING': LogLevel.WARN,
+    'Info': LogLevel.INFO,
+    'info': LogLevel.INFO,
+    'INFO': LogLevel.INFO,
+    'Debug': LogLevel.DEBUG,
+    'debug': LogLevel.DEBUG,
+    'DEBUG': LogLevel.DEBUG,
+    'Trace': LogLevel.TRACE,
+    'trace': LogLevel.TRACE,
+    'TRACE': LogLevel.TRACE
 };
 
 /**
@@ -55,11 +55,11 @@ export const DEFAULT_LOG_LEVEL = LogLevel.INFO;
  * Array of log level names for use in UI (QuickPick, etc.).
  */
 export const LOG_LEVEL_OPTIONS = [
-  LOG_LEVEL_NAMES[LogLevel.ERROR],
-  LOG_LEVEL_NAMES[LogLevel.WARN],
-  LOG_LEVEL_NAMES[LogLevel.INFO],
-  LOG_LEVEL_NAMES[LogLevel.DEBUG],
-  LOG_LEVEL_NAMES[LogLevel.TRACE],
+    LOG_LEVEL_NAMES[LogLevel.ERROR],
+    LOG_LEVEL_NAMES[LogLevel.WARN],
+    LOG_LEVEL_NAMES[LogLevel.INFO],
+    LOG_LEVEL_NAMES[LogLevel.DEBUG],
+    LOG_LEVEL_NAMES[LogLevel.TRACE]
 ] as const;
 
 /**
@@ -70,7 +70,7 @@ export const LOG_LEVEL_OPTIONS = [
  * @returns LogLevel enum value
  */
 export function parseLogLevel(name: string): LogLevel {
-  return LOG_LEVEL_FROM_NAME[name] ?? DEFAULT_LOG_LEVEL;
+    return LOG_LEVEL_FROM_NAME[name] ?? DEFAULT_LOG_LEVEL;
 }
 
 /**
@@ -80,5 +80,5 @@ export function parseLogLevel(name: string): LogLevel {
  * @returns Display name
  */
 export function getLogLevelName(level: LogLevel): string {
-  return LOG_LEVEL_NAMES[level] ?? LOG_LEVEL_NAMES[DEFAULT_LOG_LEVEL];
+    return LOG_LEVEL_NAMES[level] ?? LOG_LEVEL_NAMES[DEFAULT_LOG_LEVEL];
 }

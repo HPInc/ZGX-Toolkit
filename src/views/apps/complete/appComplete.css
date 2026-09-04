@@ -1,5 +1,5 @@
 /*
- * Copyright ©2025 HP Development Company, L.P.
+ * Copyright ©2025-2026 HP Development Company, L.P.
  * Licensed under the X11 License. See LICENSE file in the project root for details.
  */
 
@@ -39,9 +39,23 @@
     margin-right: 10px;
 }
 
+.app-icon-img {
+    width: 28px;
+    height: 28px;
+    object-fit: contain;
+    vertical-align: middle;
+}
+
 .app-name {
     flex: 1;
     font-weight: 500;
+}
+
+.failure-reason {
+    font-weight: 400;
+    font-size: 0.85em;
+    color: var(--vscode-descriptionForeground);
+    margin-top: 2px;
 }
 
 .success-indicator {

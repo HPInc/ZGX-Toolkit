@@ -1,5 +1,5 @@
 /*
- * Copyright ©2025 HP Development Company, L.P.
+ * Copyright ©2025-2026 HP Development Company, L.P.
  * Licensed under the X11 License. See LICENSE file in the project root for details.
  */
 
@@ -8,7 +8,7 @@ import { PairDevicesViewController } from '../../views/groups/pairDevices/pairDe
 import { Logger } from '../../utils/logger';
 import { ITelemetryService } from '../../types/telemetry';
 import { DeviceService, ConnectXGroupService, DeviceHealthCheckService } from '../../services';
-import { Device } from '../../types/devices';
+import { Device, DeviceType, getDeviceTypeOptions } from '../../types/devices';
 import { ConnectXGroup } from '../../types/connectxGroup';
 
 describe('PairDevicesView', () => {
@@ -33,6 +33,9 @@ describe('PairDevicesView', () => {
             keyCopied: true,
             connectionTested: true
         },
+        fingerprint: {
+            deviceType: DeviceType.ZGXNano
+        },
         createdAt: '2025-01-01T00:00:00Z',
         updatedAt: '2025-01-01T00:00:00Z'
     };
@@ -50,6 +53,9 @@ describe('PairDevicesView', () => {
             keyCopied: true,
             connectionTested: true
         },
+        fingerprint: {
+            deviceType: DeviceType.ZGXFury
+        },
         createdAt: '2025-01-01T00:00:00Z',
         updatedAt: '2025-01-01T00:00:00Z'
     };
@@ -66,6 +72,9 @@ describe('PairDevicesView', () => {
             keyGenerated: false,
             keyCopied: false,
             connectionTested: false
+        },
+        fingerprint: {
+            deviceType: DeviceType.ZGXNano
         },
         createdAt: '2025-01-01T00:00:00Z',
         updatedAt: '2025-01-01T00:00:00Z'
@@ -85,7 +94,7 @@ describe('PairDevicesView', () => {
             info: jest.fn(),
             warn: jest.fn(),
             error: jest.fn(),
-            trace: jest.fn(),
+            trace: jest.fn()
         } as any;
 
         // Create mock telemetry
@@ -94,7 +103,7 @@ describe('PairDevicesView', () => {
             trackError: jest.fn(),
             isEnabled: jest.fn().mockReturnValue(false),
             setEnabled: jest.fn(),
-            dispose: jest.fn().mockResolvedValue(undefined),
+            dispose: jest.fn().mockResolvedValue(undefined)
         } as any;
 
         // Create mock device service
@@ -105,7 +114,7 @@ describe('PairDevicesView', () => {
             connectToDevice: jest.fn(),
             getDevice: jest.fn(),
             getAllDevices: jest.fn().mockResolvedValue([]),
-            subscribe: jest.fn().mockReturnValue(() => {}),
+            subscribe: jest.fn().mockReturnValue(() => {})
         } as any;
 
         // Create mock group service
@@ -116,7 +125,7 @@ describe('PairDevicesView', () => {
             getGroup: jest.fn(),
             deleteGroup: jest.fn(),
             removeGroup: jest.fn(),
-            subscribe: jest.fn().mockImplementation((callback: (groups: ConnectXGroup[]) => void) => () => {}),
+            subscribe: jest.fn().mockImplementation((_callback: (groups: ConnectXGroup[]) => void) => () => {})
         } as any;
 
         // Create mock health check service
@@ -124,7 +133,7 @@ describe('PairDevicesView', () => {
             checkDeviceHealth: jest.fn().mockResolvedValue({
                 isHealthy: true,
                 device: 'Test device'
-            }),
+            })
         } as any;
 
         // Create mock message callback
@@ -159,6 +168,9 @@ describe('PairDevicesView', () => {
             const html = await view.render();
 
             expect(html).toContain('No devices available for pairing');
+            expect(html).toContain('codicon-info');
+            expect(html).toContain('Add a compatible device to enable pairing and continue.');
+            expect(html).not.toContain('No devices have been added yet.');
             expect(mockLogger.debug).toHaveBeenCalledWith(
                 'Rendering pair devices view',
                 undefined
@@ -173,7 +185,113 @@ describe('PairDevicesView', () => {
 
             expect(html).toContain('Device One');
             expect(html).toContain('Device Two');
+            expect(html).toContain('Device Name');
+            expect(html).toContain('Device Type');
+            expect(html).toContain('2 devices');
+            expect(html).toContain('device-type-column');
+            expect(html).toContain('device-type-badge nano"');
+            expect(html).toContain('device-type-badge fury"');
+            expect(html).toContain('device-type-badge-text">ZGX Nano');
+            expect(html).toContain('device-type-badge-text">ZGX Fury');
             expect(html).not.toContain('No devices available for pairing');
+        });
+
+        it('should render device type filter dropdown when devices exist', async () => {
+            mockDeviceService.getAllDevices.mockResolvedValue([mockDevice1, mockDevice2]);
+            mockGroupService.getAllGroups.mockResolvedValue([]);
+
+            const html = await view.render();
+            const expectedOptions = getDeviceTypeOptions();
+
+            expect(html).toContain('Filter by');
+            expect(html).toContain('id="deviceTypeFilterToggle"');
+            expect(html).toContain('id="deviceTypeFilterMenu"');
+            expect(html).toContain('class="device-type-filter-checkbox"');
+
+            const optionIndexes = expectedOptions.map(option => {
+                expect(html).toContain(option.label);
+                return html.indexOf(`>${option.label}<`);
+            });
+
+            optionIndexes.forEach(index => {
+                expect(index).toBeGreaterThan(-1);
+            });
+
+            for (let index = 0; index < optionIndexes.length - 1; index += 1) {
+                expect(optionIndexes[index]).toBeLessThan(optionIndexes[index + 1]);
+            }
+
+            expect(html).toContain('No devices match the selected filter.');
+        });
+
+        it('should default to Fury diagram when only selectable devices are Furys', async () => {
+            const groupWithNano = {
+                ...mockGroup,
+                deviceIds: ['device-1']
+            };
+            mockDeviceService.getAllDevices.mockResolvedValue([mockDevice1, mockDevice2]);
+            mockGroupService.getAllGroups.mockResolvedValue([groupWithNano]);
+
+            const html = await view.render({
+                zgxNanoDiagramUri: 'nano://diagram',
+                zgxFuryDiagramUri: 'fury://diagram'
+            });
+
+            expect(html).toContain('src="fury://diagram"');
+            expect(html).toContain('data-default-type="fury"');
+        });
+
+        it('should default to Nano diagram when selectable Nanos and Furys both exist', async () => {
+            mockDeviceService.getAllDevices.mockResolvedValue([mockDevice1, mockDevice2]);
+            mockGroupService.getAllGroups.mockResolvedValue([]);
+
+            const html = await view.render({
+                zgxNanoDiagramUri: 'nano://diagram',
+                zgxFuryDiagramUri: 'fury://diagram'
+            });
+
+            expect(html).toContain('src="nano://diagram"');
+            expect(html).toContain('data-default-type="nano"');
+        });
+
+        it('should fall back to Fury diagram URI when Nano is default but Nano URI is missing', async () => {
+            mockDeviceService.getAllDevices.mockResolvedValue([mockDevice1, mockDevice2]);
+            mockGroupService.getAllGroups.mockResolvedValue([]);
+
+            const html = await view.render({
+                zgxNanoDiagramUri: '',
+                zgxFuryDiagramUri: 'fury://diagram'
+            });
+
+            expect(html).toContain('data-default-type="nano"');
+            expect(html).toContain('src="fury://diagram"');
+        });
+
+        it('should fall back to Nano diagram URI when Fury is default but Fury URI is missing', async () => {
+            const groupWithNano = {
+                ...mockGroup,
+                deviceIds: ['device-1']
+            };
+            mockDeviceService.getAllDevices.mockResolvedValue([mockDevice1, mockDevice2]);
+            mockGroupService.getAllGroups.mockResolvedValue([groupWithNano]);
+
+            const html = await view.render({
+                zgxNanoDiagramUri: 'nano://diagram',
+                zgxFuryDiagramUri: ''
+            });
+
+            expect(html).toContain('data-default-type="fury"');
+            expect(html).toContain('src="nano://diagram"');
+        });
+
+        it('should include filter label logic that builds the selected names list', async () => {
+            mockDeviceService.getAllDevices.mockResolvedValue([mockDevice1, mockDevice2]);
+            mockGroupService.getAllGroups.mockResolvedValue([]);
+
+            const html = await view.render();
+
+            expect(html).toContain("deviceTypeFilterLabel.textContent = selectedFilterLabels.join(', ');");
+            expect(html).not.toContain("selectedFilterLabels.length + ' selected'");
         });
 
         it('should mark devices already in groups as paired', async () => {
@@ -219,7 +337,7 @@ describe('PairDevicesView', () => {
                 expect.objectContaining({
                     action: 'navigate',
                     properties: {
-                        toView: 'groups.pairDevices',
+                        toView: 'groups.pairDevices'
                     },
                     measurements: {
                         availableDeviceCount: 2,
@@ -303,6 +421,102 @@ describe('PairDevicesView', () => {
 
             expect(html).not.toContain('Unsetup Device');
             expect(html).toContain('Device One');
+        });
+
+        it('should show setup devices that are not Fury or Nano as disabled', async () => {
+            const mockUnsupportedTypeDevice: Device = {
+                ...mockDevice2,
+                id: 'device-z8',
+                name: 'Unsupported Z8 Device',
+                fingerprint: {
+                    deviceType: DeviceType.Z8
+                }
+            };
+
+            mockDeviceService.getAllDevices.mockResolvedValue([mockDevice1, mockUnsupportedTypeDevice]);
+            mockGroupService.getAllGroups.mockResolvedValue([]);
+
+            const html = await view.render();
+
+            expect(html).toContain('Device One');
+            expect(html).toContain('Unsupported Z8 Device');
+            expect(html).toContain('data-is-supported="false"');
+            expect(html).toContain('Pairing not available. This device type does not support pairing.');
+            expect(html).toContain('device-type-badge-icon');
+        });
+
+        it('should show setup devices with missing fingerprint type as disabled', async () => {
+            const mockMissingTypeDevice: Device = {
+                ...mockDevice2,
+                id: 'device-missing-type',
+                name: 'Missing Type Device',
+                fingerprint: undefined
+            };
+
+            mockDeviceService.getAllDevices.mockResolvedValue([mockDevice1, mockMissingTypeDevice]);
+            mockGroupService.getAllGroups.mockResolvedValue([]);
+
+            const html = await view.render();
+
+            expect(html).toContain('Device One');
+            expect(html).toContain('Missing Type Device');
+            expect(html).toContain('data-is-supported="false"');
+        });
+
+        it('should show unsupported setup devices instead of empty state', async () => {
+            const mockUnsupportedTypeDevice: Device = {
+                ...mockDevice2,
+                id: 'device-z2',
+                name: 'Unsupported Z2 Device',
+                fingerprint: {
+                    deviceType: DeviceType.Z2
+                }
+            };
+
+            mockDeviceService.getAllDevices.mockResolvedValue([mockUnsupportedTypeDevice]);
+            mockGroupService.getAllGroups.mockResolvedValue([]);
+
+            const html = await view.render();
+
+            expect(html).not.toContain('No devices available for pairing');
+            expect(html).toContain('Unsupported Z2 Device');
+        });
+
+        it('should count only setup-complete devices in telemetry', async () => {
+            const mockUnsupportedTypeDevice: Device = {
+                ...mockDevice2,
+                id: 'device-other',
+                name: 'Other Device',
+                fingerprint: {
+                    deviceType: DeviceType.Other
+                }
+            };
+            const mockMissingTypeDevice: Device = {
+                ...mockDevice2,
+                id: 'device-no-type',
+                name: 'No Type Device',
+                fingerprint: undefined
+            };
+
+            mockDeviceService.getAllDevices.mockResolvedValue([
+                mockDevice1,
+                mockDevice2,
+                mockUnsupportedTypeDevice,
+                mockMissingTypeDevice,
+                mockDeviceUnsetup
+            ]);
+            mockGroupService.getAllGroups.mockResolvedValue([]);
+
+            await view.render();
+
+            expect(mockTelemetry.trackEvent).toHaveBeenCalledWith(
+                expect.objectContaining({
+                    measurements: {
+                        availableDeviceCount: 2,
+                        totalDeviceCount: 4
+                    }
+                })
+            );
         });
     });
 
@@ -990,6 +1204,49 @@ describe('PairDevicesView', () => {
             expect(mockLogger.trace).toHaveBeenCalledWith(
                 'Device store updated, refreshing pair devices view'
             );
+
+            newView.dispose();
+        });
+
+        it('should re-enable store refreshes after pairing success', async () => {
+            let deviceStoreCallback: () => void = () => {};
+            mockDeviceService.subscribe.mockImplementation((callback) => {
+                deviceStoreCallback = callback;
+                return () => {};
+            });
+            mockDeviceService.getAllDevices.mockResolvedValue([mockDevice1, mockDevice2]);
+            mockGroupService.getAllGroups.mockResolvedValue([]);
+            mockGroupService.createGroupAndConfigureNICs.mockResolvedValue({
+                success: true,
+                group: { id: 'new-group-id', deviceIds: ['device-1', 'device-2'], createdAt: '', updatedAt: '' },
+                message: 'Group created and NICs configured'
+            });
+
+            const newView = new PairDevicesViewController({
+                logger: mockLogger,
+                telemetry: mockTelemetry,
+                deviceService: mockDeviceService,
+                connectxGroupService: mockGroupService,
+                deviceHealthCheckService: mockHealthCheckService
+            });
+            const mockRefreshCallback = jest.fn();
+            newView.setRefreshCallback(mockRefreshCallback);
+            newView.setMessageCallback(mockMessageCallback);
+
+            await newView.handleMessage({
+                type: 'password-submitted',
+                password: 'test-password',
+                deviceIds: ['device-1', 'device-2'],
+                deviceNames: ['Device One', 'Device Two']
+            });
+
+            deviceStoreCallback();
+            await new Promise(resolve => setTimeout(resolve, 10));
+
+            expect(mockLogger.trace).toHaveBeenCalledWith(
+                'Device store updated, refreshing pair devices view'
+            );
+            expect(mockRefreshCallback).toHaveBeenCalled();
 
             newView.dispose();
         });

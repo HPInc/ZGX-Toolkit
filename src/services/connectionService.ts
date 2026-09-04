@@ -1,5 +1,5 @@
 /*
- * Copyright ©2025 HP Development Company, L.P.
+ * Copyright ©2025-2026 HP Development Company, L.P.
  * Licensed under the X11 License. See LICENSE file in the project root for details.
  */
 
@@ -9,9 +9,9 @@
  */
 
 import * as vscode from 'vscode';
-import * as os from 'os';
-import * as path from 'path';
-import * as fs from 'fs';
+import * as os from 'node:os';
+import * as path from 'node:path';
+import * as fs from 'node:fs';
 import { ChildProcess, spawn, SpawnOptions } from 'node:child_process';
 import { Device } from '../types/devices';
 import { logger } from '../utils/logger';
@@ -62,19 +62,19 @@ export class ConnectionService {
         if (platform === 'win32') {
             const windowsDir = process.env.windir || String.raw`C:\Windows`;
             return [
-                path.join(windowsDir, 'System32', 'OpenSSH', `${binaryName}.exe`),
+                path.join(windowsDir, 'System32', 'OpenSSH', `${binaryName}.exe`)
             ];
         }
 
         if (platform === 'darwin') {
             return [
-                `/usr/bin/${binaryName}`,
+                `/usr/bin/${binaryName}`
             ];
         }
 
         return [
             `/usr/bin/${binaryName}`,
-            `/bin/${binaryName}`,
+            `/bin/${binaryName}`
         ];
     }
 
@@ -94,7 +94,7 @@ export class ConnectionService {
                 if (fs.existsSync(candidate)) {
                     logger.debug('Resolved trusted SSH binary', {
                         binaryName,
-                        path: candidate,
+                        path: candidate
                     });
                     return candidate;
                 }
@@ -102,7 +102,7 @@ export class ConnectionService {
                 logger.warn('Failed while checking trusted SSH binary path', {
                     binaryName,
                     path: candidate,
-                    error: error instanceof Error ? error.message : String(error),
+                    error: error instanceof Error ? error.message : String(error)
                 });
             }
         }
@@ -132,7 +132,7 @@ export class ConnectionService {
         } catch (error) {
             logger.error('Trusted SSH binary resolution failed', {
                 binaryName,
-                error: error instanceof Error ? error.message : String(error),
+                error: error instanceof Error ? error.message : String(error)
             });
             throw error;
         }
@@ -157,7 +157,9 @@ export class ConnectionService {
             // Check if key already exists
             const keyExists = fs.existsSync(keyPath);
 
-            if (!keyExists) {
+            if (keyExists) {
+                logger.debug('SSH key already exists, using existing key');
+            } else {
                 logger.debug('SSH key does not exist, generating new key');
 
                 // Ensure .ssh directory exists with proper permissions
@@ -178,7 +180,7 @@ export class ConnectionService {
 
                 await new Promise<void>((resolve, reject) => {
                     const keygenProcess = this.spawnTrustedBinary('ssh-keygen', keygenArgs, {
-                            stdio: ['ignore', 'pipe', 'pipe']
+                        stdio: ['ignore', 'pipe', 'pipe']
                     });
 
                     let stderr = '';
@@ -202,8 +204,6 @@ export class ConnectionService {
                         reject(err);
                     });
                 });
-            } else {
-                logger.debug('SSH key already exists, using existing key');
             }
 
             // Read the public key
@@ -212,7 +212,7 @@ export class ConnectionService {
             return {
                 keyPath,
                 publicKeyPath,
-                publicKey,
+                publicKey
             };
         } catch (error) {
             logger.error('Failed to generate SSH key', { error });
@@ -246,7 +246,7 @@ export class ConnectionService {
         if (isWindows) {
             shellPath = config.get('shell.windows');
         } else if (isMac) {
-           shellPath = config.get('shell.osx');
+            shellPath = config.get('shell.osx');
         } else {
             shellPath = config.get('shell.linux');
         }
@@ -296,9 +296,9 @@ export class ConnectionService {
         const sshDir = path.join(os.homedir(), '.ssh');
         const publicKeyPath = path.join(sshDir, `${keyName}.pub`);
 
-        const sshTarget = device.port !== 22
-            ? `ssh -p ${device.port} ${device.username}@${device.host}`
-            : `ssh ${device.username}@${device.host}`;
+        const sshTarget = device.port === 22
+            ? `ssh ${device.username}@${device.host}`
+            : `ssh -p ${device.port} ${device.username}@${device.host}`;
 
         const remoteCommands = 'mkdir -p ~/.ssh && cat >> ~/.ssh/authorized_keys && chmod 700 ~/.ssh && chmod 600 ~/.ssh/authorized_keys';
 
@@ -325,11 +325,11 @@ export class ConnectionService {
      * @param timeoutMs Timeout in milliseconds (default 15000)
      * @returns True if connection successful, false otherwise
      */
-    public async testSSHKeyConnectivity(device: Device, timeoutMs: number = 15000): Promise<boolean> {
+    public async testSSHKeyConnectivity(device: Device, timeoutMs = 15000): Promise<boolean> {
         logger.info('Testing SSH key connectivity', {
             device: device.name,
             host: device.host,
-            port: device.port,
+            port: device.port
         });
 
         // Build SSH args array
@@ -339,7 +339,7 @@ export class ConnectionService {
             '-o', 'BatchMode=yes',
             '-o', 'ConnectTimeout=10',
             '-o', 'ServerAliveInterval=5',
-            '-o', 'ServerAliveCountMax=2',
+            '-o', 'ServerAliveCountMax=2'
         ];
 
         if (device.port !== 22) {
@@ -360,7 +360,7 @@ export class ConnectionService {
                 logger.error('SSH connectivity test failed to start', {
                     device: device.name,
                     success: false,
-                    error: err instanceof Error ? err.message : String(err),
+                    error: err instanceof Error ? err.message : String(err)
                 });
                 resolve(false);
                 return;
@@ -378,21 +378,21 @@ export class ConnectionService {
             const timeoutHandle = setTimeout(() => {
                 logger.warn('SSH connectivity test timed out', {
                     device: device.name,
-                    timeout: timeoutMs,
+                    timeout: timeoutMs
                 });
 
                 if (sshProcess.exitCode === null && sshProcess.signalCode === null) {
                     try {
-                         sshProcess.kill();
-                         logger.debug('SSH connectivity test process terminated after timeout', {
-                             device: device.name,
-                         });
-                     } catch (killError) {
-                         logger.warn('Failed to terminate SSH connectivity test process after timeout', {
-                             device: device.name,
-                             error: killError instanceof Error ? killError.message : String(killError),
-                         });
-                     }
+                        sshProcess.kill();
+                        logger.debug('SSH connectivity test process terminated after timeout', {
+                            device: device.name
+                        });
+                    } catch (killError) {
+                        logger.warn('Failed to terminate SSH connectivity test process after timeout', {
+                            device: device.name,
+                            error: killError instanceof Error ? killError.message : String(killError)
+                        });
+                    }
                 }
                 resolveOnce(false);
             }, timeoutMs);
@@ -406,7 +406,7 @@ export class ConnectionService {
                     device: device.name,
                     success,
                     exitCode: code,
-                    signal,
+                    signal
                 });
 
                 resolveOnce(success);
@@ -417,7 +417,7 @@ export class ConnectionService {
                 logger.error('SSH connectivity test error', {
                     device: device.name,
                     success: false,
-                    error: err.message,
+                    error: err.message
                 });
 
                 resolveOnce(false);
@@ -510,7 +510,7 @@ export class ConnectionService {
             }
 
             const existing = fs.existsSync(cfgPath) ? fs.readFileSync(cfgPath, 'utf8') : '';
-            const hostRegex = new RegExp(`^Host\\s+${alias}(\\s|$)`, 'm');
+            const hostRegex = new RegExp(String.raw`^Host\s+${alias}(\s|$)`, 'm');
 
             if (hostRegex.test(existing)) {
                 logger.trace(`SSH config alias ${alias} already present; skipping append.`);
@@ -522,16 +522,16 @@ export class ConnectionService {
                 `  HostName ${device.host}`,
                 `  User ${device.username}`,
                 `  Port ${device.port}`,
-                `  StrictHostKeyChecking ask`,
+                '  StrictHostKeyChecking ask',
                 ''
             ].join('\n');
 
-            const prependNewLine = existing.length > 0 && !/\n$/.test(existing);
+            const prependNewLine = existing.length > 0 && !existing.endsWith('\n');
             const updated = (prependNewLine ? existing + '\n' : existing) + block;
             fs.writeFileSync(cfgPath, updated, { encoding: 'utf8', mode: 0o600 });
             logger.info(`Appended SSH config alias ${alias}`);
-        } catch (e: any) {
-            logger.error(`Failed to append ssh config alias ${alias}: ${e.message || e}`);
+        } catch (e: unknown) {
+            logger.error(`Failed to append ssh config alias ${alias}: ${e instanceof Error ? e.message : String(e)}`);
         }
     }
 
@@ -546,54 +546,19 @@ export class ConnectionService {
         logger.info('Connecting via Remote-SSH', {
             device: device.name,
             host: device.host,
-            forceNewWindow,
+            forceNewWindow
         });
 
         try {
-            // Check if Remote-SSH extension is installed
-            const remoteSSHExtension = vscode.extensions.getExtension('ms-vscode-remote.remote-ssh');
-
-            if (!remoteSSHExtension) {
-                logger.warn('Remote-SSH extension not found');
-
-                const install = await vscode.window.showWarningMessage(
-                    'The Remote-SSH extension is required to connect to remote devices. Would you like to install it?',
-                    'Install',
-                    'Cancel'
-                );
-
-                if (install === 'Install') {
-                    logger.debug('User chose to install Remote-SSH extension');
-                    await vscode.commands.executeCommand(
-                        'workbench.extensions.search',
-                        '@id:ms-vscode-remote.remote-ssh'
-                    );
-                }
+            const extensionReady = await this.ensureRemoteSSHExtensionReady();
+            if (!extensionReady) {
                 return;
             }
 
-            // Ensure the extension is activated
-            if (!remoteSSHExtension.isActive) {
-                logger.debug('Activating Remote-SSH extension');
-                await remoteSSHExtension.activate();
-            }
-
-            // Build SSH connection string
-            const sshTarget = `${device.username}@${device.host}`;
-            logger.debug('SSH target', { target: sshTarget, port: device.port });
+            const connectLabel = await this.resolveConnectLabel(device);
 
             // Show progress message
             vscode.window.showInformationMessage(`Connecting to ${device.name}...`);
-
-            let connectLabel = sshTarget;
-
-            if (device.port !== 22) {
-                // Derive a stable alias
-                const filteredHost = device.host.replace(/[^a-zA-Z0-9_.-]/g, '');
-                const alias = `zgx-${filteredHost}-${device.port}`;
-                connectLabel = alias;
-                await this.ensureSSHConfigEntry(alias, device);
-            }
 
             // Use Remote Explorer's connection method
             const remoteUri = `vscode-remote://ssh-remote+${connectLabel}/home/${device.username}`;
@@ -610,41 +575,96 @@ export class ConnectionService {
         } catch (error) {
             logger.error('Failed to connect via Remote-SSH', {
                 error: error instanceof Error ? error.message : String(error),
-                device: device.name,
+                device: device.name
             });
 
-            // If connection fails, help user add to SSH config
-            const addToConfig = await vscode.window.showErrorMessage(
-                `Could not connect to ${device.name}. The device might not be in your SSH config. Would you like to add it?`,
-                'Add to SSH Config',
-                'Try Manual Connection',
+            await this.handleRemoteSSHConnectionFailure(device);
+        }
+    }
+
+    /**
+     * Ensure the Remote-SSH extension is installed and activated, prompting to install it if missing.
+     * @returns true if the extension is ready to use, false if the caller should abort
+     */
+    private async ensureRemoteSSHExtensionReady(): Promise<boolean> {
+        const remoteSSHExtension = vscode.extensions.getExtension('ms-vscode-remote.remote-ssh');
+
+        if (!remoteSSHExtension) {
+            logger.warn('Remote-SSH extension not found');
+
+            const install = await vscode.window.showWarningMessage(
+                'The Remote-SSH extension is required to connect to remote devices. Would you like to install it?',
+                'Install',
                 'Cancel'
             );
 
-            if (addToConfig === 'Add to SSH Config') {
-                logger.debug('User chose to add to SSH config');
-                await vscode.commands.executeCommand('remote-ssh.addNewSshHost');
-
-                const sshCommand = device.port !== 22
-                    ? `ssh ${device.username}@${device.host} -p ${device.port}`
-                    : `ssh ${device.username}@${device.host}`;
-
-                await vscode.window.showInformationMessage(
-                    `Please add this SSH host: ${sshCommand}`,
-                    { modal: false }
-                );
-            } else if (addToConfig === 'Try Manual Connection') {
-                logger.debug('User chose to try manual connection');
-
-                const sshCommand = device.port !== 22
-                    ? `ssh ${device.username}@${device.host} -p ${device.port}`
-                    : `ssh ${device.username}@${device.host}`;
-
-                await vscode.window.showInformationMessage(
-                    `Manual SSH connection command:\n${sshCommand}\n\nAfter successful manual connection, try connecting again through this extension.`,
-                    { modal: true }
+            if (install === 'Install') {
+                logger.debug('User chose to install Remote-SSH extension');
+                await vscode.commands.executeCommand(
+                    'workbench.extensions.search',
+                    '@id:ms-vscode-remote.remote-ssh'
                 );
             }
+            return false;
+        }
+
+        if (!remoteSSHExtension.isActive) {
+            logger.debug('Activating Remote-SSH extension');
+            await remoteSSHExtension.activate();
+        }
+
+        return true;
+    }
+
+    /**
+     * Build the SSH connect label, registering a config alias when a non-default port is used.
+     */
+    private async resolveConnectLabel(device: Device): Promise<string> {
+        const sshTarget = `${device.username}@${device.host}`;
+        logger.debug('SSH target', { target: sshTarget, port: device.port });
+
+        if (device.port === 22) {
+            return sshTarget;
+        }
+
+        // Derive a stable alias
+        const filteredHost = device.host.replaceAll(/[^a-zA-Z0-9_.-]/g, '');
+        const alias = `zgx-${filteredHost}-${device.port}`;
+        await this.ensureSSHConfigEntry(alias, device);
+        return alias;
+    }
+
+    /**
+     * Offer recovery options to the user after a failed Remote-SSH connection attempt.
+     */
+    private async handleRemoteSSHConnectionFailure(device: Device): Promise<void> {
+        // If connection fails, help user add to SSH config
+        const addToConfig = await vscode.window.showErrorMessage(
+            `Could not connect to ${device.name}. The device might not be in your SSH config. Would you like to add it?`,
+            'Add to SSH Config',
+            'Try Manual Connection',
+            'Cancel'
+        );
+
+        const sshCommand = device.port === 22
+            ? `ssh ${device.username}@${device.host}`
+            : `ssh ${device.username}@${device.host} -p ${device.port}`;
+
+        if (addToConfig === 'Add to SSH Config') {
+            logger.debug('User chose to add to SSH config');
+            await vscode.commands.executeCommand('remote-ssh.addNewSshHost');
+
+            await vscode.window.showInformationMessage(
+                `Please add this SSH host: ${sshCommand}`,
+                { modal: false }
+            );
+        } else if (addToConfig === 'Try Manual Connection') {
+            logger.debug('User chose to try manual connection');
+
+            await vscode.window.showInformationMessage(
+                `Manual SSH connection command:\n${sshCommand}\n\nAfter successful manual connection, try connecting again through this extension.`,
+                { modal: true }
+            );
         }
     }
 
@@ -660,12 +680,12 @@ export class ConnectionService {
 
         const copyCommand = this.generateSSHKeyCopyCommand(device);
         logger.debug('SSH key copy command generated', {
-            commandPreview: copyCommand.substring(0, 50) + '...',
+            commandPreview: copyCommand.substring(0, 50) + '...'
         });
 
         const terminal = vscode.window.createTerminal({
             name: `SSH Auto Setup - ${device.name}`,
-            hideFromUser: false,
+            hideFromUser: false
         });
 
         terminal.show();
@@ -688,8 +708,8 @@ export class ConnectionService {
         const sshDirExists = fs.existsSync(sshDir);
 
         // Key generation commands
-        const winKeyGenBase = `ssh-keygen -t ed25519 -f "$Env:USERPROFILE/.ssh/id_ed25519"`;
-        const posixKeyGenBase = `ssh-keygen -t ed25519 -f ~/.ssh/id_ed25519 -N ""`;
+        const winKeyGenBase = 'ssh-keygen -t ed25519 -f "$Env:USERPROFILE/.ssh/id_ed25519"';
+        const posixKeyGenBase = 'ssh-keygen -t ed25519 -f ~/.ssh/id_ed25519 -N ""';
 
 
         const windowsKeyGen = sshDirExists
@@ -701,26 +721,27 @@ export class ConnectionService {
         const macKeyGen = `${posixPre}${posixKeyGenBase}`;
 
         // Key copy commands
-        const windowsCopy = `Get-Content -Raw "$Env:USERPROFILE/.ssh/id_ed25519.pub" | ssh${device.port !== 22 ? ` -p ${device.port}` : ''} ${device.username}@${device.host} "mkdir -p ~/.ssh && cat >> ~/.ssh/authorized_keys"`;
-        const posixCopy = `ssh-copy-id${device.port !== 22 ? ` -p ${device.port}` : ''} ${device.username}@${device.host}`;
+        const portSuffix = device.port === 22 ? '' : ` -p ${device.port}`;
+        const windowsCopy = `Get-Content -Raw "$Env:USERPROFILE/.ssh/id_ed25519.pub" | ssh${portSuffix} ${device.username}@${device.host} "mkdir -p ~/.ssh && cat >> ~/.ssh/authorized_keys"`;
+        const posixCopy = `ssh-copy-id${portSuffix} ${device.username}@${device.host}`;
 
         // Test command (platform-independent)
-        const testCommand = `ssh${device.port !== 22 ? ` -p ${device.port}` : ''} ${device.username}@${device.host}`;
+        const testCommand = `ssh${portSuffix} ${device.username}@${device.host}`;
 
         return {
             windows: {
                 keyGen: windowsKeyGen,
-                copy: windowsCopy,
+                copy: windowsCopy
             },
             linux: {
                 keyGen: linuxKeyGen,
-                copy: posixCopy,
+                copy: posixCopy
             },
             mac: {
                 keyGen: macKeyGen,
-                copy: posixCopy,
+                copy: posixCopy
             },
-            testCommand,
+            testCommand
         };
     }
 }

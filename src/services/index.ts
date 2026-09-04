@@ -1,5 +1,5 @@
 /*
- * Copyright ©2025 HP Development Company, L.P.
+ * Copyright ©2025-2026 HP Development Company, L.P.
  * Licensed under the X11 License. See LICENSE file in the project root for details.
  */
 
@@ -19,3 +19,6 @@ export { ExtensionStateService, extensionStateService } from './extensionStateSe
 export { DNSServiceRegistration, dnsServiceRegistration } from './dnsRegistrationService';
 export { ConnectXGroupService, connectxGroupService } from './connectxGroupService';
 export { DeviceHealthCheckService, deviceHealthCheckService } from './deviceHealthCheckService';
+export { DeviceFingerprintService, deviceFingerprintService } from './deviceFingerprintService';
+export type { FingerprintProbe } from './probes';
+export { migrateSettings } from './configMigrationService';

@@ -1,22 +1,22 @@
 /*
- * Copyright ©2025 HP Development Company, L.P.
+ * Copyright ©2025-2026 HP Development Company, L.P.
  * Licensed under the X11 License. See LICENSE file in the project root for details.
  */
 
-import * as path from 'path';
-import { readFileSync } from 'fs';
+import * as path from 'node:path';
+import { readFileSync } from 'node:fs';
 import semver from 'semver';
 import {
-  downloadAndUnzipVSCode,
-  resolveCliArgsFromVSCodeExecutablePath,
-  runTests
+    downloadAndUnzipVSCode,
+    resolveCliArgsFromVSCodeExecutablePath,
+    runTests
 } from '@vscode/test-electron';
-import { spawnSync } from 'child_process';
+import { spawnSync } from 'node:child_process';
 
 async function run() {
 
     const pkg = JSON.parse(
-            readFileSync(path.resolve(__dirname, '../../package.json'), 'utf8')
+        readFileSync(path.resolve(__dirname, '../../package.json'), 'utf8')
     );
     const engineRange: string | undefined = pkg.engines?.vscode;
     const minEngine = engineRange ? semver.minVersion(engineRange)?.version : undefined;
@@ -38,16 +38,16 @@ async function run() {
         extensionDevelopmentPath: path.resolve(__dirname, '../..'),
         extensionTestsPath: path.resolve(__dirname, 'integrationSuite/index'),
         launchArgs: [
-        '--disable-workspace-trust',
-        '--disable-telemetry',
-        '--disable-updates',
-        '--enable-proposed-api', 'hpinc.zgx-toolkit',
-        '--log', 'trace'
+            '--disable-workspace-trust',
+            '--disable-telemetry',
+            '--disable-updates',
+            '--enable-proposed-api', 'hpinc.zgx-toolkit',
+            '--log', 'trace'
         ]
-  });
+    });
 }
 
 run().catch(err => {
-  console.error('Failed to run tests', err);
-  process.exit(1);
+    console.error('Failed to run tests', err);
+    process.exit(1);
 });

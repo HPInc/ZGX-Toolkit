@@ -1,11 +1,11 @@
 <!--
-  Copyright ©2025 HP Development Company, L.P.
+    Copyright ©2025-2026 HP Development Company, L.P.
   Licensed under the X11 License. See LICENSE file in the project root for details.
--->
-
-<div class="templates-root" role="region" aria-label="ZGX Quick Start Templates">
+--> 
+  
+<section class="templates-root" aria-labelledby="templates-heading">
     <div class="templates-content">
-        <h1 class="templates-header">ZGX Quick Start Templates</h1>
+        <h1 class="templates-header" id="templates-heading">Z Toolkit Quick Start Templates</h1>
         <p class="templates-subtitle">
             <strong>Choose and connect a device</strong> from the panel on the left in a new window or <strong>add a new one</strong>. Then browse the tutorial templates below.
         </p>
@@ -17,9 +17,9 @@
         <div class="templates-separator"></div>
         <div class="templates-grid" id="templatesGrid">
             <div class="template-item">
-                <div class="template-card" data-id="inference" tabindex="0" role="button" aria-labelledby="inference-title">
+                <button class="template-card" type="button" data-id="inference" aria-labelledby="inference-title">
                     <div class="template-card-icon codicon codicon-circuit-board" aria-hidden="true"></div>
-                </div>
+                </button>
                 <div class="template-card-text">
                     <h3 class="template-card-title" id="inference-title">Run your first inference</h3>
                     <p class="template-card-desc">Get started with AI inference using Ollama.</p>
@@ -28,9 +28,9 @@
             </div>
         
             <div class="template-item">
-                <div class="template-card" data-id="fine-tuning" tabindex="0" role="button" aria-labelledby="fine-tuning-title">
+                <button class="template-card" type="button" data-id="fine-tuning" aria-labelledby="fine-tuning-title">
                     <div class="template-card-icon codicon codicon-settings" aria-hidden="true"></div>
-                </div>
+                </button>
                 <div class="template-card-text">
                     <h3 class="template-card-title" id="fine-tuning-title">Run your first fine-tuning</h3>
                     <p class="template-card-desc">Fine‑tune AI models with torchtune.</p>
@@ -39,9 +39,9 @@
             </div>
         
             <div class="template-item">
-                <div class="template-card" data-id="rag" tabindex="0" role="button" aria-labelledby="rag-title">
+                <button class="template-card" type="button" data-id="rag" aria-labelledby="rag-title">
                     <div class="template-card-icon codicon codicon-arrow-swap" aria-hidden="true"></div>
-                </div>
+                </button>
                 <div class="template-card-text">
                     <h3 class="template-card-title" id="rag-title">Build your first RAG application</h3>
                     <p class="template-card-desc">Create a simple Q&A bot using Retrieval-Augmented Generation.</p>
@@ -50,4 +50,4 @@
             </div>
         </div>
     </div>
-</div>
+</section>

@@ -1,5 +1,5 @@
 /*
- * Copyright ©2025 HP Development Company, L.P.
+ * Copyright ©2025-2026 HP Development Company, L.P.
  * Licensed under the X11 License. See LICENSE file in the project root for details.
  */
 
@@ -142,6 +142,78 @@
     z-index: 2;
 }
 
+/* Disabled category (device-type-targeted category not supported for this device) */
+.category.category-disabled .category-header,
+.category.category-disabled .app-grid {
+    opacity: 0.65;
+}
+
+.category-unsupported-banner {
+    display: flex;
+    flex-direction: row;
+    align-items: flex-start;
+    gap: 12px;
+    background-color: #491C00;
+    border-radius: 8px;
+    padding: 12px 14px;
+    margin-bottom: var(--spacing-md, 16px);
+    opacity: 1;
+}
+
+.category-unsupported-icon-wrap {
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    width: 28px;
+    height: 28px;
+    min-width: 28px;
+}
+
+.category-unsupported-triangle {
+    width: 0;
+    height: 0;
+    border-left: 11px solid transparent;
+    border-right: 11px solid transparent;
+    border-bottom: 19px solid #D86102;
+}
+
+.category-unsupported-exclamation {
+    position: absolute;
+    top: 52%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    color: #000000;
+    font-size: 12px;
+    font-weight: 700;
+    line-height: 1;
+    font-family: var(--vscode-font-family);
+}
+
+.category-unsupported-content {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.category-unsupported-title {
+    font-weight: 600;
+    color: var(--vscode-foreground);
+}
+
+.category-unsupported-body {
+    margin: 0;
+    color: var(--vscode-descriptionForeground);
+    font-size: 0.92em;
+}
+
+.app-widget.app-disabled {
+    cursor: not-allowed;
+    opacity: 0.6;
+    pointer-events: none;
+}
+
 .app-widget.app-verifying {
     border: 2px dashed var(--vscode-descriptionForeground);
     opacity: 0.6;
@@ -250,6 +322,13 @@
     font-size: 2em;
     text-align: center;
     margin-bottom: 10px;
+}
+
+.app-icon-img {
+    width: 40px;
+    height: 40px;
+    object-fit: contain;
+    vertical-align: middle;
 }
 
 .app-title {

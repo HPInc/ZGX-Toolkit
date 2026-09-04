@@ -1,5 +1,5 @@
 /*
- * Copyright ©2025 HP Development Company, L.P.
+ * Copyright ©2025-2026 HP Development Company, L.P.
  * Licensed under the X11 License. See LICENSE file in the project root for details.
  */
 
@@ -36,6 +36,94 @@
 
 .show-form-btn:hover {
     background-color: var(--vscode-button-hoverBackground);
+}
+
+.pair-devices-control {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+}
+
+.pair-devices-button {
+    padding-inline-end: calc(35px + var(--spacing-sm));
+}
+
+.pair-devices-info {
+    position: absolute;
+    inset-block-start: 50%;
+    inset-inline-end: var(--spacing-md);
+    display: inline-grid;
+    min-inline-size: 1.5rem;
+    min-block-size: 1.5rem;
+    place-items: center;
+    background: none;
+    border: none;
+    padding: 0;
+    cursor: pointer;
+    font-family: inherit;
+    color: var(--vscode-button-foreground);
+    transform: translateY(-70%);
+}
+
+.pair-devices-info .codicon {
+    line-height: 2.5;
+}
+
+.pair-devices-info:focus-visible {
+    outline: 2px solid var(--vscode-focusBorder);
+    outline-offset: 2px;
+}
+
+.pair-devices-tooltip {
+    --pair-devices-tooltip-background: var(--vscode-editorHoverWidget-background);
+    --pair-devices-tooltip-foreground: var(--vscode-editorHoverWidget-foreground);
+    position: absolute;
+    inset-block-start: 50%;
+    inset-inline-start: calc(100% + var(--spacing-sm));
+    display: none;
+    inline-size: min(20rem, calc(100vw - var(--spacing-xl)));
+    padding: var(--spacing-md);
+    color: var(--pair-devices-tooltip-foreground);
+    background-color: var(--pair-devices-tooltip-background);
+    border: 1px solid var(--vscode-editorHoverWidget-border);
+    border-radius: var(--border-radius-lg);
+    transform: translateY(-50%);
+    z-index: 1;
+}
+
+.pair-devices-tooltip::before {
+    position: absolute;
+    inset-block-start: 50%;
+    inset-inline-start: calc(-1 * var(--spacing-sm));
+    content: '';
+    border-block: var(--spacing-sm) solid transparent;
+    border-inline-end: var(--spacing-sm) solid var(--pair-devices-tooltip-background);
+    transform: translateY(-50%);
+}
+
+.vscode-dark .pair-devices-tooltip {
+    --pair-devices-tooltip-background: var(--vscode-editorHoverWidget-foreground);
+    --pair-devices-tooltip-foreground: var(--vscode-editorHoverWidget-background);
+}
+
+.pair-devices-tooltip-content {
+    display: grid;
+    gap: var(--spacing-xs);
+}
+
+.pair-devices-tooltip-title {
+    font-size: 1.2em;
+    font-weight: 400;
+}
+
+.pair-devices-tooltip-description {
+    font-size: 0.9em;
+    font-weight: 400;
+}
+
+.pair-devices-info:hover ~ .pair-devices-tooltip,
+.pair-devices-info:focus-visible ~ .pair-devices-tooltip {
+    display: block;
 }
 
 .add-device-form {
@@ -79,6 +167,19 @@
 .form-group select.error,
 .form-group textarea.error {
     border-color: var(--vscode-inputValidation-errorBorder);
+}
+
+.field-hint {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin-top: 6px;
+    font-size: 0.85em;
+    color: var(--vscode-inputValidation-warningBorder, #cca700);
+}
+
+.field-hint .codicon {
+    font-size: 1em;
 }
 
 .host-input-container {
@@ -185,6 +286,19 @@
     height: 32px;
     box-sizing: border-box;
     min-width: 120px;
+    border: 1px solid rgba(200, 200, 200, 0.45) !important;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    color: var(--vscode-button-secondaryForeground);
+    line-height: 1.4;
+}
+
+.discover-btn .codicon {
+    display: block;
+    flex-shrink: 0;
+    font-size: 14px;
 }
 
 .discover-btn:disabled {
@@ -206,8 +320,234 @@
     color: var(--vscode-errorForeground);
 }
 
+/* Info link button ("What's this?") */
+.btn-info-link {
+    background: none;
+    border: none;
+    cursor: pointer;
+    color: var(--vscode-foreground);
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    font-size: 0.875em;
+    padding: 4px 6px;
+    position: relative;
+    white-space: nowrap;
+    font-family: inherit;
+}
+
+.btn-info-link:hover {
+    color: var(--vscode-foreground);
+}
+
+.btn-info-link .codicon {
+    font-size: 14px;
+}
+
+/* Tooltip balloon */
+.discover-tooltip {
+    display: none;
+    position: absolute;
+    top: calc(100% + 8px);
+    left: auto;
+    right: 0;
+    width: min(300px, calc(100vw - 48px));
+    background-color: var(--vscode-editorHoverWidget-background);
+    color: var(--vscode-editorHoverWidget-foreground);
+    opacity: 1;
+    border-radius: 12px;
+    border: 1px solid var(--vscode-editorHoverWidget-border);
+    padding: 8px;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.18);
+    z-index: 9999;
+    pointer-events: none;
+    white-space: normal;
+    word-wrap: break-word;
+    box-sizing: border-box;
+}
+
+.discover-tooltip-arrow {
+    position: absolute;
+    top: -8px;
+    left: auto;
+    right: 16px;
+    transform: none;
+    width: 0;
+    height: 0;
+    border-left: 8px solid transparent;
+    border-right: 8px solid transparent;
+    border-bottom: 8px solid var(--vscode-editorHoverWidget-background);
+}
+
+.discover-tooltip-content {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    padding: 8px;
+    text-align: left;
+}
+
+.discover-tooltip-title {
+    font-size: 16px;
+    font-weight: 400;
+    line-height: 20px;
+    color: var(--vscode-editorHoverWidget-foreground);
+    margin: 0;
+    width: 100%;
+}
+
+.discover-tooltip-body {
+    font-size: 12px;
+    font-weight: 400;
+    line-height: 16px;
+    color: var(--vscode-editorHoverWidget-foreground);
+    margin: 0;
+    width: 100%;
+    white-space: pre-wrap;
+}
+
+.btn-info-link:hover .discover-tooltip,
+.btn-info-link:focus-visible .discover-tooltip {
+    display: block;
+}
+
+/* Ghost (no-background) Cancel button */
+.btn-ghost {
+    background: none !important;
+    border: 1px solid transparent;
+    color: var(--vscode-foreground);
+}
+
+.btn-ghost:hover:not(:disabled) {
+    background: var(--vscode-list-hoverBackground) !important;
+    border-color: var(--vscode-panel-border);
+}
+
+/* Blue primary submit button */
+.btn-blue {
+    background-color: #0078D4 !important;
+    color: #ffffff !important;
+    border: none;
+}
+
+.btn-blue:hover:not(:disabled) {
+    background-color: #005fa3 !important;
+}
+
+/* Discovery error card */
+.discovery-error-card {
+    background-color: #491C00;
+    border-radius: 12px;
+    padding: 16px 8px 16px 12px;
+    margin-bottom: var(--spacing-md);
+}
+
+.discovery-error-top {
+    display: flex;
+    flex-direction: row;
+    align-items: flex-start;
+    gap: 12px;
+}
+
+.discovery-error-icon-wrap {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    width: 32px;
+    height: 32px;
+    min-width: 32px;
+    background-color: #491C00;
+    border-radius: 6px;
+    padding-top: 2px;
+}
+
+.discovery-error-icon-wrap .codicon {
+    font-size: 20px;
+    color: #D86102;
+}
+
+.discovery-error-content {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    flex: 1 0 0;
+    min-width: 0;
+    padding-right: 8px;
+}
+
+.discovery-error-title {
+    display: block;
+    font-weight: 400;
+    color: #FFD0AF;
+    font-size: 16px;
+    line-height: 20px;
+}
+
+.discovery-error-body {
+    color: #FFD0AF;
+    font-size: 12px;
+    line-height: 18px;
+    margin: 0;
+}
+
+.discovery-error-code {
+    display: block;
+    margin-top: 6px;
+    font-weight: 600;
+}
+
+.discovery-error-inline-link {
+    color: #FFD0AF;
+    text-decoration: underline;
+    text-decoration-style: solid;
+    text-underline-position: from-font;
+    text-decoration-skip-ink: none;
+}
+
+.discovery-error-inline-link:hover {
+    color: #FFD0AF;
+    text-decoration: underline;
+}
+
+.discovery-error-bottom {
+    display: flex;
+    flex-direction: row;
+    align-items: flex-start;
+}
+
+.discovery-error-action-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 112px;
+    padding: 8px 16px;
+    background: none;
+    border: 1px solid #E8E8E8;
+    border-radius: 8px;
+    color: #E8E8E8 !important;
+    font-size: 16px;
+    line-height: 20px;
+    cursor: pointer;
+    text-decoration: none !important;
+    box-sizing: border-box;
+    font-family: inherit;
+    white-space: nowrap;
+    transition: background var(--transition-fast);
+}
+
+.discovery-error-action-btn:hover {
+    background: rgba(232, 232, 232, 0.1) !important;
+    text-decoration: none !important;
+}
+
+@keyframes spin {
+    to { transform: rotate(360deg); }
+}
+
 .devices-section {
     margin-top: var(--spacing-xl);
+    margin-bottom: var(--spacing-xl);
 }
 
 .devices-section h2 {
@@ -221,12 +561,55 @@
     gap: var(--spacing-lg);
 }
 
+.device-section {
+    grid-column: 1 / -1;
+}
+
+.device-section-header {
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-sm);
+    margin-bottom: var(--spacing-sm);
+}
+
+.device-section-header h3 {
+    margin: 0;
+    color: var(--vscode-foreground);
+    font-size: 1em;
+}
+
+.device-section-icon {
+    color: var(--vscode-descriptionForeground);
+    font-size: 16px;
+}
+
+.paired-device-groups {
+    display: flex;
+    flex-direction: column;
+    gap: var(--spacing-lg);
+}
+
+.unpaired-device-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+    gap: var(--spacing-lg);
+}
+
+.device-section-empty-state {
+    color: var(--vscode-descriptionForeground);
+    font-style: italic;
+    padding: var(--spacing-md);
+}
+
+.device-section-empty-state p {
+    margin: 0;
+}
+
 /* Paired group container - spans full width */
 .paired-group-container {
-    grid-column: 1 / -1;
     display: flex;
     flex-direction: row;
-    background-color: var(--vscode-editor-background);
+    background-color: var(--vscode-sideBarSectionHeader-background);
     border: 2px solid var(--vscode-panel-border);
     border-radius: var(--border-radius-lg);
     padding: 0;
@@ -237,6 +620,7 @@
     display: flex;
     flex-direction: column;
     flex: 1;
+    background-color: var(--vscode-sideBarSectionHeader-background);
 }
 
 .paired-group-actions {
@@ -267,14 +651,16 @@
     align-items: center;
     justify-content: center;
     gap: var(--spacing-xs);
-    background-color: var(--vscode-panel-border);
+    background-color: var(--vscode-sideBarSectionHeader-background);
     padding: var(--spacing-md) var(--spacing-sm);
     min-width: 32px;
+    border-right: 1px solid var(--vscode-panel-border);
+    color: var(--vscode-sideBarSectionHeader-foreground);
 }
 
 .paired-group-label .codicon {
     font-size: 14px;
-    color: var(--vscode-foreground);
+    color: inherit;
 }
 
 .paired-label-text {
@@ -283,7 +669,7 @@
     transform: rotate(180deg);
     font-size: 14px;
     font-weight: 600;
-    color: var(--vscode-foreground);
+    color: inherit;
     letter-spacing: 0.5px;
 }
 
@@ -514,8 +900,4 @@
     border-radius: 50%;
     border-top-color: transparent;
     animation: spin 1s ease-in-out infinite;
-}
-
-@keyframes spin {
-    to { transform: rotate(360deg); }
 }

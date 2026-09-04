@@ -1,5 +1,5 @@
 /*
- * Copyright ©2025 HP Development Company, L.P.
+ * Copyright ©2025-2026 HP Development Company, L.P.
  * Licensed under the X11 License. See LICENSE file in the project root for details.
  */
 
@@ -257,6 +257,87 @@ export async function executeCommandOnClient(
  * @param executionOptions Optional command execution configuration
  * @returns Promise resolving to command result
  */
+/**
+ * Outcome of a single SSH command execution attempt.
+ */
+interface SSHAttemptOutcome {
+    result?: SSHCommandResult;
+    error?: Error;
+    isRetryable: boolean;
+}
+
+/**
+ * Determine whether an SSH error is likely transient and worth retrying.
+ */
+function isRetryableSSHError(error: Error): boolean {
+    const errorMessage = error.message.toLowerCase();
+    return errorMessage.includes('timed out') ||
+        errorMessage.includes('timeout') ||
+        errorMessage.includes('econnreset');
+}
+
+/**
+ * Close an SSH client, swallowing and logging any error encountered while doing so.
+ */
+function closeSSHClientForOperation(client: SSHClient | undefined, operationName: string): void {
+    if (!client) {
+        return;
+    }
+    try {
+        client.end();
+    } catch (err) {
+        logger.debug(`Error closing SSH client for ${operationName}`, {
+            error: err instanceof Error ? err.message : String(err)
+        });
+    }
+}
+
+/**
+ * Build a failed SSHCommandResult from an error.
+ */
+function buildSSHErrorResult(error: Error | undefined, fallbackMessage = 'Unknown error'): SSHCommandResult {
+    return {
+        success: false,
+        exitCode: -1,
+        stdout: '',
+        stderr: error?.message || fallbackMessage,
+        error
+    };
+}
+
+/**
+ * Perform a single connect+execute attempt for an SSH command, always closing the connection afterwards.
+ */
+async function attemptSSHCommandOnce(
+    device: Device,
+    command: string,
+    connectionOptions: SSHConnectionOptions | undefined,
+    executionOptions: SSHCommandExecutionOptions | undefined,
+    operationName: string,
+    attempt: number,
+    totalAttempts: number
+): Promise<SSHAttemptOutcome> {
+    let client: SSHClient | undefined;
+    try {
+        const attemptText = totalAttempts > 1 && attempt > 1 ? ` (attempt ${attempt}/${totalAttempts})` : '';
+        logger.debug(`Executing SSH command for ${operationName}${attemptText}`);
+
+        // Connect to device
+        client = await createSSHConnection(device, connectionOptions);
+
+        // Execute command on the connected client
+        const result = await executeCommandOnClient(client, command, executionOptions);
+
+        return { result, isRetryable: false };
+    } catch (error) {
+        const lastError = error instanceof Error ? error : new Error(String(error));
+        return { error: lastError, isRetryable: isRetryableSSHError(lastError) };
+    } finally {
+        // Always close the client connection
+        closeSSHClientForOperation(client, operationName);
+    }
+}
+
 export async function executeSSHCommand(
     device: Device,
     command: string,
@@ -270,67 +351,41 @@ export async function executeSSHCommand(
     let lastError: Error | undefined;
 
     for (let attempt = 1; attempt <= totalAttempts; attempt++) {
-        let client: SSHClient | undefined;
+        const outcome = await attemptSSHCommandOnce(
+            device,
+            command,
+            connectionOptions,
+            executionOptions,
+            operationName,
+            attempt,
+            totalAttempts
+        );
 
-        try {
-            const attemptText = totalAttempts > 1 && attempt > 1 ? ` (attempt ${attempt}/${totalAttempts})` : '';
-            logger.debug(`Executing SSH command for ${operationName}${attemptText}`);
-
-            // Connect to device
-            client = await createSSHConnection(device, connectionOptions);
-
-            // Execute command on the connected client
-            const result = await executeCommandOnClient(client, command, executionOptions);
-
-            return result;
-
-        } catch (error) {
-            lastError = error instanceof Error ? error : new Error(String(error));
-
-            // Check if error is retryable (timeout or connection reset)
-            const errorMessage = (error instanceof Error ? error.message : String(error)).toLowerCase();
-            const isRetryable =
-                errorMessage.includes('timed out') ||
-                errorMessage.includes('timeout') ||
-                errorMessage.includes('econnreset');
-
-            if (isRetryable && attempt < totalAttempts) {
-                logger.warn(`Command error for ${operationName} (attempt ${attempt}/${totalAttempts})`, {
-                    error: lastError.message
-                });
-                logger.info(`Retrying command for ${operationName}...`);
-                
-                // Add delay before retry
-                await new Promise(resolve => setTimeout(resolve, retryDelay));
-                continue;
-            }
-
-            // For non-retryable errors or final attempt, log and return error
-            logger.error(`Command exception for ${operationName}`, {
-                error: lastError.message,
-                attempt: attempt,
-                maxRetries: retries
-            });
-
-            return {
-                success: false,
-                exitCode: -1,
-                stdout: '',
-                stderr: lastError.message,
-                error: lastError
-            };
-        } finally {
-            // Always close the client connection
-            if (client) {
-                try {
-                    client.end();
-                } catch (err) {
-                    logger.debug(`Error closing SSH client for ${operationName}`, {
-                        error: err instanceof Error ? err.message : String(err)
-                    });
-                }
-            }
+        if (outcome.result) {
+            return outcome.result;
         }
+
+        lastError = outcome.error;
+
+        if (outcome.isRetryable && attempt < totalAttempts) {
+            logger.warn(`Command error for ${operationName} (attempt ${attempt}/${totalAttempts})`, {
+                error: lastError?.message
+            });
+            logger.info(`Retrying command for ${operationName}...`);
+
+            // Add delay before retry
+            await new Promise(resolve => setTimeout(resolve, retryDelay));
+            continue;
+        }
+
+        // For non-retryable errors or final attempt, log and return error
+        logger.error(`Command exception for ${operationName}`, {
+            error: lastError?.message,
+            attempt: attempt,
+            maxRetries: retries
+        });
+
+        return buildSSHErrorResult(lastError);
     }
 
     // Total attempts exhausted
@@ -338,13 +393,7 @@ export async function executeSSHCommand(
         lastError: lastError?.message
     });
 
-    return {
-        success: false,
-        exitCode: -1,
-        stdout: '',
-        stderr: lastError?.message || 'Unknown error',
-        error: lastError
-    };
+    return buildSSHErrorResult(lastError);
 }
 
 /**

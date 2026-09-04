@@ -1,5 +1,5 @@
 /*
- * Copyright ©2025 HP Development Company, L.P.
+ * Copyright ©2025-2026 HP Development Company, L.P.
  * Licensed under the X11 License. See LICENSE file in the project root for details.
  */
 
@@ -36,9 +36,9 @@ export class InferenceInstructionsViewController extends BaseViewController {
         this.deviceService = deps.deviceService;
         this.appInstallationService = deps.appInstallationService;
 
-        this.template = this.loadTemplate('./inferenceInstructions.html', __dirname);
-        this.styles = this.loadTemplate('./inferenceInstructions.css', __dirname);
-        this.clientScript = this.loadTemplate('./inferenceInstructions.js', __dirname);
+        this.template = this.loadTemplate('instructions/inference/inferenceInstructions.html');
+        this.styles = this.loadTemplate('instructions/inference/inferenceInstructions.css');
+        this.clientScript = this.loadTemplate('instructions/inference/inferenceInstructions.js');
     }
 
     /**
@@ -61,7 +61,7 @@ export class InferenceInstructionsViewController extends BaseViewController {
             eventType: TelemetryEventType.View,
             action: 'navigate',
             properties: {
-                toView: 'instructions.inference',
+                toView: 'instructions.inference'
             }
         });
 
@@ -88,7 +88,7 @@ export class InferenceInstructionsViewController extends BaseViewController {
                     await this.deviceService.connectToDevice(message.id, message.newWindow);
                     
                     this.logger.info('Successfully initiated connection to device', {
-                        deviceId: message.id,
+                        deviceId: message.id
                     });
 
                 } catch (error) {
@@ -121,7 +121,7 @@ export class InferenceInstructionsViewController extends BaseViewController {
                 }
 
                 // Check if the app is installed
-                const isInstalled = await this.appInstallationService.verifyAppInstallation(
+                const { isInstalled } = await this.appInstallationService.verifyAppInstallation(
                     device, 
                     zgxPythonEnvApp
                 );

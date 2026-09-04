@@ -1,5 +1,5 @@
 <!--
-  Copyright ©2025 HP Development Company, L.P.
+  Copyright ©2025-2026 HP Development Company, L.P.
   Licensed under the X11 License. See LICENSE file in the project root for details.
 -->
 
@@ -8,6 +8,13 @@
         <h1>Application {{operationLabel}}</h1>
         <p>{{operationVerb}} selected applications on <strong>{{deviceName}}</strong></p>
     </div>
+
+    {{#if showZrtUninstallWarning}}
+    <div class="zrt-uninstall-warning">
+        <span class="warning-icon" title="Warning">⚠️</span>
+        Uninstalling HP Z Runtime will not stop any models it is currently serving; they will keep running until they are manually stopped or when the device is rebooted.
+    </div>
+    {{/if}}
 
     <div class="password-section hidden" id="password-section">
         <div class="password-prompt">
@@ -35,7 +42,7 @@
         <h3>{{operationLabel}} Queue</h3>
         {{#each apps}}
         <div class="app-item" id="app-{{id}}">
-            <div class="app-icon">{{icon}}</div>
+            <div class="app-icon">{{#if iconUri}}<img src="{{iconUri}}" alt="{{name}} icon" class="app-icon-img" />{{else}}{{icon}}{{/if}}</div>
             <div class="app-name">{{name}}</div>
             <div class="app-status status-pending" id="status-{{id}}">Pending</div>
         </div>

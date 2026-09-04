@@ -1,5 +1,5 @@
 /*
- * Copyright ©2025 HP Development Company, L.P.
+ * Copyright ©2025-2026 HP Development Company, L.P.
  * Licensed under the X11 License. See LICENSE file in the project root for details.
  */
 
@@ -81,7 +81,7 @@
         
         if (messageEl) {
             // Safely format markdown-style syntax while preventing XSS
-            let formattedMessage = errorDetails
+            const formattedMessage = errorDetails
                 .replace(/&/g, '&amp;')
                 .replace(/</g, '&lt;')
                 .replace(/>/g, '&gt;')

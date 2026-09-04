@@ -1,18 +1,18 @@
 /*
- * Copyright ©2025 HP Development Company, L.P.
+ * Copyright ©2025-2026 HP Development Company, L.P.
  * Licensed under the X11 License. See LICENSE file in the project root for details.
  */
 
-import { BaseViewController, IView } from '../../views/baseViewController';
+import { BaseViewController } from '../../views/baseViewController';
 import { Logger } from '../../utils/logger';
 import { ITelemetryService } from '../../types/telemetry';
 import { Message } from '../../types/messages';
 
 // Test implementation of BaseView
 class TestView extends BaseViewController {
-    public template: string = '<div>{{title}}</div>';
-    public styles: string = '.test { color: red; }';
-    public clientScript: string = 'console.log("test");';
+    public template = '<div>{{title}}</div>';
+    public styles = '.test { color: red; }';
+    public clientScript = 'console.log("test");';
 
     static viewId(): string {
         return 'test-view';
@@ -39,7 +39,7 @@ describe('BaseView', () => {
             debug: jest.fn(),
             info: jest.fn(),
             warn: jest.fn(),
-            error: jest.fn(),
+            error: jest.fn()
         } as any;
 
         telemetry = {
@@ -48,7 +48,7 @@ describe('BaseView', () => {
             trackFeature: jest.fn(),
             trackError: jest.fn(),
             trackPerformance: jest.fn(),
-            flush: jest.fn(),
+            flush: jest.fn()
         } as any;
 
         view = new TestView(logger, telemetry);
@@ -257,16 +257,51 @@ describe('BaseView', () => {
                 throw new Error('File not found');
             });
 
-            const result = view['loadTemplate']('./nonexistent.html');
+            const result = view['loadTemplate']('nonexistent.html');
             expect(result).toBe('');
             expect(logger.error).toHaveBeenCalledWith(
                 'Failed to load template',
                 expect.objectContaining({
-                    relativePath: './nonexistent.html'
+                    relativePath: 'nonexistent.html'
                 })
             );
 
             // Restore original
+            require('fs').readFileSync = originalReadFileSync;
+        });
+
+        it('should fall back to the views/-prefixed path when the direct lookup fails (bundled extension.js layout)', () => {
+            const path = require('node:path');
+            const originalReadFileSync = require('fs').readFileSync;
+            const mockReadFileSync = jest.fn()
+                .mockImplementationOnce(() => { throw new Error('ENOENT: direct path'); })
+                .mockImplementationOnce(() => '<div>bundled</div>');
+            require('fs').readFileSync = mockReadFileSync;
+
+            const result = view['loadTemplate']('devices/list/deviceList.html');
+
+            expect(result).toBe('<div>bundled</div>');
+            expect(mockReadFileSync).toHaveBeenCalledTimes(2);
+            const fallbackPath = mockReadFileSync.mock.calls[1][0] as string;
+            expect(fallbackPath).toContain(path.join('views', 'devices', 'list', 'deviceList.html'));
+
+            require('fs').readFileSync = originalReadFileSync;
+        });
+
+        it('should log and return empty string when both the direct and fallback lookups fail', () => {
+            const originalReadFileSync = require('fs').readFileSync;
+            require('fs').readFileSync = jest.fn(() => {
+                throw new Error('ENOENT');
+            });
+
+            const result = view['loadTemplate']('devices/list/missing.html');
+
+            expect(result).toBe('');
+            expect(logger.error).toHaveBeenCalledWith(
+                'Failed to load template',
+                expect.objectContaining({ relativePath: 'devices/list/missing.html' })
+            );
+
             require('fs').readFileSync = originalReadFileSync;
         });
     });
@@ -519,15 +554,9 @@ describe('BaseView', () => {
 
     describe('multiple overlay support', () => {
         it('should enable both error and password overlays without duplicating base overlay', () => {
-            const originalStyles = view['styles'];
-            const originalScript = view['clientScript'];
-
             // Enable error overlay first
             view['enableErrorOverlay']();
             
-            const stylesAfterError = view['styles'];
-            const scriptAfterError = view['clientScript'];
-
             // Enable password input overlay second
             view['enablePasswordInputOverlay']();
             
@@ -575,7 +604,6 @@ describe('BaseView', () => {
             view['enableErrorOverlay'](); // Call again
             
             const styles = view['styles'];
-            const script = view['clientScript'];
 
             // Count occurrences of base overlay CSS class
             const baseStyleMatches = (styles.match(/\.overlay-backdrop/g) || []).length;

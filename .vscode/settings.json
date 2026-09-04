@@ -7,33 +7,31 @@
     "forceToTop": true,
     "blankLinesAfter": 1,
     "license": "X11",
+    "spacesBetweenYears": false,
     "company": "HP Inc.",
-    "copyrightHolder": "HP Development Company L.C."
+    "copyrightHolder": "HP Development Company, L.P."
   },
 
-  "psi-header.variables": [
-     ["projectCreationYear", "2025"]
-  ],
-  
   "psi-header.changes-tracking": {
-    "isActive": false,
+    "isActive": true,
     "modAuthor": "Modified By: ",
     "modDate": "Last Modified: ",
     "modDateFormat": "date",
-    "include": [],
+    "include": ["typescript", "javascript", "html", "css"],
     "exclude": [
       "markdown",
       "json",
       "jsonc"
     ],
-    "autoHeader": "manualSave"
+    "autoHeader": "manualSave",
+    "replace": ["Copyright"]
   },
   
   "psi-header.templates": [
     {
       "language": "*",
       "template": [
-        "Copyright ©<<year>> HP Development Company, L.P.",
+        "Copyright ©<<yeartoyear(fc!P, now)>> HP Development Company, L.P.",
         "Licensed under the X11 License. See LICENSE file in the project root for details.",
       ]
     }

@@ -1,9 +1,10 @@
 /*
- * Copyright ©2025 HP Development Company, L.P.
+ * Copyright ©2025-2026 HP Development Company, L.P.
  * Licensed under the X11 License. See LICENSE file in the project root for details.
  */
 
-import { BaseViewController } from '../../baseViewController';
+import { BaseSetupViewController } from '../baseSetupViewController';
+import { SETUP_VIEW_IDS } from '../setupViewIds';
 import { Logger } from '../../../utils/logger';
 import { ITelemetryService, TelemetryEventType } from '../../../types/telemetry';
 import { Device } from '../../../types/devices';
@@ -11,16 +12,17 @@ import { Message } from '../../../types/messages';
 import { ConnectionService } from '../../../services/connectionService';
 import { SetupOptionsViewController } from '../options/setupOptionsViewController';
 import { DnsRegistrationViewController } from '../dnsRegistration/dnsRegistrationViewController';
+import { DetectDeviceTypeViewController } from '../detectDeviceType/detectDeviceTypeViewController';
 
 /**
  * Manual SSH setup view - guides users through manual SSH key setup with platform-specific commands
  */
-export class ManualSetupViewController extends BaseViewController {
-    private connectionService: ConnectionService;
+export class ManualSetupViewController extends BaseSetupViewController {
+
     private currentDevice?: Device;
 
     public static viewId(): string {
-        return 'setup/manual';
+        return SETUP_VIEW_IDS.manual;
     }
 
     constructor(
@@ -30,11 +32,10 @@ export class ManualSetupViewController extends BaseViewController {
             connectionService: ConnectionService;
         }
     ) {
-        super(deps.logger, deps.telemetry);
-        this.connectionService = deps.connectionService;
-        this.template = this.loadTemplate('./manualSetup.html', __dirname);
-        this.styles = this.loadTemplate('./manualSetup.css', __dirname);
-        this.clientScript = this.loadTemplate('./manualSetup.js', __dirname);
+        super(deps);
+        this.template = this.loadTemplate('setup/manual/manualSetup.html');
+        this.styles = this.loadTemplate('setup/manual/manualSetup.css');
+        this.clientScript = this.loadTemplate('setup/manual/manualSetup.js');
     }
 
     async render(params?: { device: Device }, nonce?: string): Promise<string> {
@@ -69,8 +70,8 @@ export class ManualSetupViewController extends BaseViewController {
             eventType: TelemetryEventType.View,
             action: 'navigate',
             properties: {
-                toView: 'setup.manual',
-            },
+                toView: 'setup.manual'
+            }
         });
 
         return this.wrapHtml(html, nonce);
@@ -87,9 +88,19 @@ export class ManualSetupViewController extends BaseViewController {
         }
 
         switch (message.type) {
-            case 'testConnection':
-                await this.handleTestConnection(this.currentDevice);
+            case 'testConnection': {
+                const success = await this.handleTestConnection(
+                    this.currentDevice,
+                    'Failed to verify SSH connection. Please ensure you copied your public key correctly.'
+                );
+                if (success) {
+                    await this.navigateTo(DetectDeviceTypeViewController.viewId(), {
+                        device: this.currentDevice,
+                        setupType: 'manual'
+                    }, 'editor');
+                }
                 break;
+            }
 
             case 'manualComplete':
                 await this.handleManualComplete(this.currentDevice);
@@ -106,49 +117,12 @@ export class ManualSetupViewController extends BaseViewController {
     }
 
     /**
-     * Handle test connection - verify SSH connectivity
-     */
-    private async handleTestConnection(device: Device): Promise<void> {
-        this.logger.info('Testing SSH connection', { device: device.name });
-
-        try {
-            // Test SSH connectivity
-            const testSuccessful = await this.connectionService.testSSHKeyConnectivity(device);
-
-            if (testSuccessful) {
-                this.logger.info('SSH connection test successful', { device: device.name });
-
-                // Navigate to DNS registration view
-                await this.navigateTo(DnsRegistrationViewController.viewId(), { 
-                    device: device,
-                    setupType: 'manual'
-                }, 'editor');
-                return;
-            } else {
-                throw new Error('SSH connection test failed - could not connect to device');
-            }
-
-        } catch (error) {
-            this.logger.error('Connection test failed', {
-                error: error instanceof Error ? error.message : String(error),
-                device: device.name
-            });
-
-            this.sendMessageToWebview({
-                type: 'connectionTestFailed',
-                error: error instanceof Error ? error.message : 'Failed to verify SSH connection. Please ensure you copied your public key correctly.'
-            });
-        }
-    }
-
-    /**
      * Handle manual setup completion - test SSH connectivity
      */
     private async handleManualComplete(device: Device): Promise<void> {
         this.logger.info('Verifying manual SSH setup completion', { device: device.name });
 
         try {
-            // Test SSH connectivity
             const testSuccessful = await this.connectionService.testSSHKeyConnectivity(device);
 
             if (testSuccessful) {

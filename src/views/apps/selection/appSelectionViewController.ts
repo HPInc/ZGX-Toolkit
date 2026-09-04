@@ -1,12 +1,12 @@
 /*
- * Copyright ©2025 HP Development Company, L.P.
+ * Copyright ©2025-2026 HP Development Company, L.P.
  * Licensed under the X11 License. See LICENSE file in the project root for details.
  */
 
 import { BaseViewController } from '../../baseViewController';
 import { Logger } from '../../../utils/logger';
 import { ITelemetryService, TelemetryEventType } from '../../../types/telemetry';
-import { Device } from '../../../types/devices';
+import { Device, isInferenceDeviceType } from '../../../types/devices';
 import { Message } from '../../../types/messages';
 import { APP_CATEGORIES, AppDefinition, getAllApps, getAppById } from '../../../constants/apps';
 import { DeviceService, deviceHealthCheckService } from '../../../services';
@@ -36,9 +36,9 @@ export class AppSelectionViewController extends BaseViewController {
         super(deps.logger, deps.telemetry);
         this.deviceService = deps.deviceService;
         this.appInstallationService = deps.appInstallationService;
-        this.template = this.loadTemplate('./appSelection.html', __dirname);
-        this.styles = this.loadTemplate('./appSelection.css', __dirname);
-        this.clientScript = this.loadTemplate('./appSelection.js', __dirname);
+        this.template = this.loadTemplate('apps/selection/appSelection.html');
+        this.styles = this.loadTemplate('apps/selection/appSelection.css');
+        this.clientScript = this.loadTemplate('apps/selection/appSelection.js');
         
         // Enable error overlay support
         this.enableErrorOverlay();
@@ -46,6 +46,7 @@ export class AppSelectionViewController extends BaseViewController {
 
     async render(params?: {
         device: Device;
+        zrtLogoUri?: string;
     }, nonce?: string): Promise<string> {
         this.logger.debug('Rendering app selection view', { device: params?.device?.name });
 
@@ -65,20 +66,57 @@ export class AppSelectionViewController extends BaseViewController {
         // Calculate which apps are auto-dependencies
         const autoDependencies = this.calculateAutoDependencies([], [], allApps);
 
-        // Transform categories for rendering
-        const categories = APP_CATEGORIES.map(category => ({
-            name: category.name,
-            description: category.description,
-            apps: category.apps.map((app: any) => ({
-                id: app.id,
-                icon: app.icon,
-                name: app.name,
-                description: app.description,
-                features: app.features,
-                installed: false,
-                isBaseSystemInstalled: false
-            }))
-        }));
+        /**  
+        * Determine whether this device's type is well-suited for local model inferencing
+        * (currently ARM-based for now). This controls both the placement and the
+        * enabled/disabled state of device-type-targeted categories.
+        */
+        const inferenceDeviceType = isInferenceDeviceType(device.fingerprint?.deviceType);
+
+        /**
+        * Message shown in the "unsupported on current device" banner for device-type-targeted
+        * categories (e.g. Model Serving) when the current device isn't a supported type.
+        */
+        const unsupportedCategoryMessage = '{productName} is currently only supported on HP ZGX Fury and Nano devices.';
+
+        // Transform categories for rendering, tagging device-type-targeted categories
+        // with whether they are enabled for this device.
+        const transformedCategories = APP_CATEGORIES.map(category => {
+            // Categories without a deviceType are shown as-is for every device.
+            const isTargetedCategory = !!category.deviceType;
+            const categoryEnabled = !isTargetedCategory || inferenceDeviceType;
+
+            const unsupportedProductName = category.apps.some(app => app.id === 'zrt')
+                ? 'ZRT'
+                : category.name;
+
+            return {
+                name: category.name,
+                description: category.description,
+                disabled: !categoryEnabled,
+                unsupportedMessage: unsupportedCategoryMessage.replace('{productName}', unsupportedProductName),
+                apps: category.apps.map((app: AppDefinition) => ({
+                    id: app.id,
+                    icon: app.icon,
+                    iconUri: app.id === 'zrt' ? params?.zrtLogoUri : undefined,
+                    name: app.name,
+                    description: app.description,
+                    features: app.features,
+                    installed: false,
+                    isBaseSystemInstalled: false,
+                    disabled: !categoryEnabled
+                }))
+            };
+        });
+
+        // Feature device-type-targeted categories (e.g. Model Serving) at the top of the
+        // list for supported devices.
+        const categories = inferenceDeviceType
+            ? transformedCategories
+            : [
+                ...transformedCategories.filter(cat => !cat.disabled),
+                ...transformedCategories.filter(cat => cat.disabled)
+            ];
 
         const html = this.renderTemplate(this.template, {
             deviceName: device.name,
@@ -101,8 +139,8 @@ export class AppSelectionViewController extends BaseViewController {
             eventType: TelemetryEventType.View,
             action: 'navigate',
             properties: {
-                toView: 'apps.selection',
-            },
+                toView: 'apps.selection'
+            }
         });
 
         // Include error overlay template BEFORE scripts so it's in DOM when scripts execute
@@ -221,7 +259,7 @@ export class AppSelectionViewController extends BaseViewController {
 
         // Use cached device health check result if available for this device, otherwise perform new check
         let healthCheckResult;
-        if (this.cachedHealthCheckResult && this.cachedHealthCheckResult.deviceId === device.id) {
+        if (this.cachedHealthCheckResult?.deviceId === device.id) {
             this.logger.debug('Using cached health check result for ollama check');
             healthCheckResult = this.cachedHealthCheckResult;
         } else {
@@ -250,7 +288,7 @@ export class AppSelectionViewController extends BaseViewController {
             return;
         }
 
-        const isInstalled = await this.appInstallationService.verifyAppInstallation(
+        const { isInstalled } = await this.appInstallationService.verifyAppInstallation(
             device, 
             ollamaApp
         );
@@ -280,8 +318,8 @@ export class AppSelectionViewController extends BaseViewController {
         }
         await this.navigateTo(AppProgressViewController.viewId(), { 
             device: device,
-            operation: "uninstall",
-            selectedApps: "all"
+            operation: 'uninstall',
+            selectedApps: 'all'
         });
     }
 
@@ -358,7 +396,7 @@ export class AppSelectionViewController extends BaseViewController {
                 }
                 
                 try {
-                    const isInstalled = await this.appInstallationService.verifyAppInstallation(device, app);
+                    const { isInstalled } = await this.appInstallationService.verifyAppInstallation(device, app);
                     
                     // Send result back to webview
                     this.sendMessageToWebview({
@@ -412,7 +450,7 @@ export class AppSelectionViewController extends BaseViewController {
         // For each selected app, recursively collect all its dependencies
         const getAllDependencies = (appId: string, collected: Set<string> = new Set()): Set<string> => {
             const app = appDefinitions.find((a: AppDefinition) => a.id === appId);
-            if (app && app.dependencies) {
+            if (app?.dependencies) {
                 for (const depId of app.dependencies) {
                     if (!collected.has(depId) && !installedApps.includes(depId)) {
                         collected.add(depId);

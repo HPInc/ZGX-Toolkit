@@ -1,5 +1,5 @@
 /*
- * Copyright ©2025 HP Development Company, L.P.
+ * Copyright ©2025-2026 HP Development Company, L.P.
  * Licensed under the X11 License. See LICENSE file in the project root for details.
  */
 
@@ -10,6 +10,7 @@ import { Message, SetupOptionSelectedMessage } from '../../../types/messages';
 import { Device } from '../../../types/devices';
 import { DeviceManagerViewController } from '../../devices/manager/deviceManagerViewController';
 import { ManualSetupViewController } from '../manual/manualSetupViewController';
+import { SETUP_VIEW_IDS } from '../setupViewIds';
 import { AutomaticSetupViewController } from '../automatic/automaticSetupViewController';
 
 /**
@@ -20,7 +21,7 @@ export class SetupOptionsViewController extends BaseViewController {
     private currentDevice?: Device;
 
     public static viewId(): string {
-        return 'setup/options';
+        return SETUP_VIEW_IDS.options;
     }
 
     constructor(deps: {
@@ -29,15 +30,15 @@ export class SetupOptionsViewController extends BaseViewController {
     }) {
         super(deps.logger, deps.telemetry);
 
-        this.template = this.loadTemplate('./setupOptions.html', __dirname);
-        this.styles = this.loadTemplate('./setupOptions.css', __dirname);
-        this.clientScript = this.loadTemplate('./setupOptions.js', __dirname);
+        this.template = this.loadTemplate('setup/options/setupOptions.html');
+        this.styles = this.loadTemplate('setup/options/setupOptions.css');
+        this.clientScript = this.loadTemplate('setup/options/setupOptions.js');
     }
 
     async render(params?: { device: Device }, nonce?: string): Promise<string> {
         this.logger.debug('Rendering setup options view', { deviceName: params?.device.name });
 
-        if (!params || !params.device) {
+        if (!params?.device) {
             this.logger.error('Missing required device parameter for setup options view');
             throw new Error('device is required');
         }
@@ -46,7 +47,7 @@ export class SetupOptionsViewController extends BaseViewController {
         this.currentDevice = params.device;
 
         const data = {
-            deviceName: params.device.name,
+            deviceName: params.device.name
         };
 
         const html = this.renderTemplate(this.template, data);
@@ -69,7 +70,7 @@ export class SetupOptionsViewController extends BaseViewController {
                 break;
 
             case 'setup-option-selected':
-                await this.handleOptionSelected(message as SetupOptionSelectedMessage);
+                await this.handleOptionSelected(message);
                 break;
 
             default:

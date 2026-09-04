@@ -1,19 +1,22 @@
 /*
- * Copyright ©2025 HP Development Company, L.P.
+ * Copyright ©2025-2026 HP Development Company, L.P.
  * Licensed under the X11 License. See LICENSE file in the project root for details.
  */
 
-const fs = require('fs');
-const path = require('path');
+import * as fs from 'node:fs';
+import * as path from 'node:path';
+import { fileURLToPath } from 'node:url';
+
+const dirname = path.dirname(fileURLToPath(import.meta.url));
 
 // Create resources directory if it doesn't exist
-const resourcesDir = path.join(__dirname, '..', 'resources');
+const resourcesDir = path.join(dirname, '..', 'resources');
 if (!fs.existsSync(resourcesDir)) {
     fs.mkdirSync(resourcesDir, { recursive: true });
 }
 
 // Copy codicon CSS
-const codiconCssSource = path.join(__dirname, '..', 'node_modules', '@vscode', 'codicons', 'dist', 'codicon.css');
+const codiconCssSource = path.join(dirname, '..', 'node_modules', '@vscode', 'codicons', 'dist', 'codicon.css');
 const codiconCssTarget = path.join(resourcesDir, 'codicon.css');
 
 if (fs.existsSync(codiconCssSource)) {
@@ -24,7 +27,7 @@ if (fs.existsSync(codiconCssSource)) {
 }
 
 // Copy codicon font
-const codiconFontSource = path.join(__dirname, '..', 'node_modules', '@vscode', 'codicons', 'dist', 'codicon.ttf');
+const codiconFontSource = path.join(dirname, '..', 'node_modules', '@vscode', 'codicons', 'dist', 'codicon.ttf');
 const codiconFontTarget = path.join(resourcesDir, 'codicon.ttf');
 
 if (fs.existsSync(codiconFontSource)) {
@@ -34,10 +37,10 @@ if (fs.existsSync(codiconFontSource)) {
     console.error('codicon.ttf not found at', codiconFontSource);
 }
 
-// Copy view template files (.html, .css, .js) from src/views to out/views
+// Copy view template files (.html, .css, .js) from src/views to dist/views
 function copyViewTemplates() {
-    const srcViewsDir = path.join(__dirname, '..', 'src', 'views');
-    const outViewsDir = path.join(__dirname, '..', 'out', 'views');
+    const srcViewsDir = path.join(dirname, '..', 'src', 'views');
+    const outViewsDir = path.join(dirname, '..', 'dist', 'views');
 
     // Recursively copy template files
     function copyDirectory(src, dest) {
@@ -65,7 +68,7 @@ function copyViewTemplates() {
                 // Copy .html, .css, and .js files (but not .ts files)
                 if (['.html', '.css', '.js'].includes(ext)) {
                     fs.copyFileSync(srcPath, destPath);
-                    console.log(`Copied ${path.relative(path.join(__dirname, '..'), srcPath)} -> ${path.relative(path.join(__dirname, '..'), destPath)}`);
+                    console.log(`Copied ${path.relative(path.join(dirname, '..'), srcPath)} -> ${path.relative(path.join(dirname, '..'), destPath)}`);
                 }
             }
         }
