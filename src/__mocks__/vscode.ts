@@ -39,8 +39,50 @@ export const workspace = {
         stat: jest.fn(),
         readFile: jest.fn(),
         writeFile: jest.fn()
-    }
+    },
+    workspaceFolders: undefined as { uri: { authority: string } }[] | undefined,
+    onDidChangeWorkspaceFolders: jest.fn().mockReturnValue({ dispose: jest.fn() }),
+    onDidChangeConfiguration: jest.fn().mockReturnValue({ dispose: jest.fn() }),
+    createFileSystemWatcher: jest.fn().mockReturnValue({
+        onDidChange: jest.fn().mockReturnValue({ dispose: jest.fn() }),
+        onDidCreate: jest.fn().mockReturnValue({ dispose: jest.fn() }),
+        onDidDelete: jest.fn().mockReturnValue({ dispose: jest.fn() }),
+        dispose: jest.fn()
+    })
 };
+
+// Minimal mock of vscode.EventEmitter sufficient for unit tests.
+export class EventEmitter<T> {
+    private readonly listeners: ((value: T) => unknown)[] = [];
+
+    public event = (listener: (value: T) => unknown) => {
+        this.listeners.push(listener);
+        return { dispose: jest.fn() };
+    };
+
+    public fire(value: T): void {
+        this.listeners.forEach(listener => listener(value));
+    }
+
+    public dispose(): void {
+        this.listeners.length = 0;
+    }
+}
+
+// Minimal mock of vscode.RelativePattern sufficient for unit tests.
+export class RelativePattern {
+    public readonly base: string;
+    public readonly baseUri: unknown;
+    public readonly pattern: string;
+
+    // Base/pattern are optional so jest's automock introspection (which instantiates with
+    // no arguments) doesn't throw.
+    constructor(base?: { fsPath: string } | string, pattern?: string) {
+        this.base = typeof base === 'string' ? base : (base?.fsPath ?? '');
+        this.baseUri = base;
+        this.pattern = pattern ?? '';
+    }
+}
 
 export const env = {
     clipboard: {
@@ -48,7 +90,9 @@ export const env = {
     },
     isTelemetryEnabled: true,
     onDidChangeTelemetryEnabled: jest.fn().mockReturnValue({ dispose: jest.fn() }),
-    openExternal: jest.fn().mockResolvedValue(true)
+    openExternal: jest.fn().mockResolvedValue(true),
+    remoteName: undefined as string | undefined,
+    sessionId: 'mock-session-id'
 };
 
 export const extensions = {

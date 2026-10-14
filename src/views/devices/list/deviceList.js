@@ -6,9 +6,19 @@
 (function() {
     const vscode = window.vscodeApi || acquireVsCodeApi();
     window.vscodeApi = vscode;
+    const deviceAttentionClasses = [
+        'device-attention--connecting',
+        'device-attention--checking',
+        'device-attention--failed'
+    ];
+    // Tracks last-applied reachability status per device so an unrelated device's check
+    // doesn't replay another device's animation when the store broadcasts every device's status.
+    const lastAppliedStatuses = new Map();
 
     // Set up event listeners instead of inline onclick
     document.addEventListener('DOMContentLoaded', function() {
+        initializeReachabilityBaseline();
+
         // Add device buttons
         const addDeviceBtn = document.getElementById('add-device-btn');
         if (addDeviceBtn) {
@@ -74,8 +84,8 @@
         document.querySelectorAll('[data-action="toggle-dropdown"]').forEach(btn => {
             btn.addEventListener('click', function(e) {
                 e.stopPropagation();
-                const id = this.getAttribute('data-id');
-                toggleDropdown(id);
+                const dropdownId = this.getAttribute('aria-controls');
+                toggleDropdown(dropdownId);
             });
         });
 
@@ -84,6 +94,22 @@
             btn.addEventListener('click', function() {
                 const id = this.getAttribute('data-id');
                 manageApps(id);
+            });
+        });
+
+        // Disconnect buttons
+        document.querySelectorAll('[data-action="disconnect-device"]').forEach(btn => {
+            btn.addEventListener('click', function() {
+                const id = this.getAttribute('data-id');
+                disconnectDevice(id);
+            });
+        });
+
+        // Check status buttons
+        document.querySelectorAll('[data-action="check-device-reachability"]').forEach(btn => {
+            btn.addEventListener('click', function() {
+                const id = this.getAttribute('data-id');
+                checkDeviceReachability(id);
             });
         });
 
@@ -144,6 +170,12 @@
         });
     });
 
+    window.addEventListener('message', event => {
+        if (event.data?.type === 'reachability-status-updated') {
+            updateReachabilityAttention(event.data.statuses || []);
+        }
+    });
+
     function showAddForm() {
         vscode.postMessage({
             type: 'navigate',
@@ -191,6 +223,7 @@
     }
 
     function connectDevice(id) {
+        setDeviceAttentionById(id, 'connecting');
         vscode.postMessage({
             type: 'connect-device',
             id: id
@@ -199,6 +232,7 @@
 
     function connectDeviceCurrent(id) {
         closeAllDropdowns();
+        setDeviceAttentionById(id, 'connecting');
         vscode.postMessage({
             type: 'connect-device',
             id: id,
@@ -208,6 +242,7 @@
 
     function connectDeviceNew(id) {
         closeAllDropdowns();
+        setDeviceAttentionById(id, 'connecting');
         vscode.postMessage({
             type: 'connect-device',
             id: id,
@@ -222,10 +257,87 @@
         });
     }
 
+    function disconnectDevice(id) {
+        vscode.postMessage({
+            type: 'disconnect-device',
+            id: id
+        });
+    }
+
+    function checkDeviceReachability(id) {
+        closeAllDropdowns();
+        vscode.postMessage({
+            type: 'check-device-reachability',
+            deviceId: id
+        });
+    }
+
     function registerDns(id) {
         vscode.postMessage({
             type: 'register-dns',
             id: id
+        });
+    }
+
+    function setDeviceAttentionById(deviceId, state) {
+        const item = document.querySelector(`.device-item[data-id="${deviceId}"]`);
+        if (!item) { return; }
+
+        item.classList.remove(...deviceAttentionClasses);
+        if (state === 'failed') {
+            void item.offsetWidth;
+        }
+        if (state) {
+            item.classList.add(`device-attention--${state}`);
+        }
+    }
+
+    function updateReachabilityAttention(statuses) {
+        statuses.forEach(status => {
+            const previous = lastAppliedStatuses.get(status.deviceId);
+            if (previous
+                && previous.status === status.status
+                && previous.checking === status.checking
+                && previous.checkedAt === status.checkedAt
+                && previous.explicit === status.explicit) {
+                return;
+            }
+            lastAppliedStatuses.set(status.deviceId, status);
+
+            const item = document.querySelector(`.device-item[data-id="${status.deviceId}"]`);
+            if (item) {
+                item.classList.toggle('device-item-not-reachable', status.notReachable);
+                item.classList.toggle('device-item-unreachable', status.unreachable);
+            }
+
+            // Only devices the user explicitly asked to check (tracked server-side, so every
+            // view stays in sync regardless of which one initiated the check) should pulse;
+            // silent background/periodic reachability checks must not animate the item.
+            if (!status.explicit) {
+                return;
+            }
+
+            if (status.checking) {
+                setDeviceAttentionById(status.deviceId, 'checking');
+                return;
+            }
+
+            setDeviceAttentionById(status.deviceId, status.status === 'unreachable' ? 'failed' : null);
+        });
+    }
+
+    function initializeReachabilityBaseline() {
+        document.querySelectorAll('.device-item[data-device-status]').forEach(item => {
+            const checkedAt = item.getAttribute('data-reachability-checked-at') || undefined;
+            lastAppliedStatuses.set(item.getAttribute('data-id'), {
+                deviceId: item.getAttribute('data-id'),
+                status: item.getAttribute('data-device-status'),
+                notReachable: item.getAttribute('data-not-reachable') === 'true',
+                unreachable: item.getAttribute('data-unreachable') === 'true',
+                checking: item.getAttribute('data-reachability-checking') === 'true',
+                checkedAt,
+                explicit: item.getAttribute('data-reachability-explicit') === 'true'
+            });
         });
     }
 
@@ -259,8 +371,8 @@
     }
 
     // Toggle dropdown
-    function toggleDropdown(deviceId) {
-        const dropdown = document.getElementById('dropdown-' + deviceId);
+    function toggleDropdown(dropdownId) {
+        const dropdown = document.getElementById(dropdownId);
         if (!dropdown) {return;}
 
         const isVisible = dropdown.classList.contains('show');

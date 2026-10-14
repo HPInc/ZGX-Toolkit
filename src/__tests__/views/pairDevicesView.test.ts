@@ -1072,7 +1072,7 @@ describe('PairDevicesView', () => {
             // Start the password-submitted handler (triggers pairing)
             const handleMessagePromise = newView.handleMessage({
                 type: 'password-submitted',
-                password: 'test-password',
+                passwords: { 'device-1': 'test-password', 'device-2': 'test-password' },
                 deviceIds: ['device-1', 'device-2'],
                 deviceNames: ['Device One', 'Device Two']
             });
@@ -1136,7 +1136,7 @@ describe('PairDevicesView', () => {
             // Start the password-submitted handler (triggers pairing)
             const handleMessagePromise = newView.handleMessage({
                 type: 'password-submitted',
-                password: 'test-password',
+                passwords: { 'device-1': 'test-password', 'device-2': 'test-password' },
                 deviceIds: ['device-1', 'device-2'],
                 deviceNames: ['Device One', 'Device Two']
             });
@@ -1190,7 +1190,7 @@ describe('PairDevicesView', () => {
             // Complete pairing with failure
             await newView.handleMessage({
                 type: 'password-submitted',
-                password: 'wrong-password',
+                passwords: { 'device-1': 'test-password', 'device-2': 'test-password' },
                 deviceIds: ['device-1', 'device-2'],
                 deviceNames: ['Device One', 'Device Two']
             });
@@ -1235,7 +1235,7 @@ describe('PairDevicesView', () => {
 
             await newView.handleMessage({
                 type: 'password-submitted',
-                password: 'test-password',
+                passwords: { 'device-1': 'test-password', 'device-2': 'test-password' },
                 deviceIds: ['device-1', 'device-2'],
                 deviceNames: ['Device One', 'Device Two']
             });
@@ -1271,14 +1271,14 @@ describe('PairDevicesView', () => {
 
             await view.handleMessage({
                 type: 'password-submitted',
-                password: 'test-password',
+                passwords: { 'device-1': 'test-password', 'device-2': 'test-password' },
                 deviceIds: ['device-1', 'device-2'],
                 deviceNames: ['Device One', 'Device Two']
             });
 
             expect(mockGroupService.createGroupAndConfigureNICs).toHaveBeenCalledWith(
                 { deviceIds: ['device-1', 'device-2'] },
-                'test-password'
+                { 'device-1': 'test-password', 'device-2': 'test-password' }
             );
 
             expect(mockLogger.info).toHaveBeenCalledWith(
@@ -1319,7 +1319,7 @@ describe('PairDevicesView', () => {
 
             await view.handleMessage({
                 type: 'password-submitted',
-                password: 'test-password',
+                passwords: { 'device-1': 'test-password', 'device-2': 'test-password' },
                 deviceIds: ['device-1', 'device-2'],
                 deviceNames: ['Device One', 'Device Two']
             });
@@ -1341,7 +1341,7 @@ describe('PairDevicesView', () => {
 
             await view.handleMessage({
                 type: 'password-submitted',
-                password: 'test-password',
+                passwords: { 'device-1': 'test-password', 'device-2': 'test-password' },
                 deviceIds: ['device-1', 'device-2'],
                 deviceNames: ['Device One', 'Device Two']
             });
@@ -1364,7 +1364,7 @@ describe('PairDevicesView', () => {
 
             await view.handleMessage({
                 type: 'password-submitted',
-                password: 'test-password',
+                passwords: { 'device-1': 'test-password', 'device-2': 'test-password' },
                 deviceIds: ['device-1', 'device-2'],
                 deviceNames: ['Device One', 'Device Two']
             });
@@ -1384,7 +1384,7 @@ describe('PairDevicesView', () => {
 
             await view.handleMessage({
                 type: 'password-submitted',
-                password: 'wrong-password',
+                passwords: { 'device-1': 'test-password', 'device-2': 'test-password' },
                 deviceIds: ['device-1', 'device-2'],
                 deviceNames: ['Device One', 'Device Two']
             });
@@ -1429,7 +1429,7 @@ describe('PairDevicesView', () => {
 
             await view.handleMessage({
                 type: 'password-submitted',
-                password: 'test-password',
+                passwords: { 'device-1': 'test-password', 'device-2': 'test-password' },
                 deviceIds: ['device-1', 'device-2'],
                 deviceNames: ['Device One', 'Device Two']
             });
@@ -1461,7 +1461,7 @@ describe('PairDevicesView', () => {
 
             await view.handleMessage({
                 type: 'password-submitted',
-                password: 'test-password',
+                passwords: { 'device-1': 'test-password', 'device-2': 'test-password' },
                 deviceIds: ['device-1', 'device-2'],
                 deviceNames: ['Device One', 'Device Two']
             });
@@ -1498,3 +1498,5 @@ describe('PairDevicesView', () => {
         });
     });
 });
+
+

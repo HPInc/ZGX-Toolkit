@@ -1,5 +1,5 @@
 /*
- * Copyright ©2025 HP Development Company, L.P.
+ * Copyright ©2025-2026 HP Development Company, L.P.
  * Licensed under the X11 License. See LICENSE file in the project root for details.
  */
 
@@ -13,9 +13,14 @@ import { Device } from '../../types/devices';
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as SSHConfig from 'ssh-config';
+import * as path from 'node:path';
 
 // Mock dependencies
-jest.mock('node:fs');
+jest.mock('node:fs', () => ({
+    ...jest.createMockFromModule<typeof import('node:fs')>('node:fs'),
+    constants: jest.requireActual<typeof import('node:fs')>('node:fs').constants,
+    promises: { open: jest.fn(), access: jest.fn() }
+}));
 jest.mock('node:os');
 jest.mock('ssh-config');
 
@@ -53,14 +58,24 @@ describe('sshConfig', () => {
         };
 
         (os.homedir as jest.Mock).mockReturnValue('/home/testuser');
+        (os.platform as jest.Mock).mockReturnValue('linux');
+        (fs.existsSync as jest.Mock).mockReturnValue(false);
+        (fs.readFileSync as jest.Mock).mockReset().mockImplementation(() => {
+            throw Object.assign(new Error('File not found'), { code: 'ENOENT' });
+        });
+        (fs.statSync as jest.Mock).mockImplementation(() => {
+            throw Object.assign(new Error('File not found'), { code: 'ENOENT' });
+        });
+        (fs.promises.open as jest.Mock).mockRejectedValue(Object.assign(new Error('File not found'), { code: 'ENOENT' }));
+        (SSHConfig.parse as jest.Mock).mockReset();
     });
 
     describe('getSSHConfig', () => {
         describe('Basic Configuration', () => {
-            it('should create config with device properties when no SSH config file exists', () => {
+            it('should create config with device properties when no SSH config file exists', async () => {
                 (fs.existsSync as jest.Mock).mockReturnValue(false);
 
-                const config = getSSHConfig(mockDevice);
+                const config = (await getSSHConfig(mockDevice));
 
                 expect(config).toBeDefined();
                 expect(config.host).toBe('192.168.1.100');
@@ -68,32 +83,41 @@ describe('sshConfig', () => {
                 expect(config.port).toBe(22);
             });
 
-            it('should use default port 22 when device port is undefined', () => {
+            it('requires host verification and rejects a host without a trusted key', async () => {
+                (fs.existsSync as jest.Mock).mockReturnValue(false);
+
+                const config = (await getSSHConfig(mockDevice));
+
+                expect(config.hostVerifier).toEqual(expect.any(Function));
+                await expect(new Promise<boolean>(resolve => (config.hostVerifier as (key: Buffer, verify: (valid: boolean) => void) => void)(Buffer.from('untrusted-host-key'), resolve))).resolves.toBe(false);
+            });
+
+            it('should use default port 22 when device port is undefined', async () => {
                 (fs.existsSync as jest.Mock).mockReturnValue(false);
                 const deviceWithoutPort = { ...mockDevice };
                 delete (deviceWithoutPort as any).port;
 
-                const config = getSSHConfig(deviceWithoutPort);
+                const config = (await getSSHConfig(deviceWithoutPort));
 
                 expect(config.port).toBe(22);
             });
 
-            it('should apply custom timeout options when provided', () => {
+            it('should apply custom timeout options when provided', async () => {
                 (fs.existsSync as jest.Mock).mockReturnValue(false);
 
-                const config = getSSHConfig(mockDevice, {
+                const config = (await getSSHConfig(mockDevice, {
                     timeout: 5000,
                     readyTimeout: 10000
-                });
+                }));
 
                 expect(config.timeout).toBe(5000);
                 expect(config.readyTimeout).toBe(10000);
             });
 
-            it('should leave timeout options undefined when not provided', () => {
+            it('should leave timeout options undefined when not provided', async () => {
                 (fs.existsSync as jest.Mock).mockReturnValue(false);
 
-                const config = getSSHConfig(mockDevice);
+                const config = (await getSSHConfig(mockDevice));
 
                 expect(config.timeout).toBeUndefined();
                 expect(config.readyTimeout).toBeUndefined();
@@ -101,7 +125,7 @@ describe('sshConfig', () => {
         });
 
         describe('SSH Config File Parsing', () => {
-            it('should parse SSH config and apply HostName', () => {
+            it('should parse SSH config and apply HostName', async () => {
                 (fs.existsSync as jest.Mock).mockReturnValue(true);
                 (fs.readFileSync as jest.Mock).mockReturnValue(`
                     Host 192.168.1.100
@@ -117,12 +141,12 @@ describe('sshConfig', () => {
                 };
                 (SSHConfig.parse as jest.Mock).mockReturnValue(mockParsedConfig);
 
-                const config = getSSHConfig(mockDevice);
+                const config = (await getSSHConfig(mockDevice));
 
                 expect(config.host).toBe('actual-host.example.com');
             });
 
-            it('should handle HostName as array', () => {
+            it('should handle HostName as array', async () => {
                 (fs.existsSync as jest.Mock).mockReturnValue(true);
                 (fs.readFileSync as jest.Mock).mockReturnValue('');
 
@@ -133,12 +157,12 @@ describe('sshConfig', () => {
                 };
                 (SSHConfig.parse as jest.Mock).mockReturnValue(mockParsedConfig);
 
-                const config = getSSHConfig(mockDevice);
+                const config = (await getSSHConfig(mockDevice));
 
                 expect(config.host).toBe('host1.example.com');
             });
 
-            it('should parse and apply Port', () => {
+            it('should parse and apply Port', async () => {
                 (fs.existsSync as jest.Mock).mockReturnValue(true);
                 (fs.readFileSync as jest.Mock).mockReturnValue('');
 
@@ -149,12 +173,12 @@ describe('sshConfig', () => {
                 };
                 (SSHConfig.parse as jest.Mock).mockReturnValue(mockParsedConfig);
 
-                const config = getSSHConfig(mockDevice);
+                const config = (await getSSHConfig(mockDevice));
 
                 expect(config.port).toBe(2222);
             });
 
-            it('should handle Port as array', () => {
+            it('should handle Port as array', async () => {
                 (fs.existsSync as jest.Mock).mockReturnValue(true);
                 (fs.readFileSync as jest.Mock).mockReturnValue('');
 
@@ -165,12 +189,12 @@ describe('sshConfig', () => {
                 };
                 (SSHConfig.parse as jest.Mock).mockReturnValue(mockParsedConfig);
 
-                const config = getSSHConfig(mockDevice);
+                const config = (await getSSHConfig(mockDevice));
 
                 expect(config.port).toBe(2222);
             });
 
-            it('should parse and apply User', () => {
+            it('should parse and apply User', async () => {
                 (fs.existsSync as jest.Mock).mockReturnValue(true);
                 (fs.readFileSync as jest.Mock).mockReturnValue('');
 
@@ -181,12 +205,12 @@ describe('sshConfig', () => {
                 };
                 (SSHConfig.parse as jest.Mock).mockReturnValue(mockParsedConfig);
 
-                const config = getSSHConfig(mockDevice);
+                const config = (await getSSHConfig(mockDevice));
 
                 expect(config.username).toBe('customuser');
             });
 
-            it('should handle User as array', () => {
+            it('should handle User as array', async () => {
                 (fs.existsSync as jest.Mock).mockReturnValue(true);
                 (fs.readFileSync as jest.Mock).mockReturnValue('');
 
@@ -197,40 +221,43 @@ describe('sshConfig', () => {
                 };
                 (SSHConfig.parse as jest.Mock).mockReturnValue(mockParsedConfig);
 
-                const config = getSSHConfig(mockDevice);
+                const config = (await getSSHConfig(mockDevice));
 
                 expect(config.username).toBe('user1');
             });
 
-            it('should handle missing SSH config file gracefully', () => {
+            it('should handle missing SSH config file gracefully', async () => {
                 (fs.existsSync as jest.Mock).mockReturnValue(false);
 
-                expect(() => getSSHConfig(mockDevice)).not.toThrow();
+                await expect(getSSHConfig(mockDevice)).resolves.toBeDefined();
+                expect(fs.readFileSync).toHaveBeenCalledWith(path.join('/home/testuser', '.ssh', 'config'), 'utf-8');
+                expect(fs.readFileSync).toHaveBeenCalledWith(path.join('/etc/ssh', 'ssh_config'), 'utf-8');
+                expect(SSHConfig.parse).not.toHaveBeenCalled();
             });
 
-            it('should handle SSH config parse errors gracefully', () => {
+            it('refuses the connection when SSH config cannot be parsed safely', async () => {
                 (fs.existsSync as jest.Mock).mockReturnValue(true);
                 (fs.readFileSync as jest.Mock).mockReturnValue('invalid config');
                 (SSHConfig.parse as jest.Mock).mockImplementation(() => {
                     throw new Error('Parse error');
                 });
 
-                expect(() => getSSHConfig(mockDevice)).not.toThrow();
+                await expect(getSSHConfig(mockDevice)).rejects.toThrow('Unable to load SSH configuration safely');
             });
         });
 
         describe('IdentityFile Handling', () => {
-            it('should handle missing IdentityFile gracefully', () => {
-                (fs.existsSync as jest.Mock).mockImplementation((path: string) => {
-                    if (path.includes('.ssh/config')) return true;
+            it('should handle missing IdentityFile gracefully', async () => {
+                (fs.existsSync as jest.Mock).mockImplementation((filename: string) => {
+                    if (path.basename(filename) === 'config') return true;
                     return false;
                 });
 
-                (fs.readFileSync as jest.Mock).mockImplementation((path: string) => {
-                    if (path.includes('.ssh/config')) {
+                (fs.readFileSync as jest.Mock).mockImplementation((filename: string) => {
+                    if (path.basename(filename) === 'config') {
                         return 'Host config content';
                     }
-                    return Buffer.from('');
+                    throw Object.assign(new Error('File not found'), { code: 'ENOENT' });
                 });
 
                 const mockParsedConfig = {
@@ -240,19 +267,22 @@ describe('sshConfig', () => {
                 };
                 (SSHConfig.parse as jest.Mock).mockReturnValue(mockParsedConfig);
 
-                expect(() => getSSHConfig(mockDevice)).not.toThrow();
+                await expect(getSSHConfig(mockDevice)).resolves.toBeDefined();
             });
 
-            it('should handle IdentityFile read errors gracefully', () => {
-                (fs.existsSync as jest.Mock).mockImplementation((path: string) => {
-                    if (path.includes('.ssh/config')) return true;
-                    if (path.includes('id_custom')) return true;
+            it('should handle IdentityFile read errors gracefully', async () => {
+                (fs.existsSync as jest.Mock).mockImplementation((filename: string) => {
+                    if (path.basename(filename) === 'config') return true;
+                    if (filename.includes('id_custom')) return true;
                     return false;
                 });
 
-                (fs.readFileSync as jest.Mock).mockImplementation((path: string) => {
-                    if (path.includes('.ssh/config')) {
+                (fs.readFileSync as jest.Mock).mockImplementation((filename: string) => {
+                    if (path.basename(filename) === 'config') {
                         return 'Host config content';
+                    }
+                    if (path.basename(filename) === 'ssh_config') {
+                        throw Object.assign(new Error('File not found'), { code: 'ENOENT' });
                     }
                     throw new Error('Permission denied');
                 });
@@ -264,14 +294,14 @@ describe('sshConfig', () => {
                 };
                 (SSHConfig.parse as jest.Mock).mockReturnValue(mockParsedConfig);
 
-                expect(() => getSSHConfig(mockDevice)).not.toThrow();
+                await expect(getSSHConfig(mockDevice)).resolves.toBeDefined();
             });
         });
 
         describe('IdentitiesOnly Handling', () => {
 
 
-            it('should handle undefined IdentitiesOnly without crashing', () => {
+            it('should handle undefined IdentitiesOnly without crashing', async () => {
                 (fs.existsSync as jest.Mock).mockReturnValue(true);
                 (fs.readFileSync as jest.Mock).mockReturnValue('');
 
@@ -282,10 +312,10 @@ describe('sshConfig', () => {
                 };
                 (SSHConfig.parse as jest.Mock).mockReturnValue(mockParsedConfig);
 
-                expect(() => getSSHConfig(mockDevice)).not.toThrow();
+                await expect(getSSHConfig(mockDevice)).resolves.toBeDefined();
             });
 
-            it('should handle empty array IdentitiesOnly gracefully', () => {
+            it('should handle empty array IdentitiesOnly gracefully', async () => {
                 (fs.existsSync as jest.Mock).mockReturnValue(true);
                 (fs.readFileSync as jest.Mock).mockReturnValue('');
 
@@ -296,12 +326,12 @@ describe('sshConfig', () => {
                 };
                 (SSHConfig.parse as jest.Mock).mockReturnValue(mockParsedConfig);
 
-                expect(() => getSSHConfig(mockDevice)).not.toThrow();
+                await expect(getSSHConfig(mockDevice)).resolves.toBeDefined();
             });
         });
 
         describe('Authentication Fallback', () => {
-            it('should try common key locations when no key in SSH config', () => {
+            it('should try common key locations when no key in SSH config', async () => {
                 (fs.existsSync as jest.Mock).mockImplementation((path: string) => {
                     if (path.includes('.ssh/config')) return false;
                     if (path.includes('id_ed25519')) return true;
@@ -312,15 +342,15 @@ describe('sshConfig', () => {
                     if (path.includes('id_ed25519')) {
                         return Buffer.from('ed25519-key-data');
                     }
-                    return Buffer.from('');
+                    throw Object.assign(new Error('File not found'), { code: 'ENOENT' });
                 });
 
-                const config = getSSHConfig(mockDevice);
+                const config = (await getSSHConfig(mockDevice));
 
                 expect(config.privateKey).toBeDefined();
             });
 
-            it('should try id_rsa when id_ed25519 not found', () => {
+            it('should try id_rsa when id_ed25519 not found', async () => {
                 (fs.existsSync as jest.Mock).mockImplementation((path: string) => {
                     if (path.includes('.ssh/config')) return false;
                     if (path.includes('id_rsa')) return true;
@@ -331,15 +361,15 @@ describe('sshConfig', () => {
                     if (path.includes('id_rsa')) {
                         return Buffer.from('rsa-key-data');
                     }
-                    return Buffer.from('');
+                    throw Object.assign(new Error('File not found'), { code: 'ENOENT' });
                 });
 
-                const config = getSSHConfig(mockDevice);
+                const config = (await getSSHConfig(mockDevice));
 
                 expect(config.privateKey).toBeDefined();
             });
 
-            it('should try id_ecdsa when other keys not found', () => {
+            it('should try id_ecdsa when other keys not found', async () => {
                 (fs.existsSync as jest.Mock).mockImplementation((path: string) => {
                     if (path.includes('.ssh/config')) return false;
                     if (path.includes('id_ecdsa')) return true;
@@ -350,10 +380,10 @@ describe('sshConfig', () => {
                     if (path.includes('id_ecdsa')) {
                         return Buffer.from('ecdsa-key-data');
                     }
-                    return Buffer.from('');
+                    throw Object.assign(new Error('File not found'), { code: 'ENOENT' });
                 });
 
-                const config = getSSHConfig(mockDevice);
+                const config = (await getSSHConfig(mockDevice));
 
                 expect(config.privateKey).toBeDefined();
             });
@@ -362,7 +392,7 @@ describe('sshConfig', () => {
         });
 
         describe('Integration Scenarios', () => {
-            it('should combine SSH config with timeout options', () => {
+            it('should combine SSH config with timeout options', async () => {
                 (fs.existsSync as jest.Mock).mockReturnValue(true);
                 (fs.readFileSync as jest.Mock).mockReturnValue('');
 
@@ -375,10 +405,10 @@ describe('sshConfig', () => {
                 };
                 (SSHConfig.parse as jest.Mock).mockReturnValue(mockParsedConfig);
 
-                const config = getSSHConfig(mockDevice, {
+                const config = (await getSSHConfig(mockDevice, {
                     timeout: 5000,
                     readyTimeout: 10000
-                });
+                }));
 
                 expect(config.host).toBe('configured-host.example.com');
                 expect(config.port).toBe(2222);

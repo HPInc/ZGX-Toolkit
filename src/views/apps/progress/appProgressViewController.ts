@@ -12,6 +12,7 @@ import { APP_CATEGORIES, AppDefinition, getAllApps } from '../../../constants/ap
 import { AppInstallationService, PasswordService, DeviceService } from '../../../services';
 import { AppCompleteViewController } from '../complete/appCompleteViewController';
 import { AppSelectionViewController } from '../selection/appSelectionViewController';
+import { SSHHostVerificationError, SSH_HOST_VERIFICATION_GUIDANCE } from '../../../utils/sshHostVerifier';
 
 /**
  * Application installation progress view - displays real-time progress of app installation
@@ -24,6 +25,7 @@ export class AppProgressViewController extends BaseViewController {
     private currentOperation?: 'install' | 'uninstall';
     private currentSelectedApps?: string[];
     private validatedPassword?: string;
+    private hostVerificationFailed = false;
 
     public static viewId(): string {
         return 'apps/progress';
@@ -62,6 +64,7 @@ export class AppProgressViewController extends BaseViewController {
         this.currentDevice = device;
         this.currentOperation = params.operation || 'install';
         this.validatedPassword = undefined; // Reset password on new render
+        this.hostVerificationFailed = false;
 
         let appDetails: AppDefinition[];
         
@@ -350,6 +353,9 @@ export class AppProgressViewController extends BaseViewController {
      * Handle password validation from the webview
      */
     private async handlePasswordValidation(password: string): Promise<void> {
+        if (this.hostVerificationFailed) {
+            return;
+        }
         if (!this.currentDevice) {
             this.logger.error('No device available for password validation');
             return;
@@ -386,6 +392,18 @@ export class AppProgressViewController extends BaseViewController {
             this.logger.error('Error during password validation', {
                 error: error instanceof Error ? error.message : String(error)
             });
+
+            if (error instanceof SSHHostVerificationError) {
+                this.hostVerificationFailed = true;
+                this.validatedPassword = undefined;
+                this.sendMessageToWebview({
+                    type: 'passwordValidationResult',
+                    valid: false,
+                    hostVerificationFailed: true,
+                    error: `${SSH_HOST_VERIFICATION_GUIDANCE}\n\n${error.message}`
+                });
+                return;
+            }
 
             // Notify webview of error
             this.sendMessageToWebview({

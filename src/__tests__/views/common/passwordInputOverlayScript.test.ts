@@ -80,6 +80,7 @@ describe('Password input overlay webview script', () => {
         context.window.showPasswordInputOverlay({
             title: 'Enter password',
             message: 'Please authenticate',
+            messageEmphasis: 'This is important.',
             icon: 'codicon-key',
             fieldLabel: 'Passphrase:',
             placeholder: 'secret',
@@ -93,6 +94,8 @@ describe('Password input overlay webview script', () => {
         const iconEl = createElement();
         const titleEl = createElement();
         const messageEl = createElement();
+        const messageTextEl = createElement();
+        const messageEmphasisEl = createElement();
         const labelEl = createElement();
         const fieldEl = createElement();
         const hintEl = createElement();
@@ -102,6 +105,8 @@ describe('Password input overlay webview script', () => {
             '#password-input-overlay-icon': iconEl,
             '#password-input-overlay-title': titleEl,
             '#password-input-overlay-message': messageEl,
+            '#password-input-overlay-message-text': messageTextEl,
+            '#password-input-overlay-message-emphasis': messageEmphasisEl,
             '#password-input-overlay-label': labelEl,
             '#password-input-overlay-field': fieldEl,
             '#password-input-overlay-hint': hintEl,
@@ -113,11 +118,12 @@ describe('Password input overlay webview script', () => {
 
         expect(iconEl.className).toBe('codicon codicon-key overlay-icon password-input-icon');
         expect(titleEl.textContent).toBe('Enter password');
-        expect(messageEl.textContent).toBe('Please authenticate');
+        expect(messageTextEl.textContent).toBe('Please authenticate');
+        expect(messageEmphasisEl.textContent).toBe(' This is important.');
         expect(labelEl.textContent).toBe('Passphrase:');
         expect(fieldEl.placeholder).toBe('secret');
         expect(hintEl.textContent).toBe('Use your device password');
-        expect(hintEl.style.display).toBe('block');
+        expect(hintEl.style.display).toBe('flex');
         expect(submitBtn.textContent).toBe('Go');
         expect(cancelBtn.textContent).toBe('Nevermind');
         expect(context.window._passwordInputValidationError).toBe('Required!');
@@ -265,6 +271,42 @@ describe('Password input overlay webview script', () => {
             expect(onSubmit).toHaveBeenCalledWith('hunter2');
         });
 
+        it('submits distinct passwords keyed by device ID and clears every field', () => {
+            const onSubmit = jest.fn();
+            const context = createContext();
+            loadScript(context);
+            context.window.showPasswordInputOverlay({
+                title: 'T',
+                message: 'M',
+                devices: [
+                    { id: 'device-1', name: 'Device One' },
+                    { id: 'device-2', name: 'Device Two' }
+                ],
+                onSubmit
+            });
+
+            const { config } = context.showCalls[0];
+            const submitBtn = createElement();
+            const firstField = createElement({ value: 'first-password', dataset: { deviceId: 'device-1' } });
+            const secondField = createElement({ value: 'second-password', dataset: { deviceId: 'device-2' } });
+            context.document.querySelectorAll = jest.fn(() => [firstField, secondField]);
+            context.document.getElementById = jest.fn((id: string) => {
+                if (id === 'password-input-overlay-submit-btn') return submitBtn;
+                return null;
+            });
+
+            config.onAttachEvents();
+            const submitHandler = submitBtn.addEventListener.mock.calls[0][1];
+            submitHandler();
+
+            expect(onSubmit).toHaveBeenCalledWith({
+                'device-1': 'first-password',
+                'device-2': 'second-password'
+            });
+            expect(firstField.value).toBe('');
+            expect(secondField.value).toBe('');
+        });
+
         it('ignores non-Enter keypresses', () => {
             const onSubmit = jest.fn();
             const context = createContext();
@@ -290,6 +332,42 @@ describe('Password input overlay webview script', () => {
             submitHandler({ key: 'Enter' });
 
             expect(context.postMessage).toHaveBeenCalledWith({ type: 'submit-password', password: 'abc123' });
+        });
+
+        it('sends device passwords for a string submit callback with device fields', () => {
+            const context = createContext();
+            loadScript(context);
+            context.window.showPasswordInputOverlay({
+                title: 'T',
+                message: 'M',
+                devices: [
+                    { id: 'device-1', name: 'Device One' },
+                    { id: 'device-2', name: 'Device Two' }
+                ],
+                onSubmit: 'submit-passwords'
+            });
+
+            const { config } = context.showCalls[0];
+            const submitBtn = createElement();
+            const firstField = createElement({ value: 'first-password', dataset: { deviceId: 'device-1' } });
+            const secondField = createElement({ value: 'second-password', dataset: { deviceId: 'device-2' } });
+            context.document.querySelectorAll = jest.fn(() => [firstField, secondField]);
+            context.document.getElementById = jest.fn((id: string) => {
+                if (id === 'password-input-overlay-submit-btn') return submitBtn;
+                return null;
+            });
+
+            config.onAttachEvents();
+            const submitHandler = submitBtn.addEventListener.mock.calls[0][1];
+            submitHandler();
+
+            expect(context.postMessage).toHaveBeenCalledWith({
+                type: 'submit-passwords',
+                passwords: {
+                    'device-1': 'first-password',
+                    'device-2': 'second-password'
+                }
+            });
         });
 
         it('clears the error display on input', () => {

@@ -37,6 +37,17 @@ jest.mock('../../services/dnsRegistrationService', () => ({
 // Import the mocked DNS service at the top level
 const { dnsServiceRegistration } = require('../../services/dnsRegistrationService');
 
+// Mock the remote session registry service so connectViaRemoteSSH's confirmation wait
+// resolves deterministically instead of racing real timers.
+jest.mock('../../services/remoteSessionRegistryService', () => ({
+    remoteSessionRegistryService: {
+        onDidChange: jest.fn().mockReturnValue({ dispose: jest.fn() }),
+        readAll: jest.fn().mockResolvedValue([])
+    }
+}));
+
+const { remoteSessionRegistryService } = require('../../services/remoteSessionRegistryService');
+
 describe('_ensureSSHConfigEntry', () => {
     let service: ConnectionService;
     let fsMock: any;
@@ -1308,13 +1319,25 @@ describe('connectViaRemoteSSH', () => {
             createdAt: new Date().toISOString()
         };
         (vscode.extensions.getExtension as jest.Mock).mockReturnValue({ isActive: true, activate: jest.fn() });
+
+        // By default, simulate the remote side confirming the session immediately via onDidChange.
+        (remoteSessionRegistryService.onDidChange as jest.Mock).mockImplementation((listener: (entries: unknown[]) => void) => {
+            listener([{
+                deviceId: testDevice.id,
+                connectLabel: testDevice.name,
+                windowId: 'window-2',
+                connectedAt: new Date().toISOString(),
+                lastHeartbeat: new Date().toISOString()
+            }]);
+            return { dispose: jest.fn() };
+        });
     });
 
     afterEach(() => {
         jest.restoreAllMocks();
     });
 
-    it('opens the remote folder and shows a success message when the extension is ready', async () => {
+    it('opens the remote folder and shows a success message once the remote session is confirmed', async () => {
         await service.connectViaRemoteSSH(testDevice);
 
         expect(vscode.commands.executeCommand).toHaveBeenCalledWith(
@@ -1325,6 +1348,66 @@ describe('connectViaRemoteSSH', () => {
         expect(vscode.window.showInformationMessage).toHaveBeenCalledWith(
             expect.stringContaining('Successfully connected')
         );
+    });
+
+    it('shows a softer message when the connection cannot be confirmed within the timeout', async () => {
+        jest.useFakeTimers();
+        try {
+            (remoteSessionRegistryService.onDidChange as jest.Mock).mockReturnValue({ dispose: jest.fn() });
+            (remoteSessionRegistryService.readAll as jest.Mock).mockResolvedValue([]);
+
+            const connectPromise = service.connectViaRemoteSSH(testDevice);
+            await jest.advanceTimersByTimeAsync(20000);
+            await connectPromise;
+
+            expect(vscode.window.showInformationMessage).not.toHaveBeenCalledWith(
+                expect.stringContaining('Successfully connected')
+            );
+            expect(vscode.window.showWarningMessage).toHaveBeenCalledWith(
+                expect.stringContaining("Couldn't confirm the connection")
+            );
+        } finally {
+            jest.useRealTimers();
+        }
+    });
+
+    it('waits for a new session identity instead of accepting a pre-existing entry', async () => {
+        jest.useFakeTimers();
+        try {
+            const preExistingEntry = {
+                deviceId: testDevice.id,
+                connectLabel: testDevice.name,
+                windowId: 'window-1',
+                connectedAt: '2026-01-01T00:00:00.000Z',
+                lastHeartbeat: new Date().toISOString()
+            };
+            const replacementEntry = {
+                ...preExistingEntry,
+                windowId: 'window-2',
+                connectedAt: '2026-01-01T00:00:05.000Z',
+                lastHeartbeat: new Date().toISOString()
+            };
+
+            (remoteSessionRegistryService.readAll as jest.Mock).mockResolvedValue([preExistingEntry]);
+            (remoteSessionRegistryService.onDidChange as jest.Mock).mockImplementation((listener: (entries: unknown[]) => void) => {
+                listener([preExistingEntry]);
+                setTimeout(() => listener([replacementEntry]), 100);
+                return { dispose: jest.fn() };
+            });
+
+            const connectPromise = service.connectViaRemoteSSH(testDevice);
+            await jest.advanceTimersByTimeAsync(100);
+            await connectPromise;
+
+            expect(vscode.window.showInformationMessage).toHaveBeenCalledWith(
+                expect.stringContaining('Successfully connected')
+            );
+            expect(vscode.window.showWarningMessage).not.toHaveBeenCalledWith(
+                expect.stringContaining("Couldn't confirm the connection")
+            );
+        } finally {
+            jest.useRealTimers();
+        }
     });
 
     it('honors the forceNewWindow flag', async () => {

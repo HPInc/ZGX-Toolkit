@@ -1,3 +1,24 @@
+# Version v1.35.10 → v1.38.4 (October 2026)
+
+## What's New
+
+## Major Features
+
+### Remote Status Indicator
+The visual appearance of the windows has been updated to make it easier to identify which window represents an SSH connection to a device. A window that represents an active SSH connection will display only that device in its device list, and the Connect button will change to Disconnect. Windows that do not represent an active SSH connection will continue to display all devices. Devices that already have an active SSH connection will appear with a green border around their device card in the Devices List, and the Connect button for those devices will also be changed to Disconnect. You will not be able to modify the details of a device while it is connected.
+
+To help identify which devices are reachable, you can perform an SSH ping using the Refresh Status button. This button appears under the Connect dropdown for an individual device or on the Manage Devices page to test all devices at once. The border around a device will change from white to blue when an SSH ping is successful. If the device cannot be reached, the border will turn orange to indicate a connectivity issue. 
+Users can configure automatic device reachability checks inside Visual Studio Code Settings -> Z Toolkit -> Reachability. 
+
+### Per Device sudo password handling for pair/unpair workflows
+Seperate passwords for devices can now be used for ConnectX Device Pairing
+
+### Allow Z Runtime (ZRT) to install on x86 machines
+Z Runtime can now be installed on x86/64 Ubuntu machines. Windows is not supported.
+
+### Bug Fixes
+- SSH Host Verification with ssh_config files.
+
 # Version v1.21.8 → v1.35.10 (September 2026)
 
 ## What's New

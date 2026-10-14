@@ -1,0 +1,106 @@
+<!--
+  Copyright ©2026 HP Development Company, L.P.
+  Licensed under the X11 License. See LICENSE file in the project root for details.
+-->
+
+<div 
+    class="device-card 
+        {{#if isPaired}} paired{{/if}}
+        {{#if isConnected}} device-card-connected{{/if}}
+        {{#if notReachable}} device-card-not-reachable{{/if}}
+        {{#if unreachable}} device-card-unreachable{{/if}}"
+    data-id="{{id}}" 
+    data-name="{{name}}" 
+    data-host="{{host}}" 
+    data-username="{{username}}" 
+    data-port="{{port}}" 
+    data-dns-instance-name="{{dnsInstanceName}}" 
+    data-device-type="{{deviceType}}"
+    data-device-status="{{deviceStatus}}"
+    data-device-status-label="{{deviceStatusLabel}}"
+    data-not-reachable="{{notReachable}}"
+    data-unreachable="{{unreachable}}"
+    data-reachability-checking="{{reachabilityChecking}}"
+    data-reachability-checked-at="{{reachabilityCheckedAt}}"
+    data-reachability-explicit="{{reachabilityExplicit}}">
+    <div class="device-status device-status-{{deviceStatus}}" data-device-status>
+        <span class="device-status-dot" aria-hidden="true"></span>
+        <span data-device-status-label>{{deviceStatusLabel}}</span>
+    </div>
+    <div class="device-card-icons">
+        {{#if needsDnsRegistration}}
+        <button class="device-card-icon dns-warning-icon" data-action="register-dns" data-id="{{id}}" title="mDNS service not registered. Click to register for device discovery.">
+            <i class="codicon codicon-warning"></i>
+        </button>
+        {{/if}}
+    </div>
+    {{#if isPaired}}
+    <div class="paired-badge-row">
+        <i class="codicon codicon-link"></i>
+        <span>Paired</span>
+    </div>
+    {{/if}}
+    <h3>{{name}}</h3>
+    <div class="device-details">
+        <div><strong>Host:</strong> {{host}}:{{port}}</div>
+        <div><strong>Device type:</strong> {{deviceTypeLabel}}</div>
+        <div><strong>Username:</strong> {{username}}</div>
+        <div><strong>Status:</strong> {{#if isSetup}}Ready{{else}}Not Setup{{/if}}</div>
+        {{#if isSetup}}
+        {{#unless useKeyAuth}}
+        <div class="alert">
+            <span class="codicon codicon-info"></span> You must setup this device again and use SSH key authentication.
+        </div>
+        {{/unless}}
+        {{/if}}
+    </div>
+    <div class="device-actions">
+        {{#if isSetup}}
+        {{#if useKeyAuth}}
+        {{#if isConnectedHere}}
+        <button class="btn btn-connected disconnect-btn" data-id="{{id}}" title="Disconnect from {{name}}">
+            <span class="codicon codicon-debug-disconnect"></span> Disconnect
+        </button>
+        {{else}}
+        {{#if isConnectedElsewhere}}
+        <fieldset class="split-button split-button-secondary" aria-label="Connection status for {{name}}">
+            <button class="split-button-main" type="button" title="Connected to {{name}}" aria-label="Connected to {{name}}" disabled>Connected</button>
+            <button class="split-button-dropdown" type="button" aria-label="Show connection options" aria-haspopup="true" aria-expanded="false"></button>
+            <div class="dropdown-content" role="menu" aria-label="Connection options">
+                <button class="dropdown-item" type="button" data-action="disconnect-device" data-id="{{id}}" role="menuitem">Disconnect</button>
+            </div>
+        </fieldset>
+        {{else}}
+        <div class="split-button">
+            <button class="split-button-main connect-btn" data-id="{{id}}">Connect</button>
+            <button class="split-button-dropdown" data-id="{{id}}"></button>
+            <div class="dropdown-content">
+                <button class="dropdown-item" data-action="check-device-reachability" data-id="{{id}}">Refresh Status</button>
+                <button class="dropdown-item" data-action="current" data-id="{{id}}">Current Window</button>
+                <button class="dropdown-item" data-action="new" data-id="{{id}}">New Window</button>
+            </div>
+        </div>
+        {{/if}}
+        {{/if}}
+        <div class="manage-apps-group">
+            <button class="btn btn-secondary manage-apps-button" data-id="{{id}}" title="{{#if isConnectedHere}}Disconnect to Manage Apps{{else}}Manage applications{{/if}}"{{#if isConnectedHere}} disabled{{/if}}>Manage Apps</button>
+            {{#if isConnectedHere}}
+            <span class="manage-apps-hint">Disconnect to Manage Apps</span>
+            {{/if}}
+        </div>
+        {{else}}
+        <button class="btn setup-btn" data-action="setup" data-id="{{id}}">Setup</button>
+        {{/if}}
+        {{else}}
+        <button class="btn setup-btn" data-action="setup" data-id="{{id}}">Setup</button>
+        {{/if}}
+        {{#unless isConnectedHere}}
+        <button class="btn btn-secondary edit-icon" type="button" data-id="{{id}}" title="{{#if isConnected}}This action is unavailable while connected to device.{{else}}Edit{{/if}}"{{#if isConnected}} disabled{{/if}}>
+            <i class="codicon codicon-edit" aria-hidden="true"></i> Edit
+        </button>
+        <button class="btn btn-secondary remove-icon" type="button" data-id="{{id}}" title="{{#if isConnected}}This action is unavailable while connected to device.{{else}}Remove{{/if}}"{{#if isConnected}} disabled{{/if}}>
+            <i class="codicon codicon-trash" aria-hidden="true"></i> Remove
+        </button>
+        {{/unless}}
+    </div>
+</div>

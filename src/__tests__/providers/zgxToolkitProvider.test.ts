@@ -9,6 +9,7 @@ import { ViewFactory } from '../../views/viewFactory';
 import { MessageRouter } from '../../utils/messageRouter';
 import { Logger } from '../../utils/logger';
 import { IView } from '../../views/baseViewController';
+import { connectionStateStore } from '../../store';
 
 /**
  * Creates a mock IView instance. Each call returns a fresh mock so callbacks
@@ -21,6 +22,7 @@ function createMockView(html = '<div>view</div>'): jest.Mocked<IView> {
         setMessageCallback: jest.fn(),
         setNavigationCallback: jest.fn(),
         setRefreshCallback: jest.fn(),
+        setCloseEditorCallback: jest.fn(),
         dispose: jest.fn()
     };
 }
@@ -112,6 +114,7 @@ describe('ZgxToolkitProvider', () => {
     let currentPanel: ReturnType<typeof createFakeWebviewPanel>;
 
     beforeEach(() => {
+        connectionStateStore.clear();
         views = [];
         failViewId = undefined;
 
@@ -150,6 +153,11 @@ describe('ZgxToolkitProvider', () => {
         provider = new ZgxToolkitProvider(mockContext, mockViewFactory, mockMessageRouter, mockLogger);
     });
 
+    afterEach(() => {
+        provider.dispose();
+        connectionStateStore.clear();
+    });
+
     describe('constructor', () => {
         it('generates a nonce and logs initialization', () => {
             expect(mockLogger.debug).toHaveBeenCalledWith('Provider initialized');
@@ -170,6 +178,27 @@ describe('ZgxToolkitProvider', () => {
             expect(fake.webview.html).toContain('<div>view</div>');
             expect(mockLogger.info).toHaveBeenCalledWith('Resolving sidebar webview');
             expect(mockLogger.info).toHaveBeenCalledWith('Sidebar webview resolved successfully');
+        });
+
+        it('uses the singular view title only while this window is connected to a device', async () => {
+            const fake = createFakeWebviewView();
+            await provider.resolveWebviewView(fake.webviewView, {} as any, {} as any);
+
+            expect(fake.webviewView.title).toBeUndefined();
+
+            connectionStateStore.reconcile([{
+                deviceId: 'device-1',
+                connectLabel: 'zgx@192.168.1.100',
+                windowId: (vscode.env as any).sessionId,
+                connectedAt: new Date().toISOString(),
+                lastHeartbeat: new Date().toISOString()
+            }]);
+
+            expect(fake.webviewView.title).toBe('Device');
+
+            connectionStateStore.clear();
+
+            expect(fake.webviewView.title).toBeUndefined();
         });
 
         it('refreshes the sidebar when it becomes visible again', async () => {
@@ -250,6 +279,26 @@ describe('ZgxToolkitProvider', () => {
             expect(mockViewFactory.create).toHaveBeenCalledWith('devices/manager');
         });
 
+        it('does not open an editor from sidebar navigation while connected in this window', async () => {
+            const fake = createFakeWebviewView();
+            await provider.resolveWebviewView(fake.webviewView, {} as any, {} as any);
+            connectionStateStore.reconcile([{
+                deviceId: 'device-1',
+                connectLabel: 'zgx@192.168.1.100',
+                windowId: (vscode.env as any).sessionId,
+                connectedAt: new Date().toISOString(),
+                lastHeartbeat: new Date().toISOString()
+            }]);
+
+            await fake.triggerMessage({ type: 'navigate', targetView: 'devices/manager', panel: 'editor' });
+
+            expect(vscode.window.createWebviewPanel).not.toHaveBeenCalled();
+            expect(mockLogger.debug).toHaveBeenCalledWith(
+                'Ignoring request to open extension editor while connected to a device',
+                { viewId: 'devices/manager' }
+            );
+        });
+
         it('routes a navigate message without an editor panel target through the sidebar', async () => {
             const fake = createFakeWebviewView();
             await provider.resolveWebviewView(fake.webviewView, {} as any, {} as any);
@@ -269,6 +318,36 @@ describe('ZgxToolkitProvider', () => {
 
             expect(mockMessageRouter.validateMessage).toHaveBeenCalled();
             expect(mockMessageRouter.routeMessage).toHaveBeenCalledWith({ type: 'refresh' }, currentView);
+        });
+
+        it('blocks device actions while connected but allows Disconnect and refresh', async () => {
+            const fake = createFakeWebviewView();
+            await provider.resolveWebviewView(fake.webviewView, {} as any, {} as any);
+            const currentView = views[views.length - 1];
+            connectionStateStore.reconcile([{
+                deviceId: 'device-1',
+                connectLabel: 'zgx@192.168.1.100',
+                windowId: (vscode.env as any).sessionId,
+                connectedAt: new Date().toISOString(),
+                lastHeartbeat: new Date().toISOString()
+            }]);
+
+            await fake.triggerMessage({ type: 'manage-apps', id: 'device-1' });
+            expect(mockMessageRouter.routeMessage).not.toHaveBeenCalled();
+            expect(mockLogger.warn).toHaveBeenCalledWith(
+                'Ignoring extension action while connected to a device',
+                { type: 'manage-apps', target: 'sidebar' }
+            );
+
+            await fake.triggerMessage({ type: 'disconnect-device', id: 'device-1' });
+            await fake.triggerMessage({ type: 'refresh' });
+
+            expect(mockMessageRouter.routeMessage).toHaveBeenNthCalledWith(
+                1,
+                { type: 'disconnect-device', id: 'device-1' },
+                currentView
+            );
+            expect(mockMessageRouter.routeMessage).toHaveBeenNthCalledWith(2, { type: 'refresh' }, currentView);
         });
 
         it('ignores an invalid message and logs a warning', async () => {
@@ -331,6 +410,21 @@ describe('ZgxToolkitProvider', () => {
     });
 
     describe('openInEditor', () => {
+        it('allows opening the editor when a device is connected in another window', async () => {
+            connectionStateStore.reconcile([{
+                deviceId: 'device-1',
+                connectLabel: 'zgx@192.168.1.100',
+                windowId: 'another-window',
+                connectedAt: new Date().toISOString(),
+                lastHeartbeat: new Date().toISOString()
+            }]);
+
+            await provider.openInEditor('devices/manager');
+
+            expect(vscode.window.createWebviewPanel).toHaveBeenCalled();
+            expect(mockViewFactory.create).toHaveBeenCalledWith('devices/manager');
+        });
+
         it('creates a new editor panel and navigates to the requested view', async () => {
             const fake = createFakeWebviewView();
             await provider.resolveWebviewView(fake.webviewView, {} as any, {} as any);
@@ -388,6 +482,58 @@ describe('ZgxToolkitProvider', () => {
                 expect.objectContaining({ viewId: 'devices/manager' })
             );
             expect(mockViewFactory.create).toHaveBeenCalledWith('common/error');
+        });
+
+        describe('closeEditorIfShowing', () => {
+            it('closes the editor panel when it is showing the given view', async () => {
+                await provider.openInEditor('apps/selection');
+
+                provider.closeEditorIfShowing('apps/selection');
+
+                expect(currentPanel.panel.dispose).toHaveBeenCalled();
+            });
+
+            it('does not close the editor panel when it is showing a different view', async () => {
+                await provider.openInEditor('devices/manager');
+
+                provider.closeEditorIfShowing('apps/selection');
+
+                expect(currentPanel.panel.dispose).not.toHaveBeenCalled();
+            });
+
+            it('closes the editor panel when it is showing the given view for the given device', async () => {
+                await provider.openInEditor('apps/selection', { device: { id: 'device-1' } });
+
+                provider.closeEditorIfShowing('apps/selection', 'device-1');
+
+                expect(currentPanel.panel.dispose).toHaveBeenCalled();
+            });
+
+            it('does not close the editor panel when the device does not match', async () => {
+                await provider.openInEditor('apps/selection', { device: { id: 'device-1' } });
+
+                provider.closeEditorIfShowing('apps/selection', 'device-2');
+
+                expect(currentPanel.panel.dispose).not.toHaveBeenCalled();
+            });
+
+            it('does nothing when the editor panel is not open', () => {
+                expect(() => provider.closeEditorIfShowing('apps/selection')).not.toThrow();
+            });
+
+            it('closes the editor panel when this window connects to a device', async () => {
+                await provider.openInEditor('devices/manager');
+
+                connectionStateStore.reconcile([{
+                    deviceId: 'device-1',
+                    connectLabel: 'zgx@192.168.1.100',
+                    windowId: (vscode.env as any).sessionId,
+                    connectedAt: new Date().toISOString(),
+                    lastHeartbeat: new Date().toISOString()
+                }]);
+
+                expect(currentPanel.panel.dispose).toHaveBeenCalled();
+            });
         });
 
         describe('editor panel message handling', () => {
@@ -460,6 +606,28 @@ describe('ZgxToolkitProvider', () => {
 
             expect(vscode.window.createWebviewPanel).not.toHaveBeenCalled();
             expect(mockViewFactory.create).toHaveBeenCalledWith('devices/list');
+        });
+
+        it('blocks editor navigation requested by a sidebar view while connected in this window', async () => {
+            const fake = createFakeWebviewView();
+            await provider.resolveWebviewView(fake.webviewView, {} as any, {} as any);
+            const sidebarView = views[views.length - 1];
+            const navigationCallback = sidebarView.setNavigationCallback.mock.calls[0][0];
+            connectionStateStore.reconcile([{
+                deviceId: 'device-1',
+                connectLabel: 'zgx@192.168.1.100',
+                windowId: (vscode.env as any).sessionId,
+                connectedAt: new Date().toISOString(),
+                lastHeartbeat: new Date().toISOString()
+            }]);
+
+            await navigationCallback('devices/manager', undefined, 'editor');
+
+            expect(vscode.window.createWebviewPanel).not.toHaveBeenCalled();
+            expect(mockLogger.debug).toHaveBeenCalledWith(
+                'Ignoring extension editor navigation while connected to a device',
+                { viewId: 'devices/manager' }
+            );
         });
 
         it('propagates messages sent by a view through its message callback', async () => {

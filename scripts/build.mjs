@@ -29,7 +29,9 @@ const buildOptions = {
         'vscode',
         // Mark packages with native modules as external
         'ssh2',
-        'dnssd'
+        'dnssd',
+        // Let Node resolve tinyglobby's CommonJS export in the CommonJS extension bundle
+        'tinyglobby'
     ],
     format: 'cjs',
     platform: 'node',
@@ -43,7 +45,7 @@ const buildOptions = {
 
 // Walks package-lock.json to find the full transitive dependency set of the given
 // packages, so the copy list can't silently drift out of sync with their real deps.
-function resolveNativeModuleDeps(rootNames) {
+function resolveRuntimeModuleDeps(rootNames) {
     const lockPath = path.join(__dirname, '..', 'package-lock.json');
     const { packages = {} } = JSON.parse(fs.readFileSync(lockPath, 'utf8'));
 
@@ -66,13 +68,13 @@ function resolveNativeModuleDeps(rootNames) {
 }
 
 // Function to copy native modules and their dependencies
-function copyNativeModules() {
+function copyRuntimeModules() {
     const nodeModulesPath = path.join(__dirname, '..', 'node_modules');
     const outNodeModulesPath = path.join(outDir, 'node_modules');
 
     // Derive the roots from buildOptions.external so adding a native external stays a one-line change
-    const nativeExternals = buildOptions.external.filter(name => name !== 'vscode');
-    const packagesToCopy = resolveNativeModuleDeps(nativeExternals);
+    const runtimeExternals = buildOptions.external.filter(name => name !== 'vscode');
+    const packagesToCopy = resolveRuntimeModuleDeps(runtimeExternals);
 
     for (const packageName of packagesToCopy) {
         const sourcePath = path.join(nodeModulesPath, packageName);
@@ -89,12 +91,12 @@ function copyNativeModules() {
     const packageJsonTarget = path.join(outDir, 'package.json');
     if (fs.existsSync(packageJsonSource)) {
         const packageData = JSON.parse(fs.readFileSync(packageJsonSource, 'utf8'));
-        // Only include the direct native-external dependencies (not their transitive deps)
+        // Only include direct external dependencies (not their transitive deps)
         const runtimePackage = {
             name: packageData.name,
             version: packageData.version,
             dependencies: Object.fromEntries(
-                nativeExternals.map(name => [name, packageData.dependencies[name]])
+            runtimeExternals.map(name => [name, packageData.dependencies[name]])
             )
         };
         fs.writeFileSync(packageJsonTarget, JSON.stringify(runtimePackage, null, 2));
@@ -144,7 +146,7 @@ try {
     }
 
     // Copy native modules after successful build
-    copyNativeModules();
+    copyRuntimeModules();
 } catch (error) {
     console.error('Build failed:', error);
     process.exit(1);

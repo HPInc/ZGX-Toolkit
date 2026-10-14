@@ -69,6 +69,28 @@ class ConfigService {
     }
 
     /**
+     * Get the background device reachability check interval in milliseconds.
+     *
+     * The user-facing configuration value is stored in seconds.
+     */
+    public getReachabilityRefreshIntervalMs(): number {
+        const seconds = this.get<number>('reachability.refreshInterval', CONFIG_DEFAULTS.REACHABILITY_REFRESH_INTERVAL_SECONDS);
+        const validSeconds = Number.isFinite(seconds) && seconds > 0
+            ? seconds
+            : CONFIG_DEFAULTS.REACHABILITY_REFRESH_INTERVAL_SECONDS;
+        return validSeconds * 1000;
+    }
+
+    /**
+   * Get whether background device reachability checks are enabled from configuration.
+   * 
+   * @returns True if background reachability checks should run
+   */
+    public getReachabilityEnabled(): boolean {
+        return this.get<boolean>('reachability.enabled', CONFIG_DEFAULTS.REACHABILITY_ENABLED);
+    }
+
+    /**
    * Get a configuration value.
    * 
    * @param key Configuration key (without the section prefix)

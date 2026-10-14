@@ -1,15 +1,17 @@
 /*
- * Copyright ©2025 HP Development Company, L.P.
+ * Copyright ©2025-2026 HP Development Company, L.P.
  * Licensed under the X11 License. See LICENSE file in the project root for details.
  */
 
 import { DnsRegistrationViewController } from '../../views/setup/dnsRegistration/dnsRegistrationViewController';
 import { SetupSuccessViewController } from '../../views/setup/success/setupSuccessViewController';
+import { DeviceManagerViewController } from '../../views/devices/manager/deviceManagerViewController';
 import { Logger } from '../../utils/logger';
 import { ITelemetryService, TelemetryEventType } from '../../types/telemetry';
 import { ConnectionService } from '../../services/connectionService';
 import { Device } from '../../types/devices';
 import { jest } from '@jest/globals';
+import { SSHHostVerificationError, SSH_HOST_VERIFICATION_GUIDANCE } from '../../utils/sshHostVerifier';
 
 describe('DnsRegistrationViewController', () => {
     // Mock logger
@@ -207,8 +209,49 @@ describe('DnsRegistrationViewController', () => {
             expect(sendMessageSpy).toHaveBeenCalledWith({
                 type: 'passwordValidationResult',
                 valid: false,
-                error: 'Connection error. Please check your network and try again.'
+                error: 'SSH connection failed'
             });
+        });
+
+        it('preserves host-key details and blocks further password submissions', async () => {
+            const controller = createController();
+            mockConnectionService.validatePasswordForDNS.mockResolvedValue({
+                valid: false, isConnectionError: true, hostVerificationFailed: true,
+                error: 'Unknown host key (SHA256:test-fingerprint)'
+            });
+            const sendMessageSpy = jest.spyOn(controller as any, 'sendMessageToWebview').mockResolvedValue(undefined);
+            const navigateSpy = jest.spyOn(controller as any, 'navigateTo').mockResolvedValue(undefined);
+            await controller.render({ device: mockDevice });
+
+            await controller.handleMessage({ type: 'validatePassword', password: 'secret' });
+            await controller.handleMessage({ type: 'validatePassword', password: 'another-password' });
+
+            expect(sendMessageSpy).toHaveBeenCalledWith({
+                type: 'passwordValidationResult', valid: false, hostVerificationFailed: true,
+                error: `${SSH_HOST_VERIFICATION_GUIDANCE}\n\nUnknown host key (SHA256:test-fingerprint)`
+            });
+            expect(mockConnectionService.validatePasswordForDNS).toHaveBeenCalledTimes(1);
+            expect(mockConnectionService.registerDNSServiceWithAvahi).not.toHaveBeenCalled();
+            await controller.handleMessage({ type: 'cancel' });
+            expect(navigateSpy).toHaveBeenCalledWith(DeviceManagerViewController.viewId());
+            controller.dispose();
+        });
+
+        it('classifies thrown host trust errors without masking them as unexpected errors', async () => {
+            const controller = createController();
+            const error = new SSHHostVerificationError('Changed host key');
+            mockConnectionService.validatePasswordForDNS.mockRejectedValue(error);
+            const sendMessageSpy = jest.spyOn(controller as any, 'sendMessageToWebview').mockResolvedValue(undefined);
+            await controller.render({ device: mockDevice });
+
+            await controller.handleMessage({ type: 'validatePassword', password: 'secret' });
+
+            expect(sendMessageSpy).toHaveBeenCalledWith({
+                type: 'passwordValidationResult', valid: false, hostVerificationFailed: true,
+                error: `${SSH_HOST_VERIFICATION_GUIDANCE}\n\n${error.message}`
+            });
+            expect(mockConnectionService.registerDNSServiceWithAvahi).not.toHaveBeenCalled();
+            controller.dispose();
         });
 
         it('should handle validation exception gracefully', async () => {

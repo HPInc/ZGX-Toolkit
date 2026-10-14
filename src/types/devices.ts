@@ -74,16 +74,21 @@ export function getDeviceTypeLabel(deviceType?: DeviceType): string | null {
 /**
  * Device types that currently support local model inferencing (e.g. ZRT). These device
  * types get inference-oriented tooling featured prominently in the app selection screen.
- * Note: ZRT is currently only supported on ARM-based devices (e.g. Fury and Nano).
+ * Note: ZRT support has been extended to include x86 devices.
  */
 const INFERENCE_DEVICE_TYPES = new Set<DeviceType>([
     DeviceType.ZGXFury,
-    DeviceType.ZGXNano
+    DeviceType.ZGXNano,
+    DeviceType.Z8,
+    DeviceType.Z6,
+    DeviceType.Z4,
+    DeviceType.Z2,
+    DeviceType.Other
 ]);
 
 /**
  * Returns true if the given device type supports local model inferencing (e.g. ZRT). Devices that
- * do not currently support it or types not yet determined (e.g. x86 Z8/Z4/Z2) will return false.
+ * do not currently support it will return false.
  */
 export function isInferenceDeviceType(deviceType?: DeviceType): boolean {
     return !!deviceType && INFERENCE_DEVICE_TYPES.has(deviceType);

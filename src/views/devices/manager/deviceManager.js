@@ -7,6 +7,17 @@
     const vscode = window.vscodeApi || acquireVsCodeApi();
     window.vscodeApi = vscode;
     let discoveredDevices = [];
+    let hasManuallyEnteredDeviceName = false;
+    // Tracks last-applied status per device so periodic reachability ticks only touch the
+    // DOM when something actually changed, instead of rewriting every card's markup every
+    // few seconds (which causes a distracting reflow/cursor flicker while typing in the form).
+    const lastAppliedStatuses = new Map();
+    let lastAppliedRefreshText = null;
+    const deviceAttentionClasses = [
+        'device-attention--connecting',
+        'device-attention--checking',
+        'device-attention--failed'
+    ];
 
     // Initialize editingDeviceId from data attribute if present
     const formContainer = document.getElementById('addDeviceForm');
@@ -17,10 +28,19 @@
 
     // Set up event listeners instead of inline onclick
     document.addEventListener('DOMContentLoaded', function () {
+        initializeReachabilityBaseline();
+
         // Form submission handler
         const deviceForm = document.getElementById('deviceForm');
         if (deviceForm) {
             deviceForm.addEventListener('submit', handleFormSubmit);
+        }
+
+        const deviceNameInput = document.getElementById('deviceName');
+        if (deviceNameInput) {
+            deviceNameInput.addEventListener('input', function () {
+                hasManuallyEnteredDeviceName = this.value.trim().length > 0;
+            });
         }
 
         // Show form button
@@ -51,6 +71,12 @@
         const discoverBtn = document.getElementById('discoverBtn');
         if (discoverBtn) {
             discoverBtn.addEventListener('click', discoverDevices);
+        }
+
+        // Refresh Status button
+        const refreshStatusBtn = document.getElementById('refreshStatusBtn');
+        if (refreshStatusBtn) {
+            refreshStatusBtn.addEventListener('click', refreshDeviceStatus);
         }
 
         // Edit buttons
@@ -88,6 +114,7 @@
         document.querySelectorAll('.connect-btn').forEach(btn => {
             btn.addEventListener('click', function () {
                 const deviceId = this.getAttribute('data-id');
+                setDeviceAttentionById(deviceId, 'connecting');
                 vscode.postMessage({
                     type: 'connect-device',
                     id: deviceId,
@@ -127,11 +154,24 @@
                 const action = this.getAttribute('data-action');
                 const id = this.getAttribute('data-id');
 
-                vscode.postMessage({
-                    type: 'connect-device',
-                    id: id,
-                    newWindow: action === 'new'
-                });
+                if (action === 'disconnect-device') {
+                    vscode.postMessage({
+                        type: 'disconnect-device',
+                        id: id
+                    });
+                } else if (action === 'check-device-reachability') {
+                    vscode.postMessage({
+                        type: 'check-device-reachability',
+                        deviceId: id
+                    });
+                } else {
+                    setDeviceAttentionById(id, 'connecting');
+                    vscode.postMessage({
+                        type: 'connect-device',
+                        id: id,
+                        newWindow: action === 'new'
+                    });
+                }
 
                 // Close the dropdown
                 this.closest('.dropdown-content').classList.remove('show');
@@ -144,6 +184,17 @@
                 const deviceId = this.getAttribute('data-id');
                 vscode.postMessage({
                     type: 'manage-apps',
+                    id: deviceId
+                });
+            });
+        });
+
+        // Disconnect buttons
+        document.querySelectorAll('.disconnect-btn').forEach(btn => {
+            btn.addEventListener('click', function () {
+                const deviceId = this.getAttribute('data-id');
+                vscode.postMessage({
+                    type: 'disconnect-device',
                     id: deviceId
                 });
             });
@@ -181,6 +232,7 @@
                 });
             });
         });
+
 
         // Keep submit button/hint in sync as the user changes it
         const deviceTypeSelectEl = document.getElementById('deviceType');
@@ -287,6 +339,7 @@
         editingDeviceId = null;
         resetForm();
         hideFormError();
+        vscode.postMessage({ type: 'device-form-state', mode: 'add' });
         document.getElementById('addDeviceForm').classList.remove('hidden');
         document.getElementById('showFormBtn').classList.add('hidden');
         document.getElementById('formTitle').textContent = 'Add New Device';
@@ -322,6 +375,7 @@
 
         // Set editing state
         editingDeviceId = deviceId;
+        vscode.postMessage({ type: 'device-form-state', mode: 'edit', deviceId });
 
         // Populate form fields
         document.getElementById('deviceName').value = name;
@@ -370,6 +424,7 @@
         editingDeviceId = null;
         resetForm();
         hideFormError();
+        vscode.postMessage({ type: 'device-form-state', mode: 'closed' });
         document.getElementById('addDeviceForm').classList.add('hidden');
         document.getElementById('showFormBtn').classList.remove('hidden');
     }
@@ -377,6 +432,7 @@
     function resetForm() {
         // Explicitly clearing each field
         document.getElementById('deviceForm').reset();
+        hasManuallyEnteredDeviceName = false;
         document.getElementById('deviceName').value = '';
         document.getElementById('deviceHost').value = '';
         document.getElementById('deviceUsername').value = '';
@@ -406,6 +462,18 @@
         hideDevicesDropdown();
         discoveredDevices = [];
         document.getElementById('devicesDropdown').innerHTML = '';
+    }
+
+    function refreshDeviceStatus() {
+        const btn = document.getElementById('refreshStatusBtn');
+        const btnText = document.getElementById('refreshStatusBtnText');
+        const spinner = document.getElementById('refreshStatusSpinner');
+
+        btn.disabled = true;
+        btnText.textContent = 'Refreshing...';
+        spinner.classList.remove('hidden');
+
+        vscode.postMessage({ type: 'refresh-all-reachability' });
     }
 
     function discoverDevices() {
@@ -478,7 +546,7 @@
                         const host = this.getAttribute('data-host');
                         const name = this.getAttribute('data-name');
                         document.getElementById('deviceHost').value = host;
-                        if (!document.getElementById('deviceName').value) {
+                        if (!hasManuallyEnteredDeviceName) {
                             document.getElementById('deviceName').value = name;
                         }
                         hideDevicesDropdown();
@@ -649,7 +717,7 @@
                 break;
 
             case 'show-password-input-for-delete':
-                showPasswordInputForDelete(message.deviceId, message.groupId);
+                showPasswordInputForDelete(message.deviceId, message.groupId, message.deviceIds, message.deviceNames);
                 break;
 
             case 'show-zrt-announcement':
@@ -659,8 +727,112 @@
             case 'show-zrt-info':
                 showZrtInfoModal(message.zrtLogoUri);
                 break;
+
+            case 'reachability-status-updated':
+                updateReachabilityStatus(message);
+                break;
+
+            case 'reachability-refresh-completed': {
+                const refreshBtn = document.getElementById('refreshStatusBtn');
+                const refreshBtnText = document.getElementById('refreshStatusBtnText');
+                const refreshSpinner = document.getElementById('refreshStatusSpinner');
+                if (refreshBtn && refreshBtnText && refreshSpinner) {
+                    refreshBtn.disabled = false;
+                    refreshBtnText.textContent = 'Refresh Status';
+                    refreshSpinner.classList.add('hidden');
+                }
+                break;
+            }
         }
     });
+
+    function updateReachabilityStatus(message) {
+        (message.statuses || []).forEach(status => {
+            const previous = lastAppliedStatuses.get(status.deviceId);
+            if (previous
+                && previous.status === status.status
+                && previous.label === status.label
+                && previous.notReachable === status.notReachable
+                && previous.unreachable === status.unreachable
+                && previous.checking === status.checking
+                && previous.checkedAt === status.checkedAt
+                && previous.explicit === status.explicit) {
+                return;
+            }
+            lastAppliedStatuses.set(status.deviceId, status);
+
+            const card = document.querySelector(`.device-card[data-id="${status.deviceId}"]`);
+            if (!card) {
+                return;
+            }
+
+            card.classList.toggle('device-card-not-reachable', status.notReachable);
+            card.classList.toggle('device-card-unreachable', status.unreachable);
+            // Only devices the user explicitly asked to check (tracked server-side, so every
+            // view stays in sync regardless of which one initiated the check) should pulse;
+            // silent background/periodic reachability checks must not animate the card.
+            if (status.explicit) {
+                if (status.checking) {
+                    setDeviceAttention(card, 'checking');
+                } else {
+                    setDeviceAttention(card, status.status === 'unreachable' ? 'failed' : null);
+                }
+            }
+
+            const statusElement = card.querySelector('[data-device-status]');
+            if (!statusElement) {
+                return;
+            }
+
+            statusElement.className = `device-status device-status-${status.status}`;
+            const label = statusElement.querySelector('[data-device-status-label]');
+            if (label) {
+                label.textContent = status.label;
+            }
+        });
+
+        const lastRefreshedText = `Last refreshed: ${message.lastRefreshed}`;
+        if (lastRefreshedText !== lastAppliedRefreshText) {
+            lastAppliedRefreshText = lastRefreshedText;
+            const lastRefreshed = document.getElementById('lastRefreshed');
+            if (lastRefreshed) {
+                lastRefreshed.textContent = lastRefreshedText;
+            }
+        }
+    }
+
+    function setDeviceAttentionById(deviceId, state) {
+        const card = document.querySelector(`.device-card[data-id="${deviceId}"]`);
+        if (card) {
+            setDeviceAttention(card, state);
+        }
+    }
+
+    function setDeviceAttention(card, state) {
+        card.classList.remove(...deviceAttentionClasses);
+        if (state === 'failed') {
+            void card.offsetWidth;
+        }
+        if (state) {
+            card.classList.add(`device-attention--${state}`);
+        }
+    }
+
+    function initializeReachabilityBaseline() {
+        document.querySelectorAll('.device-card[data-device-status]').forEach(card => {
+            const checkedAt = card.getAttribute('data-reachability-checked-at') || undefined;
+            lastAppliedStatuses.set(card.getAttribute('data-id'), {
+                deviceId: card.getAttribute('data-id'),
+                status: card.getAttribute('data-device-status'),
+                label: card.getAttribute('data-device-status-label'),
+                notReachable: card.getAttribute('data-not-reachable') === 'true',
+                unreachable: card.getAttribute('data-unreachable') === 'true',
+                checking: card.getAttribute('data-reachability-checking') === 'true',
+                checkedAt,
+                explicit: card.getAttribute('data-reachability-explicit') === 'true'
+            });
+        });
+    }
 
     /**
      * Show the one-time ZRT product announcement overlay.
@@ -672,7 +844,7 @@
         }
         window.showAnnouncementOverlay(
             'Introducing HP Z Runtime',
-            '\n**Take the next step with your AI workflow**\nYou\'ve connected to your AI infrastructure with HP Z Toolkit. Now use HP Z Runtime (ZRT) to pull, serve, and manage AI models locally through a streamlined runtime designed for supported devices.\n\n**To install ZRT:**\n1. Select a device from **Device Manager**.\n2. Click **Manage Apps**.\n3. Under **Model Serving**, select *HP Z Runtime* and **install**.\n\n> ZRT is currently only supported on HP ZGX Fury and Nano devices.',
+            '\n**Take the next step with your AI workflow**\nYou\'ve connected to your AI infrastructure with HP Z Toolkit. Now use HP Z Runtime (ZRT) to pull, serve, and manage AI models locally through a streamlined runtime designed for supported devices.\n\n**To install ZRT:**\n1. Select a device from **Device Manager**.\n2. Click **Manage Apps**.\n3. Under **Model Serving**, select *HP Z Runtime* and **install**.',
             {
                 dismissText: 'Dismiss',
                 learnMoreText: 'Learn More',
@@ -698,7 +870,7 @@
         }
         window.showAnnouncementOverlay(
             'HP Z Runtime',
-            '**What is HP Z Runtime?**\n\nHP Z Runtime (ZRT) is a command-line runtime for pulling, serving, and managing large language models locally on supported HP Z devices, with OpenAI-compatible API endpoints for inference.\n\n**Key benefits**\n- Pull and run models from popular model hubs\n- Serve models locally with a single command\n- Streamlined model lifecycle management\n- OpenAI-compatible API endpoints for easy integration\n\n**How to install**\n1. Select a device from **Device Manager**.\n2. Click **Manage Apps**.\n3. Under **Model Serving**, select **HP Z Runtime** and **install**.\n\nZRT is distributed as a Snap package and is installed automatically through the Manage Apps flow above.\n\n> ZRT is currently only supported on HP ZGX Fury and Nano devices.',
+            '**What is HP Z Runtime?**\n\nHP Z Runtime (ZRT) is a command-line runtime for pulling, serving, and managing large language models locally on supported HP Z devices, with OpenAI-compatible API endpoints for inference.\n\n**Key benefits**\n- Pull and run models from popular model hubs\n- Serve models locally with a single command\n- Streamlined model lifecycle management\n- OpenAI-compatible API endpoints for easy integration\n\n**How to install**\n1. Select a device from **Device Manager**.\n2. Click **Manage Apps**.\n3. Under **Model Serving**, select **HP Z Runtime** and **install**.\n\nZRT is distributed as a Snap package and is installed automatically through the Manage Apps flow above.',
             {
                 dismissText: 'Close',
                 learnMoreText: 'Learn More',
@@ -748,25 +920,30 @@
      * Show password input overlay to collect sudo password for paired device deletion.
      * @param {string} deviceId - The ID of the device to delete.
      * @param {string} groupId - The ID of the paired group the device belongs to.
+     * @param {string[]} deviceIds - The IDs of devices being unconfigured.
+     * @param {string[]} deviceNames - The display names of devices being unconfigured.
      */
-    function showPasswordInputForDelete(deviceId, groupId) {
+    function showPasswordInputForDelete(deviceId, groupId, deviceIds, deviceNames) {
         if (!window.showPasswordInputOverlay) {
             return;
         }
         window.showPasswordInputOverlay({
-            title: 'Sudo Password Required',
-            message: 'Enter your sudo password to unconfigure ConnectX network interfaces before deleting this device.',
+            title: 'Sudo Passwords Required',
+            message: 'Enter your sudo password for each device to complete the unpairing.',
+            messageEmphasis: 'Devices may use different sudo passwords.',
             icon: 'codicon-lock',
-            fieldLabel: 'Sudo Password:',
+            devices: deviceIds.map(function(currentDeviceId, index) {
+                return { id: currentDeviceId, name: deviceNames[index] };
+            }),
             placeholder: 'Enter password...',
-            hint: 'This password is required to unconfigure ConnectX network settings on both paired devices before the device can be deleted.',
+            hint: 'The passwords are only used to remove the ConnectX network settings required for pairing.',
             submitButtonText: 'Continue',
             cancelButtonText: 'Cancel',
             validationErrorMessage: 'Password is required',
-            onSubmit: function(password) {
+            onSubmit: function(passwords) {
                 vscode.postMessage({
                     type: 'password-submitted-for-delete',
-                    password: password,
+                    passwords: passwords,
                     deviceId: deviceId,
                     groupId: groupId
                 });

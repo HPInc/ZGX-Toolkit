@@ -5,7 +5,7 @@
 
 /**
  * SSH configuration utility for building SSH connection configurations.
- * Handles reading ~/.ssh/config and merging with device properties.
+ * Reads user and system client configuration and merges with device properties.
  */
 
 import * as os from 'node:os';
@@ -15,21 +15,24 @@ import { ConnectConfig } from 'ssh2';
 import * as SSHConfig from 'ssh-config';
 import { Device } from '../types/devices';
 import { logger } from './logger';
+import { createSSHHostVerifier, preflightSSHHostVerifier, SSHHostVerificationError } from './sshHostVerifier';
+import { resolveSSHConfigIncludes } from './sshConfigIncludes';
 
 export interface SSHConfigOptions {
     readyTimeout?: number;
     timeout?: number;
+    onHostVerificationFailure?: (error: Error) => void;
 }
 
 /**
  * Get SSH configuration for a device.
- * Reads from ~/.ssh/config and merges with device properties.
+ * Reads user and system SSH configuration and merges with device properties.
  * 
  * @param device The device to get SSH config for
  * @param options Optional timeout configuration
  * @returns SSH connection configuration
  */
-export function getSSHConfig(device: Device, options?: SSHConfigOptions): ConnectConfig {
+export async function getSSHConfig(device: Device, options?: SSHConfigOptions): Promise<ConnectConfig> {
     const config: ConnectConfig = {
         host: device.host,
         port: device.port || 22,
@@ -38,13 +41,15 @@ export function getSSHConfig(device: Device, options?: SSHConfigOptions): Connec
         timeout: options?.timeout
     };
 
-    const hostConfig = loadSSHConfigForHost(device.host);
+    const hostConfig = loadSSHConfigForHost(device.host, device.username);
     
     if (hostConfig) {
         applyHostConfigToConnection(config, hostConfig);
     }
 
     ensureAuthenticationMethod(config);
+    config.hostVerifier = createSSHHostVerifier(config, hostConfig, device.host, options?.onHostVerificationFailure);
+    await preflightSSHHostVerifier(config.hostVerifier);
 
     return config;
 }
@@ -52,17 +57,38 @@ export function getSSHConfig(device: Device, options?: SSHConfigOptions): Connec
 /**
  * Load SSH config file and get host-specific configuration
  */
-function loadSSHConfigForHost(host: string): Record<string, string | string[]> | null {
-    const sshConfigPath = path.join(os.homedir(), '.ssh', 'config');
-
-    if (!fs.existsSync(sshConfigPath)) {
-        return null;
-    }
-
+function loadSSHConfigForHost(host: string, username: string): Record<string, string | string[]> | null {
     try {
-        const sshConfigContent = fs.readFileSync(sshConfigPath, 'utf-8');
-        const parsedConfig = SSHConfig.parse(sshConfigContent);
-        const hostConfig = parsedConfig.compute(host);
+        const systemDirectory = os.platform() === 'win32'
+            ? path.join(process.env.ProgramData || String.raw`C:\ProgramData`, 'ssh') : '/etc/ssh';
+        const filenames = [path.join(os.homedir(), '.ssh', 'config'), path.join(systemDirectory, 'ssh_config')];
+        const sources = filenames.flatMap(filename => {
+            let content: string;
+            try {
+                content = fs.readFileSync(filename, 'utf-8');
+            } catch (error) {
+                if ((error as NodeJS.ErrnoException)?.code === 'ENOENT') return [];
+                throw error;
+            }
+            return [{ config: SSHConfig.parse(content), filename, baseDirectory: systemDirectory }];
+        });
+        if (!sources.length) return null;
+        const [first, ...remaining] = sources;
+        let computed: Record<string, string | string[]>;
+        if (sources.every(source => Array.isArray(source.config))) {
+            const base = first.filename === filenames[0] ? first : { config: new SSHConfig.SSHConfig(), filename: filenames[0] };
+            const additional = first.filename === filenames[0] ? remaining : sources;
+            computed = resolveSSHConfigIncludes(base.config, host, base.filename, username, additional).compute(host, { ignoreCase: true, matchExec: false });
+        } else {
+            computed = Object.assign({}, ...[...sources].reverse().map(source => source.config.compute(host, { ignoreCase: true, matchExec: false })));
+        }
+        const directives: Record<string, string> = {
+            hostname: 'HostName', port: 'Port', user: 'User', identityfile: 'IdentityFile',
+            identitiesonly: 'IdentitiesOnly', hostkeyalias: 'HostKeyAlias',
+            userknownhostsfile: 'UserKnownHostsFile', globalknownhostsfile: 'GlobalKnownHostsFile',
+            knownhostscommand: 'KnownHostsCommand', revokedhostkeys: 'RevokedHostKeys'
+        };
+        const hostConfig = Object.fromEntries(Object.entries(computed || {}).map(([key, value]) => [directives[key.toLowerCase()] || key, value]));
 
         if (hostConfig) {
             logger.debug('Found SSH config for host', { host });
@@ -73,7 +99,8 @@ function loadSSHConfigForHost(host: string): Record<string, string | string[]> |
         logger.warn('Failed to parse SSH config', {
             error: error instanceof Error ? error.message : String(error)
         });
-        return null;
+        const message = error instanceof Error ? error.message : String(error);
+        throw new SSHHostVerificationError(`Unable to load SSH configuration safely; refusing the connection: ${message}`, { cause: error });
     }
 }
 

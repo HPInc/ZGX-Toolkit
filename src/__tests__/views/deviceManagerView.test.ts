@@ -6,11 +6,20 @@
 import { DeviceManagerViewController } from '../../views/devices/manager/deviceManagerViewController';
 import { Logger } from '../../utils/logger';
 import { ITelemetryService, TelemetryEventType } from '../../types/telemetry';
-import { DeviceDiscoveryService, DeviceService, ConnectXGroupService, DeviceFingerprintService, extensionStateService } from '../../services';
+import { DeviceDiscoveryService, DeviceService, ConnectXGroupService, DeviceFingerprintService, extensionStateService, remoteSessionRegistryService } from '../../services';
 import { DeviceDiscoveryError } from '../../services/deviceDiscoveryService';
 import { Device, DeviceConfig, DeviceType } from '../../types/devices';
 import { URLS } from '../../constants/config';
+import { connectionStateStore, deviceReachabilityStore } from '../../store';
+import { DeviceStatus } from '../../types/devicestatus';
 import * as vscode from 'vscode';
+
+// Mock the reachability check service so disconnect tests don't perform real network probes
+jest.mock('../../services/deviceReachabilityCheckService', () => ({
+    deviceReachabilityCheckService: {
+        checkDevicesReachability: jest.fn().mockResolvedValue(undefined)
+    }
+}));
 
 describe('DeviceManagerView', () => {
     let view: DeviceManagerViewController;
@@ -77,6 +86,12 @@ describe('DeviceManagerView', () => {
         mockGroupService = {
             getAllGroups: jest.fn().mockResolvedValue([]),
             getGroupForDevice: jest.fn().mockResolvedValue(undefined),
+            getGroupInfo: jest.fn().mockResolvedValue({
+                devices: [
+                    { id: 'test-1', name: 'Test device' },
+                    { id: 'test-2', name: 'Paired device' }
+                ]
+            }),
             removeGroupAndUnconfigureNICs: jest.fn().mockResolvedValue({ success: true }),
             subscribe: jest.fn().mockReturnValue(() => {})
         } as any;
@@ -99,6 +114,64 @@ describe('DeviceManagerView', () => {
 
     afterEach(() => {
         view.dispose();
+        connectionStateStore.clear();
+        deviceReachabilityStore.clear();
+    });
+
+    describe('reachability updates', () => {
+        it('updates status indicators without refreshing the entire webview', async () => {
+            const refreshCallback = jest.fn();
+            const sendMessage = jest.fn();
+            mockService.getAllDevices.mockResolvedValue([{
+                ...mockDevice,
+                isSetup: true,
+                useKeyAuth: true
+            }]);
+            view.setRefreshCallback(refreshCallback);
+            view.setMessageCallback(sendMessage);
+
+            deviceReachabilityStore.setResult(mockDevice.id, DeviceStatus.Reachable);
+            await new Promise(resolve => setImmediate(resolve));
+
+            expect(refreshCallback).not.toHaveBeenCalled();
+            expect(sendMessage).toHaveBeenCalledWith(expect.objectContaining({
+                type: 'reachability-status-updated',
+                statuses: [expect.objectContaining({
+                    deviceId: mockDevice.id,
+                    status: DeviceStatus.Reachable,
+                    label: 'Reachable'
+                })]
+            }));
+        });
+
+        it('refreshes all device reachability and always reports completion', async () => {
+            const sendMessage = jest.fn();
+            const devices = [{ ...mockDevice, isSetup: true }];
+            mockService.getAllDevices.mockResolvedValue(devices);
+            view.setMessageCallback(sendMessage);
+
+            await view.handleMessage({ type: 'refresh-all-reachability' });
+
+            expect(mockService.getAllDevices).toHaveBeenCalled();
+            expect(mockTelemetry.trackEvent).toHaveBeenCalledWith({
+                eventType: TelemetryEventType.Device,
+                action: 'refreshStatus'
+            });
+            expect(sendMessage).toHaveBeenCalledWith({ type: 'reachability-refresh-completed' });
+        });
+
+        it('reports refresh completion when the reachability check fails', async () => {
+            const sendMessage = jest.fn();
+            mockService.getAllDevices.mockResolvedValue([mockDevice]);
+            const { deviceReachabilityCheckService } = require('../../services/deviceReachabilityCheckService') as {
+                deviceReachabilityCheckService: { checkDevicesReachability: jest.Mock };
+            };
+            deviceReachabilityCheckService.checkDevicesReachability.mockRejectedValueOnce(new Error('probe failed'));
+            view.setMessageCallback(sendMessage);
+
+            await expect(view.handleMessage({ type: 'refresh-all-reachability' })).rejects.toThrow('probe failed');
+            expect(sendMessage).toHaveBeenCalledWith({ type: 'reachability-refresh-completed' });
+        });
     });
 
     describe('render', () => {
@@ -108,10 +181,29 @@ describe('DeviceManagerView', () => {
             const html = await view.render();
 
             expect(html).toContain('No devices configured yet');
+            expect(html).toContain('Last refreshed: Never');
             expect(mockLogger.debug).toHaveBeenCalledWith(
                 'Rendering device manager view',
                 undefined
             );
+        });
+
+        it('formats a valid last-refreshed timestamp', async () => {
+            mockService.getAllDevices.mockResolvedValue([]);
+            deviceReachabilityStore.markQueryCompleted('2026-09-18T00:05:00.000');
+
+            const html = await view.render();
+
+            expect(html).toContain('Last refreshed: 09/18/2026 @ 12:05 AM');
+        });
+
+        it('uses Never for an invalid last-refreshed timestamp', async () => {
+            mockService.getAllDevices.mockResolvedValue([]);
+            deviceReachabilityStore.markQueryCompleted('invalid timestamp');
+
+            const html = await view.render();
+
+            expect(html).toContain('Last refreshed: Never');
         });
 
         it('should render device list when devices exist', async () => {
@@ -123,6 +215,105 @@ describe('DeviceManagerView', () => {
             expect(html).toContain('192.168.1.100');
             expect(html).toContain('root');
             expect(html).not.toContain('No devices configured yet');
+        });
+
+        describe('connection state reconciliation', () => {
+            afterEach(() => {
+                jest.restoreAllMocks();
+                connectionStateStore.clear();
+            });
+
+            it('should reconcile connection state from the shared registry before reading button state', async () => {
+                mockService.getAllDevices.mockResolvedValue([{ ...mockDevice, isSetup: true, useKeyAuth: true }]);
+                const readAllSpy = jest.spyOn(remoteSessionRegistryService, 'readAll').mockResolvedValue([{
+                    deviceId: mockDevice.id,
+                    connectLabel: 'root@192.168.1.100',
+                    windowId: (vscode.env as any).sessionId,
+                    connectedAt: new Date().toISOString(),
+                    lastHeartbeat: new Date().toISOString()
+                }]);
+
+                const html = await view.render();
+
+                expect(readAllSpy).toHaveBeenCalled();
+                expect(html).toMatch(/class="device-card\s+device-card-connected/);
+                expect(html).toContain('Disconnect from Test device');
+                expect(html).not.toContain('class="device-card-icon edit-icon"');
+                expect(html).not.toContain('class="device-card-icon remove-icon"');
+            });
+
+            it('should enable Manage Apps when the device is connected in another window', async () => {
+                mockService.getAllDevices.mockResolvedValue([{ ...mockDevice, isSetup: true, useKeyAuth: true }]);
+                jest.spyOn(remoteSessionRegistryService, 'readAll').mockResolvedValue([{
+                    deviceId: mockDevice.id,
+                    connectLabel: 'root@192.168.1.100',
+                    windowId: 'another-window',
+                    connectedAt: new Date().toISOString(),
+                    lastHeartbeat: new Date().toISOString()
+                }]);
+
+                const html = await view.render();
+                const manageAppsButton = html.match(/<button[^>]*class="[^"]*manage-apps-button[^"]*"[^>]*>/)?.[0] ?? '';
+                const editButton = html.match(/<button[^>]*class="[^"]*edit-icon[^"]*"[^>]*>/)?.[0] ?? '';
+                const deleteButton = html.match(/<button[^>]*class="[^"]*remove-icon[^"]*"[^>]*>/)?.[0] ?? '';
+                const connectedDropdown = html.match(/<fieldset class="split-button split-button-secondary" aria-label="Connection status for Test device">[\s\S]*?<\/fieldset>/)?.[0] ?? '';
+
+                expect(html).toContain('class="device-actions"');
+                expect(html).toContain('Connected in another window');
+                expect(html).toMatch(/class="device-card\s+device-card-connected/);
+                expect(connectedDropdown).toContain('title="Connected to Test device"');
+                expect(connectedDropdown).toContain('disabled>Connected</button>');
+                expect(connectedDropdown).toContain('data-action="disconnect-device"');
+                expect(manageAppsButton).toContain('title="Manage applications"');
+                expect(manageAppsButton).not.toContain('disabled');
+                expect(editButton).toContain('title="This action is unavailable while connected to device."');
+                expect(editButton).toContain('disabled');
+                expect(deleteButton).toContain('title="This action is unavailable while connected to device."');
+                expect(deleteButton).toContain('disabled');
+                expect(html).toContain('<i class="codicon codicon-edit" aria-hidden="true"></i> Edit');
+                expect(html).toContain('<i class="codicon codicon-trash" aria-hidden="true"></i> Remove');
+            });
+
+            it('should enable Edit and Delete when the device is disconnected', async () => {
+                mockService.getAllDevices.mockResolvedValue([{ ...mockDevice, isSetup: true, useKeyAuth: true }]);
+                jest.spyOn(remoteSessionRegistryService, 'readAll').mockResolvedValue([]);
+
+                const html = await view.render();
+                const editButton = html.match(/<button[^>]*class="[^"]*edit-icon[^"]*"[^>]*>/)?.[0] ?? '';
+                const deleteButton = html.match(/<button[^>]*class="[^"]*remove-icon[^"]*"[^>]*>/)?.[0] ?? '';
+
+                expect(editButton).toContain('title="Edit"');
+                expect(editButton).not.toContain('disabled');
+                expect(deleteButton).toContain('title="Remove"');
+                expect(deleteButton).not.toContain('disabled');
+                expect(html).not.toContain('class="device-card device-card-connected"');
+                const connectButtonIndex = html.indexOf('class="split-button-main connect-btn"');
+                const manageAppsButtonIndex = html.indexOf('class="btn btn-secondary manage-apps-button"');
+                const editButtonIndex = html.indexOf('class="btn btn-secondary edit-icon"');
+                const removeButtonIndex = html.indexOf('class="btn btn-secondary remove-icon"');
+                expect(editButtonIndex).toBeGreaterThan(connectButtonIndex);
+                expect(editButtonIndex).toBeGreaterThan(manageAppsButtonIndex);
+                expect(removeButtonIndex).toBeGreaterThan(editButtonIndex);
+                expect(html).not.toContain('class="device-card-icon edit-icon"');
+                expect(html).not.toContain('class="device-card-icon remove-icon"');
+                expect(html).toContain('<i class="codicon codicon-edit" aria-hidden="true"></i> Edit');
+                expect(html).toContain('<i class="codicon codicon-trash" aria-hidden="true"></i> Remove');
+            });
+
+            it('should still render (with devices treated as disconnected) if reconciliation fails', async () => {
+                mockService.getAllDevices.mockResolvedValue([{ ...mockDevice, isSetup: true, useKeyAuth: true }]);
+                const readAllError = new Error('read failed');
+                jest.spyOn(remoteSessionRegistryService, 'readAll').mockRejectedValue(readAllError);
+
+                const html = await view.render();
+
+                expect(mockLogger.error).toHaveBeenCalledWith(
+                    'Failed to reconcile connection state before rendering device manager',
+                    { error: readAllError }
+                );
+                expect(html).toContain('Test device');
+                expect(html).not.toContain('Disconnect from Test device');
+            });
         });
 
         it('should show a dash for device type when no fingerprint is set', async () => {
@@ -988,6 +1179,44 @@ describe('DeviceManagerView', () => {
             );
         });
 
+        it('should refresh when the group store updates', async () => {
+            const subscribeCallback = mockGroupService.subscribe.mock.calls[0][0];
+            const refreshSpy = jest.spyOn(view as any, 'refresh').mockResolvedValue(undefined);
+
+            await subscribeCallback([]);
+
+            expect(mockLogger.trace).toHaveBeenCalledWith('Group store updated, refreshing device manager view');
+            expect(refreshSpy).toHaveBeenCalled();
+        });
+
+        it('should log a refresh error when the group store updates', async () => {
+            const subscribeCallback = mockGroupService.subscribe.mock.calls[0][0];
+            const refreshError = new Error('Group refresh failed');
+            jest.spyOn(view as any, 'refresh').mockRejectedValue(refreshError);
+
+            await subscribeCallback([]);
+
+            expect(mockLogger.error).toHaveBeenCalledWith(
+                'Failed to refresh device manager view after group store update',
+                { error: refreshError }
+            );
+        });
+
+        it('should refresh when connection state changes', () => {
+            const refreshSpy = jest.spyOn(view as any, 'refresh').mockResolvedValue(undefined);
+
+            connectionStateStore.reconcile([{ 
+                deviceId: 'test-1',
+                connectLabel: 'root@192.168.1.100',
+                windowId: 'another-window',
+                connectedAt: new Date().toISOString(),
+                lastHeartbeat: new Date().toISOString()
+            }]);
+
+            expect(mockLogger.trace).toHaveBeenCalledWith('Connection state store updated, refreshing device manager view');
+            expect(refreshSpy).toHaveBeenCalled();
+        });
+
         it('should handle dispose when no subscription exists', () => {
             // Create controller without subscription
             mockService.subscribe.mockReturnValue(undefined as any);
@@ -1201,7 +1430,9 @@ describe('DeviceManagerView', () => {
             expect(sendMessageSpy).toHaveBeenCalledWith({
                 type: 'show-password-input-for-delete',
                 deviceId: 'test-1',
-                groupId: 'group-1'
+                groupId: 'group-1',
+                deviceIds: ['test-1', 'test-2'],
+                deviceNames: ['Test device', 'Paired device']
             });
         });
     });
@@ -1214,12 +1445,15 @@ describe('DeviceManagerView', () => {
 
             await view.handleMessage({
                 type: 'password-submitted-for-delete',
-                password: 'sudo-pass',
+                passwords: { 'test-1': 'sudo-pass', 'test-2': 'sudo-pass' },
                 deviceId: 'test-1',
                 groupId: 'group-1'
             });
 
-            expect(mockGroupService.removeGroupAndUnconfigureNICs).toHaveBeenCalledWith('group-1', 'sudo-pass');
+            expect(mockGroupService.removeGroupAndUnconfigureNICs).toHaveBeenCalledWith('group-1', {
+                'test-1': 'sudo-pass',
+                'test-2': 'sudo-pass'
+            });
             expect(mockService.deleteDevice).toHaveBeenCalledWith('test-1');
             expect(mockLogger.debug).toHaveBeenCalledWith('Paired device deleted', {
                 id: 'test-1',
@@ -1239,7 +1473,7 @@ describe('DeviceManagerView', () => {
 
             await view.handleMessage({
                 type: 'password-submitted-for-delete',
-                password: 'wrong-pass',
+                passwords: { 'test-1': 'sudo-pass', 'test-2': 'sudo-pass' },
                 deviceId: 'test-1',
                 groupId: 'group-1'
             });
@@ -1265,7 +1499,7 @@ describe('DeviceManagerView', () => {
 
             await expect(view.handleMessage({
                 type: 'password-submitted-for-delete',
-                password: 'sudo-pass',
+                passwords: { 'test-1': 'sudo-pass', 'test-2': 'sudo-pass' },
                 deviceId: 'test-1',
                 groupId: 'group-1'
             })).rejects.toThrow('Store failure: could not persist group removal');
@@ -1283,7 +1517,7 @@ describe('DeviceManagerView', () => {
 
             await expect(view.handleMessage({
                 type: 'password-submitted-for-delete',
-                password: 'sudo-pass',
+                passwords: { 'test-1': 'sudo-pass', 'test-2': 'sudo-pass' },
                 deviceId: 'test-1',
                 groupId: 'group-1'
             })).rejects.toThrow('device not found: test-1');
@@ -1302,7 +1536,7 @@ describe('DeviceManagerView', () => {
 
             await expect(view.handleMessage({
                 type: 'password-submitted-for-delete',
-                password: 'sudo-pass',
+                passwords: { 'test-1': 'sudo-pass', 'test-2': 'sudo-pass' },
                 deviceId: 'test-1',
                 groupId: 'group-1'
             })).rejects.toThrow('Deletion failed');
@@ -1330,7 +1564,51 @@ describe('DeviceManagerView', () => {
         });
     });
 
+    describe('disconnectDevice', () => {
+        it('requests a disconnect from the window that owns the active session', async () => {
+            mockService.getDevice.mockResolvedValue(mockDevice);
+            connectionStateStore.reconcile([{
+                deviceId: mockDevice.id,
+                connectLabel: 'root@192.168.1.100',
+                windowId: 'another-window',
+                connectedAt: new Date().toISOString(),
+                lastHeartbeat: new Date().toISOString()
+            }]);
+            const requestDisconnectSpy = jest.spyOn(remoteSessionRegistryService, 'requestDisconnect').mockResolvedValue(true);
+            const unregisterSpy = jest.spyOn(remoteSessionRegistryService, 'unregister').mockResolvedValue(undefined);
+            (vscode.window.showWarningMessage as jest.Mock).mockResolvedValue('Disconnect');
+
+            await view.handleMessage({ type: 'disconnect-device', id: mockDevice.id } as any);
+
+            expect(requestDisconnectSpy).toHaveBeenCalledWith(mockDevice.id, 'another-window');
+            expect(unregisterSpy).not.toHaveBeenCalled();
+            requestDisconnectSpy.mockRestore();
+            unregisterSpy.mockRestore();
+        });
+    });
+
     describe('connectDevice', () => {
+        it('does not open another connection when the user declines the active-session prompt', async () => {
+            mockService.getDevice.mockResolvedValue(mockDevice);
+            (vscode.window.showWarningMessage as jest.Mock).mockResolvedValue(undefined);
+            connectionStateStore.reconcile([{
+                deviceId: mockDevice.id,
+                connectLabel: 'root@192.168.1.100',
+                windowId: 'another-window',
+                connectedAt: new Date().toISOString(),
+                lastHeartbeat: new Date().toISOString()
+            }]);
+
+            await view.handleMessage({ type: 'connect-device', id: mockDevice.id } as any);
+
+            expect(vscode.window.showWarningMessage).toHaveBeenCalledWith(
+                `Already connected to ${mockDevice.name}. Open another session anyway?`,
+                { modal: true },
+                'Open Anyway'
+            );
+            expect(mockService.connectToDevice).not.toHaveBeenCalled();
+        });
+
         it('should handle DeviceNeedsSetupError and navigate to setup', async () => {
             const { DeviceNeedsSetupError } = await import('../../services/deviceService.js');
             const setupError = new DeviceNeedsSetupError('Device needs setup', mockDevice);
@@ -1407,6 +1685,23 @@ describe('DeviceManagerView', () => {
     });
 
     describe('manageApps', () => {
+        it('navigates to app management when the device is connected in another window', async () => {
+            mockService.getDevice.mockResolvedValue(mockDevice);
+            const navigateToSpy = jest.spyOn(view as any, 'navigateTo').mockResolvedValue(undefined);
+            connectionStateStore.reconcile([{
+                deviceId: mockDevice.id,
+                connectLabel: 'root@192.168.1.100',
+                windowId: 'another-window',
+                connectedAt: new Date().toISOString(),
+                lastHeartbeat: new Date().toISOString()
+            }]);
+
+            await view.handleMessage({ type: 'manage-apps', id: mockDevice.id } as any);
+
+            expect(vscode.window.showWarningMessage).not.toHaveBeenCalled();
+            expect(navigateToSpy).toHaveBeenCalledWith('apps/selection', { device: mockDevice });
+        });
+
         it('should navigate to app management', async () => {
             mockService.getDevice.mockResolvedValue(mockDevice);
             const navigateToSpy = jest.spyOn(view as any, 'navigateTo').mockResolvedValue(undefined);
@@ -2323,3 +2618,5 @@ describe('DeviceManagerView', () => {
         });
     });
 });
+
+

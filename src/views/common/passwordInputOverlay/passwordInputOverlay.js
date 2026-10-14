@@ -1,5 +1,5 @@
 /*
- * Copyright ©2025 HP Development Company, L.P.
+ * Copyright ©2025-2026 HP Development Company, L.P.
  * Licensed under the X11 License. See LICENSE file in the project root for details.
  */
 
@@ -30,6 +30,7 @@
      * @param {object} options - Configuration options
      * @param {string} options.title - Title for the overlay (required)
      * @param {string} options.message - Message/description text (required)
+     * @param {string} options.messageEmphasis - Optional bold message text
      * @param {string} options.icon - Codicon class name (default: 'codicon-lock')
      * @param {string} options.fieldLabel - Label for the password field (default: 'Password:')
      * @param {string} options.placeholder - Placeholder text for the password field (default: 'Enter password...')
@@ -37,7 +38,8 @@
      * @param {string} options.submitButtonText - Text for submit button (default: 'Continue')
      * @param {string} options.cancelButtonText - Text for cancel button (default: 'Cancel')
      * @param {string} options.validationErrorMessage - Error message for empty password (default: 'Password is required')
-     * @param {function|string} options.onSubmit - Callback when password is submitted. Receives password as parameter. Can be a function or message type string.
+     * @param {{id: string, name: string}[]} [options.devices] - Devices that require individual password fields.
+     * @param {function|string} options.onSubmit - Callback when password is submitted. Receives a password or a device ID keyed password map. Can be a function or message type string.
      * @param {function|string} options.onCancel - Optional callback when cancelled. Can be a function or message type string.
      */
     window.showPasswordInputOverlay = function(options) {
@@ -70,7 +72,16 @@
                 // Set message (required)
                 const messageEl = overlayContent.querySelector('#password-input-overlay-message');
                 if (messageEl) {
-                    messageEl.textContent = options.message;
+                    const messageTextEl = overlayContent.querySelector('#password-input-overlay-message-text');
+                    const messageEmphasisEl = overlayContent.querySelector('#password-input-overlay-message-emphasis');
+                    if (messageTextEl && messageEmphasisEl) {
+                        messageTextEl.textContent = options.message;
+                        messageEmphasisEl.textContent = options.messageEmphasis ? ` ${options.messageEmphasis}` : '';
+                    } else {
+                        messageEl.textContent = [options.message, options.messageEmphasis]
+                            .filter(Boolean)
+                            .join(' ');
+                    }
                 }
 
                 // Set field label
@@ -85,12 +96,50 @@
                     fieldEl.placeholder = options.placeholder || 'Enter password...';
                 }
 
+                const singleFieldContainer = typeof fieldEl?.closest === 'function'
+                    ? fieldEl.closest('.password-input-field-container')
+                    : null;
+                const deviceFieldsEl = overlayContent.querySelector('#password-input-overlay-device-fields');
+                const devices = Array.isArray(options.devices) ? options.devices : [];
+                if (singleFieldContainer) {
+                    singleFieldContainer.classList.toggle('hidden', devices.length > 0);
+                }
+                if (deviceFieldsEl) {
+                    deviceFieldsEl.replaceChildren();
+                    for (const device of devices) {
+                        const container = document.createElement('div');
+                        container.className = 'password-input-field-container';
+
+                        const label = document.createElement('label');
+                        label.className = 'password-input-label';
+                        label.htmlFor = `password-input-overlay-field-${device.id}`;
+                        label.textContent = `Sudo Password for ${device.name}`;
+
+                        const input = document.createElement('input');
+                        input.type = 'password';
+                        input.id = `password-input-overlay-field-${device.id}`;
+                        input.className = 'password-input-field password-input-device-field';
+                        input.placeholder = options.placeholder || 'Enter password...';
+                        input.autocomplete = 'off';
+                        input.spellcheck = false;
+                        input.dataset.deviceId = device.id;
+
+                        container.append(label, input);
+                        deviceFieldsEl.appendChild(container);
+                    }
+                }
+
                 // Set hint (optional)
                 const hintEl = overlayContent.querySelector('#password-input-overlay-hint');
                 if (hintEl) {
                     if (options.hint) {
-                        hintEl.textContent = options.hint;
-                        hintEl.style.display = 'block';
+                        const hintTextEl = overlayContent.querySelector('#password-input-overlay-hint-text');
+                        if (hintTextEl) {
+                            hintTextEl.textContent = options.hint;
+                        } else {
+                            hintEl.textContent = options.hint;
+                        }
+                        hintEl.style.display = 'flex';
                     } else {
                         hintEl.style.display = 'none';
                     }
@@ -115,12 +164,12 @@
                 const backdrop = document.getElementById(BACKDROP_ID);
                 const submitBtn = document.getElementById('password-input-overlay-submit-btn');
                 const cancelBtn = document.getElementById('password-input-overlay-cancel-btn');
-                const passwordField = document.getElementById('password-input-overlay-field');
+                const passwordFields = getPasswordFields();
                 const errorEl = document.getElementById('password-input-overlay-error');
 
-                // Focus the password field
-                if (passwordField) {
-                    setTimeout(() => passwordField.focus(), 100);
+                // Focus the first password field
+                if (passwordFields[0]) {
+                    setTimeout(() => passwordFields[0].focus(), 100);
                 }
 
                 // Submit button click
@@ -133,8 +182,7 @@
                     cancelBtn.addEventListener('click', handleCancel);
                 }
 
-                // Enter key in password field
-                if (passwordField) {
+                for (const passwordField of passwordFields) {
                     passwordField.addEventListener('keypress', function(event) {
                         if (event.key === 'Enter') {
                             handleSubmit();
@@ -166,11 +214,7 @@
      * Hide password input overlay
      */
     window.hidePasswordInputOverlay = function() {
-        // Clear password field
-        const passwordField = document.getElementById('password-input-overlay-field');
-        if (passwordField) {
-            passwordField.value = '';
-        }
+        clearPasswordFields();
 
         window.BaseOverlay.hide(BACKDROP_ID);
         submitCallback = null;
@@ -181,39 +225,41 @@
      * Handle submit action
      */
     function handleSubmit() {
-        const passwordField = document.getElementById('password-input-overlay-field');
+        const passwordFields = getPasswordFields();
         const errorEl = document.getElementById('password-input-overlay-error');
-        const password = passwordField ? passwordField.value : '';
+        const hasDeviceFields = passwordFields.some(passwordField => !!passwordField.dataset?.deviceId);
+        const emptyField = passwordFields.find(passwordField => !passwordField.value || passwordField.value.trim().length === 0);
 
-        // Validate password
-        if (!password || password.trim().length === 0) {
+        if (emptyField) {
             if (errorEl) {
                 errorEl.textContent = window._passwordInputValidationError || 'Password is required';
                 errorEl.style.display = 'block';
             }
-            if (passwordField) {
-                passwordField.focus();
-            }
+            emptyField.focus();
             return;
         }
 
-        // Clear the password field before hiding the overlay
-        if (passwordField) {
-            passwordField.value = '';
+        const passwords = {};
+        for (const passwordField of passwordFields) {
+            const deviceId = passwordField.dataset?.deviceId;
+            if (deviceId) {
+                passwords[deviceId] = passwordField.value;
+            }
         }
+        const submittedValue = hasDeviceFields ? passwords : passwordFields[0]?.value || '';
+
+        clearPasswordFields();
 
         // Hide the overlay
         window.BaseOverlay.hide(BACKDROP_ID);
 
         // Execute submit callback with the password
         if (submitCallback && typeof submitCallback === 'function') {
-            submitCallback(password);
+            submitCallback(submittedValue);
         } else if (submitCallback && typeof submitCallback === 'string') {
-            // If callback is a string message type, send it with the password
-            window.BaseOverlay.sendMessage({
-                type: submitCallback,
-                password: password
-            });
+            window.BaseOverlay.sendMessage(hasDeviceFields
+                ? { type: submitCallback, passwords: submittedValue }
+                : { type: submitCallback, password: submittedValue });
         }
 
         // Clear callbacks and validation error
@@ -226,11 +272,7 @@
      * Handle cancel action
      */
     function handleCancel() {
-        // Clear password field for security
-        const passwordField = document.getElementById('password-input-overlay-field');
-        if (passwordField) {
-            passwordField.value = '';
-        }
+        clearPasswordFields();
 
         // Execute cancel callback
         window.BaseOverlay.executeCallback(cancelCallback, true, BACKDROP_ID);
@@ -245,5 +287,23 @@
         // Clear callbacks
         submitCallback = null;
         cancelCallback = null;
+    }
+
+    function getPasswordFields() {
+        const deviceFields = typeof document.querySelectorAll === 'function'
+            ? Array.from(document.querySelectorAll('.password-input-device-field'))
+            : [];
+        if (deviceFields.length > 0) {
+            return deviceFields;
+        }
+
+        const passwordField = document.getElementById('password-input-overlay-field');
+        return passwordField ? [passwordField] : [];
+    }
+
+    function clearPasswordFields() {
+        for (const passwordField of getPasswordFields()) {
+            passwordField.value = '';
+        }
     }
 })();

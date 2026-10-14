@@ -26,7 +26,7 @@ See ZTK Onboarding Guide @ https://www.hp.com/zgx-onboard
 ### Prerequisites: 
 
 * Your HP Z device is located on same subnet of local network
-* VS Code Remote SSH extension is installed on your primary device (non-Z device) 
+* VS Code Remote SSH extension is installed on your primary device
 
 ### Installation Steps: 
 
@@ -37,9 +37,9 @@ See ZTK Onboarding Guide @ https://www.hp.com/zgx-onboard
 Alternatively, you can install the extension directly from the [VS Code Marketplace](https://marketplace.visualstudio.com/items?itemName=HPInc.zgx-toolkit)
 
 ### Supported Devices:
-HP Z Toolkit is designed for supported HP Z AI development systems, including NVIDIA GB10 and GB300-based systems. Device capabilities may vary by system.
+HP Z Toolkit is designed for supported HP Z AI development systems, including NVIDIA GB10 and GB300-based systems. Devices must be running Ubuntu 24.04 and device capabilities may vary by system.
 
-### Supported OS on client device, i.e., not the Z device
+### Supported OS on client devices:
 
 * Windows 11 
 * Ubuntu 24.04 

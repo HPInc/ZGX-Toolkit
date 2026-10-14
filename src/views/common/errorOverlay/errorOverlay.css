@@ -1,5 +1,5 @@
 /*
- * Copyright ©2025 HP Development Company, L.P.
+ * Copyright ©2025-2026 HP Development Company, L.P.
  * Licensed under the X11 License. See LICENSE file in the project root for details.
  */
 
@@ -65,4 +65,10 @@
     word-wrap: break-word;
     margin: 0;
     padding: 0;
+}
+
+#error-overlay-help-links {
+    margin: 0 32px 24px;
+    font-size: 13px;
+    overflow-wrap: anywhere;
 }

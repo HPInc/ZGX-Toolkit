@@ -39,7 +39,9 @@
         "z-toolkit"
     ],
     "qna": "marketplace",
-    "activationEvents": [],
+    "activationEvents": [
+        "onStartupFinished"
+    ],
     "extensionDependencies": [
         "ms-vscode-remote.remote-ssh"
     ],
@@ -47,6 +49,9 @@
         "telemetry"
     ],
     "main": "./dist/extension.js",
+    "extensionKind": [
+        "ui"
+    ],
     "contributes": {
         "viewsContainers": {
             "activitybar": [
@@ -118,6 +123,17 @@
                     "type": "boolean",
                     "default": true,
                     "description": "Enable telemetry for the Z Toolkit extension. This setting is enabled by default; set it to false to opt out. Telemetry is collected only when both this setting and VS Code's global telemetry setting allow it. Telemetry data helps improve the extension by providing insights into usage patterns and potential issues. No personal or sensitive data is collected."
+                },
+                "zToolkit.reachability.enabled": {
+                    "type": "boolean",
+                    "default": false,
+                    "description": "Enable automatic background device reachability checks."
+                },
+                "zToolkit.reachability.refreshInterval": {
+                    "type": "number",
+                    "default": 60,
+                    "minimum": 1,
+                    "description": "Interval, in seconds, at which the Z Toolkit extension automatically checks device reachability in the background."
                 }
             }
         }
@@ -147,23 +163,24 @@
         "@types/ssh2": "^1.15.5",
         "@types/vscode": "1.102.x",
         "@stylistic/eslint-plugin": "^5.10.0",
-        "@typescript-eslint/parser": "^8.67.0",
+        "@typescript-eslint/parser": "^8.71.0",
         "@vscode/test-electron": "^3.1.0",
-        "@vscode/vsce": "^3.9.2",
+        "@vscode/vsce": "^4.0.0",
         "@eslint/js": "^10.0.1",
         "esbuild": "^0.28.2",
-        "eslint": "^10.8.1",
-        "jest": "^30.4.2",
-        "mocha": "^11.8.0",
-        "ts-jest": "^29.4.12",
+        "eslint": "^10.12.0",
+        "jest": "^30.5.2",
+        "mocha": "^12.0.3",
+        "ts-jest": "^29.4.14",
         "typescript": "^6.0.3",
-        "typescript-eslint": "8.67.0",
-        "globals": "^17.11.0"
+        "typescript-eslint": "8.71.0",
+        "globals": "^17.13.0"
     },
     "dependencies": {
-        "@vscode/codicons": "^0.0.40",
+        "@vscode/codicons": "^0.0.45",
         "@vscode/extension-telemetry": "^1.2.0",
         "dnssd": "^0.4.1",
+        "tinyglobby": "^0.2.17",
         "handlebars": "^4.7.9",
         "rwlock": "^5.0.0",
         "ssh-config": "^5.0.3",
@@ -174,7 +191,10 @@
             "cpu-features": "npm:empty-npm-package@^1.0.0"
         },
         "mocha": {
-            "serialize-javascript": "npm:serialize-javascript@^7.0.3"
+            "serialize-javascript": "^7.1.2"
+        },
+        "jest": {
+            "js-yaml": "^5.4.3"
         }
     }
 }

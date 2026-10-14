@@ -36,3 +36,6 @@ export * from './telemetry';
 
 // SSH types
 export * from './ssh';
+
+// Remote session registry types
+export * from './remoteSession';

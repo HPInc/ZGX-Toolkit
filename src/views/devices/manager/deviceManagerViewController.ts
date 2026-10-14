@@ -4,6 +4,7 @@
  */
 
 import * as vscode from 'vscode';
+import Handlebars from 'handlebars';
 import { BaseViewController } from '../../baseViewController';
 import { Logger } from '../../../utils/logger';
 import { ITelemetryService, TelemetryEventType } from '../../../types/telemetry';
@@ -12,10 +13,34 @@ import { Device, getDeviceTypeOptions, getDeviceTypeLabel, DeviceType, DeviceCon
 import { ConnectXGroup } from '../../../types/connectxGroup';
 import { SetupOptionsViewController } from '../../setup/options/setupOptionsViewController';
 import { AppSelectionViewController } from '../../apps/selection/appSelectionViewController';
-import { DeviceDiscoveryService, DeviceService, ConnectXGroupService, DeviceFingerprintService, extensionStateService } from '../../../services';
+import { DeviceDiscoveryService, DeviceService, ConnectXGroupService, DeviceFingerprintService, extensionStateService, remoteSessionRegistryService } from '../../../services';
 import { PairDetailsViewController } from '../../groups/pairDetails/pairDetailsViewController';
 import { getDiscoveryErrorPresentation, NO_DEVICES_DISCOVERY_PRESENTATION } from './discoveryErrorPresentation';
 import { URLS } from '../../../constants/config';
+import { connectionStateStore, deviceReachabilityStore } from '../../../store';
+import { getDeviceStatus } from '../../../utils/deviceStatus';
+import { DEVICE_STATUS_LABELS, DeviceStatus } from '../../../types/devicestatus';
+import { deviceReachabilityCheckService } from '../../../services/deviceReachabilityCheckService';
+
+function formatLastRefreshed(timestamp: string): string {
+    if (timestamp === 'Never') {
+        return timestamp;
+    }
+
+    const date = new Date(timestamp);
+    if (Number.isNaN(date.getTime())) {
+        return 'Never';
+    }
+
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+    const year = date.getFullYear();
+    const minutes = String(date.getMinutes()).padStart(2, '0');
+    const hour = date.getHours() % 12 || 12;
+    const period = date.getHours() >= 12 ? 'PM' : 'AM';
+
+    return `${month}/${day}/${year} @ ${hour}:${minutes} ${period}`;
+}
 
 /**
  * device Manager View - Full editor view for managing devices.
@@ -25,8 +50,11 @@ import { URLS } from '../../../constants/config';
 export class DeviceManagerViewController extends BaseViewController {
     private readonly deviceUnsubscribe?: () => void;
     private readonly groupUnsubscribe?: () => void;
+    private readonly connectionStateUnsubscribe?: () => void;
+    private readonly reachabilityUnsubscribe?: () => void;
     private editingDeviceId?: string;
     private showForm = false;
+    private isRefreshingReachability = false;
     private lastRenderParams?: { showAddForm?: boolean; editDeviceId?: string };
 
     public static viewId(): string {
@@ -51,6 +79,10 @@ export class DeviceManagerViewController extends BaseViewController {
         this.template = this.loadTemplate('devices/manager/deviceManager.html');
         this.styles = this.loadTemplate('devices/manager/deviceManager.css');
         this.clientScript = this.loadTemplate('devices/manager/deviceManager.js');
+
+        // Register device card partial for template reuse
+        const deviceCardPartial = this.loadTemplate('devices/manager/device-card.html');
+        Handlebars.registerPartial('device-card', deviceCardPartial);
 
         // Enable warning overlay support for paired device deletion warnings
         this.enableWarningOverlay();
@@ -77,6 +109,21 @@ export class DeviceManagerViewController extends BaseViewController {
                 this.logger.error('Failed to refresh device manager view after group store update', { error });
             });
         });
+
+        // Subscribe to connection state updates (active Remote-SSH sessions across windows)
+        this.connectionStateUnsubscribe = connectionStateStore.subscribe(() => {
+            this.logger.trace('Connection state store updated, refreshing device manager view');
+            this.refresh(this.lastRenderParams).catch(error => {
+                this.logger.error('Failed to refresh device manager view after connection state update', { error });
+            });
+        });
+
+        this.reachabilityUnsubscribe = deviceReachabilityStore.subscribe(() => {
+            this.logger.trace('Device reachability updated, updating device manager status indicators');
+            this.updateReachabilityIndicators().catch(error => {
+                this.logger.error('Failed to update device manager reachability indicators', { error });
+            });
+        });
     }
 
     private readonly deviceService: DeviceService;
@@ -89,6 +136,11 @@ export class DeviceManagerViewController extends BaseViewController {
 
         const { showDeleteWarningForDeviceId, deleteWarningDeviceName, deleteWarningGroupId, showZrtInfoModal, ...persistParams } = params || {};
         this.lastRenderParams = persistParams;
+
+        // Re-read the shared active session registry immediately rather than trusting the
+        // last background reconcile, so a device connected in another window doesn't still
+        // show "Connect" for several seconds after opening/refreshing this view.
+        await this.reconcileConnectionState();
 
         const devices = await this.deviceService.getAllDevices();
         const groups = await this.connectxGroupService.getAllGroups();
@@ -126,6 +178,20 @@ export class DeviceManagerViewController extends BaseViewController {
     }
 
     /**
+     * Re-read the shared active session registry and reconcile the connection state store
+     * against it, so button state reflects the true current state rather than only what the
+     * last file-watcher event or periodic timer picked up.
+     */
+    private async reconcileConnectionState(): Promise<void> {
+        try {
+            const entries = await remoteSessionRegistryService.readAll();
+            connectionStateStore.reconcile(entries);
+        } catch (error) {
+            this.logger.error('Failed to reconcile connection state before rendering device manager', { error });
+        }
+    }
+
+    /**
      * Merge device records with derived DNS-registration-needed and pairing status flags,
      * ready for template rendering.
      */
@@ -141,13 +207,43 @@ export class DeviceManagerViewController extends BaseViewController {
             const needsDnsRegistration = this.needsDnsRegistration(device);
             const group = deviceToGroupMap.get(device.id);
 
+            const connectionState = connectionStateStore.get(device.id);
+            const isConnected = !!connectionState;
+            const isConnectedHere = connectionState?.windowId === vscode.env.sessionId;
+            const isConnectedElsewhere = isConnected && !isConnectedHere;
+            // Determine device reachability and status
+            const reachabilityState = deviceReachabilityStore.get(device.id);
+            const deviceStatus = getDeviceStatus(
+                device,
+                connectionState,
+                reachabilityState,
+                isConnectedHere,
+                isConnectedElsewhere
+            );
+            const deviceStatusLabel = DEVICE_STATUS_LABELS[deviceStatus] || 'Unknown';
+            const notReachable = deviceStatus === DeviceStatus.CheckStatus
+                || deviceStatus === DeviceStatus.CompleteSetup;
+            const unreachable = deviceStatus === DeviceStatus.Unreachable;
+            const lastRefreshed = formatLastRefreshed(deviceReachabilityStore.getLastQueryTimestamp());
+
             return {
                 ...device,
                 needsDnsRegistration,
                 isPaired: !!group,
                 groupId: group?.id,
                 deviceType: device.fingerprint?.deviceType || DeviceType.Unknown,
-                deviceTypeLabel: getDeviceTypeLabel(device.fingerprint?.deviceType) || '—'
+                deviceTypeLabel: getDeviceTypeLabel(device.fingerprint?.deviceType) || '—',
+                isConnected,
+                isConnectedHere,
+                isConnectedElsewhere,
+                notReachable,
+                unreachable,
+                deviceStatus,
+                deviceStatusLabel,
+                reachabilityChecking: reachabilityState?.checking ?? false,
+                reachabilityCheckedAt: reachabilityState?.checkedAt ?? '',
+                reachabilityExplicit: deviceReachabilityStore.isExplicitCheck(device.id),
+                lastRefreshed
             };
         });
     }
@@ -165,6 +261,41 @@ export class DeviceManagerViewController extends BaseViewController {
              device.dnsInstanceName.trim().length === 0));
     }
 
+    /** Update dynamic reachability state without replacing the webview and disrupting form input. */
+    private async updateReachabilityIndicators(): Promise<void> {
+        const devices = await this.deviceService.getAllDevices();
+        const statuses = devices.map(device => {
+            const connectionState = connectionStateStore.get(device.id);
+            const reachabilityState = deviceReachabilityStore.get(device.id);
+            const isConnectedHere = connectionState?.windowId === vscode.env.sessionId;
+            const isConnectedElsewhere = !!connectionState && !isConnectedHere;
+            const status = getDeviceStatus(
+                device,
+                connectionState,
+                reachabilityState,
+                isConnectedHere,
+                isConnectedElsewhere
+            );
+
+            return {
+                deviceId: device.id,
+                status,
+                label: DEVICE_STATUS_LABELS[status],
+                notReachable: status === DeviceStatus.CheckStatus || status === DeviceStatus.CompleteSetup,
+                unreachable: status === DeviceStatus.Unreachable,
+                checking: reachabilityState?.checking ?? false,
+                checkedAt: reachabilityState?.checkedAt,
+                explicit: deviceReachabilityStore.isExplicitCheck(device.id)
+            };
+        });
+
+        this.sendMessageToWebview({
+            type: 'reachability-status-updated',
+            statuses,
+            lastRefreshed: formatLastRefreshed(deviceReachabilityStore.getLastQueryTimestamp())
+        });
+    }
+
     /**
      * Split devices with status into paired groups and unpaired devices for template display.
      */
@@ -174,10 +305,12 @@ export class DeviceManagerViewController extends BaseViewController {
 
         for (const device of devicesWithStatus) {
             if (device.isPaired && device.groupId) {
-                if (!groupMap.has(device.groupId)) {
-                    groupMap.set(device.groupId, []);
+                const groupDevices = groupMap.get(device.groupId);
+                if (groupDevices) {
+                    groupDevices.push(device);
+                } else {
+                    groupMap.set(device.groupId, [device]);
                 }
-                groupMap.get(device.groupId)!.push(device);
             } else {
                 unpairedDevices.push(device);
             }
@@ -221,7 +354,9 @@ export class DeviceManagerViewController extends BaseViewController {
             editingDevice: !!editingDevice,
             editingDeviceDnsInstanceName: editingDevice?.dnsInstanceName || '',
             deviceTypeOptions: getDeviceTypeOptions(),
-            selectedDeviceType: editingDevice?.fingerprint?.deviceType || ''
+            selectedDeviceType: editingDevice?.fingerprint?.deviceType || '',
+            lastRefreshed: formatLastRefreshed(deviceReachabilityStore.getLastQueryTimestamp()),
+            isRefreshingReachability: this.isRefreshingReachability
         };
     }
 
@@ -291,6 +426,9 @@ export class DeviceManagerViewController extends BaseViewController {
             case 'connect-device':
                 await this.connectDevice(message.id, message.newWindow);
                 break;
+            case 'disconnect-device':
+                await this.disconnectDevice(message.id);
+                break;
             case 'setup-device':
                 await this.setupDevice(message.id);
                 break;
@@ -310,7 +448,7 @@ export class DeviceManagerViewController extends BaseViewController {
                 await this.handleDeletePairedDevice(message.id, message.groupId);
                 break;
             case 'password-submitted-for-delete':
-                await this.handlePasswordSubmittedForDelete(message.password, message.deviceId, message.groupId);
+                await this.handlePasswordSubmittedForDelete(message.passwords, message.deviceId, message.groupId);
                 break;
             case 'password-input-cancelled-for-delete':
                 this.logger.debug('Paired device deletion cancelled - password input dismissed', { id: message.deviceId });
@@ -320,6 +458,9 @@ export class DeviceManagerViewController extends BaseViewController {
                 break;
             case 'unpair-devices':
                 await this.navigateToUnpairDevices(message.groupId);
+                break;
+            case 'device-form-state':
+                this.updateFormState(message.mode, message.deviceId);
                 break;
             case 'refresh':
                 this.refresh(this.lastRenderParams).catch(error => {
@@ -338,7 +479,38 @@ export class DeviceManagerViewController extends BaseViewController {
             case 'zrt-info-close':
                 this.handleZrtInfoClose();
                 break;
+            case 'check-device-reachability':
+                await this.checkDeviceReachability(message.deviceId);
+                break;
+            case 'refresh-all-reachability':
+                await this.refreshAllReachability();
+                break;
         }
+    }
+
+    private updateFormState(mode: 'add' | 'edit' | 'closed', deviceId?: string): void {
+        const current = this.lastRenderParams ?? {};
+
+        if (mode === 'add') {
+            this.showForm = true;
+            this.editingDeviceId = undefined;
+            this.lastRenderParams = { ...current, showAddForm: true };
+            delete (this.lastRenderParams as Record<string, unknown>).editDeviceId;
+            return;
+        }
+
+        if (mode === 'edit' && deviceId) {
+            this.showForm = true;
+            this.editingDeviceId = deviceId;
+            this.lastRenderParams = { ...current, editDeviceId: deviceId };
+            delete (this.lastRenderParams as Record<string, unknown>).showAddForm;
+            return;
+        }
+
+        this.showForm = false;
+        this.editingDeviceId = undefined;
+        this.lastRenderParams = { ...current, showAddForm: false };
+        delete (this.lastRenderParams as Record<string, unknown>).editDeviceId;
     }
 
     private async viewPairingDetails(groupId: string): Promise<void> {
@@ -547,11 +719,19 @@ export class DeviceManagerViewController extends BaseViewController {
     private async handleDeletePairedDevice(id: string, groupId: string): Promise<void> {
         this.logger.info('User confirmed paired device deletion, prompting for password', { id, groupId });
 
+        const groupInfo = await this.connectxGroupService.getGroupInfo(groupId);
+        if (!groupInfo) {
+            this.logger.error('Cannot delete paired device: group not found', { id, groupId });
+            throw new Error(`Pairing group not found: ${groupId}`);
+        }
+
         // Send message to webview to show password input overlay
         this.sendMessageToWebview({
             type: 'show-password-input-for-delete',
             deviceId: id,
-            groupId: groupId
+            groupId: groupId,
+            deviceIds: groupInfo.devices.map(device => device.id),
+            deviceNames: groupInfo.devices.map(device => device.name)
         });
     }
 
@@ -560,7 +740,7 @@ export class DeviceManagerViewController extends BaseViewController {
      * Unconfigures ConnectX NICs for all devices in the group, removes the group,
      * then deletes the device.
      */
-    private async handlePasswordSubmittedForDelete(password: string, deviceId: string, groupId: string): Promise<void> {
+    private async handlePasswordSubmittedForDelete(passwords: Record<string, string>, deviceId: string, groupId: string): Promise<void> {
         this.logger.info('Password submitted for paired device deletion', { deviceId, groupId });
 
         try {
@@ -571,7 +751,7 @@ export class DeviceManagerViewController extends BaseViewController {
             }
 
             // Unconfigure ConnectX NICs and remove the group
-            const unconfigureResult = await this.connectxGroupService.removeGroupAndUnconfigureNICs(groupId, password);
+            const unconfigureResult = await this.connectxGroupService.removeGroupAndUnconfigureNICs(groupId, passwords);
             if (!unconfigureResult.success) {
                 // Abort device deletion — the group still exists in the store.
                 // Proceeding would leave an orphaned group referencing a deleted device.
@@ -605,6 +785,11 @@ export class DeviceManagerViewController extends BaseViewController {
     private async connectDevice(id: string, newWindow?: boolean): Promise<void> {
         this.logger.info('Connecting to device', { id, newWindow });
 
+        const device = await this.deviceService.getDevice(id);
+        if (device && !(await this.confirmIfAlreadyConnected(device))) {
+            return;
+        }
+
         try {
             await this.deviceService.connectToDevice(id, newWindow);
             this.logger.debug('Connection initiated', { id });
@@ -625,6 +810,79 @@ export class DeviceManagerViewController extends BaseViewController {
             
             this.logger.error('Failed to connect to device', { error, id });
             throw error;
+        }
+    }
+
+    /**
+     * If the device already has an active session (in this or another window), confirm with
+     * the user before opening another one instead of silently proceeding.
+     *
+     * @returns true if it's fine to proceed (not connected, or user confirmed anyway)
+     */
+    private async confirmIfAlreadyConnected(device: { id: string; name: string }): Promise<boolean> {
+        if (!connectionStateStore.get(device.id)) {
+            return true;
+        }
+
+        const confirmation = await vscode.window.showWarningMessage(
+            `Already connected to ${device.name}. Open another session anyway?`,
+            { modal: true },
+            'Open Anyway'
+        );
+
+        return confirmation === 'Open Anyway';
+    }
+
+    /**
+     * Disconnect a device locally when this window owns the session, or signal the owning
+     * Remote-SSH window through the shared session registry when it is connected elsewhere.
+     */
+    private async disconnectDevice(id: string): Promise<void> {
+        this.logger.info('Disconnecting from device', { id });
+
+        const device = await this.deviceService.getDevice(id);
+        if (!device) {
+            this.logger.error('device not found for disconnect', { id });
+            throw new Error(`device not found: ${id}`);
+        }
+
+        const confirmation = await vscode.window.showWarningMessage(
+            `Disconnect from ${device.name}?`,
+            { modal: true },
+            'Disconnect'
+        );
+
+        if (confirmation !== 'Disconnect') {
+            this.logger.debug('device disconnect cancelled by user', { id });
+            return;
+        }
+
+        const connectionState = connectionStateStore.get(id);
+        if (connectionState?.windowId && connectionState.windowId !== vscode.env.sessionId) {
+            const requested = await remoteSessionRegistryService.requestDisconnect(id, connectionState.windowId);
+            if (!requested) {
+                this.logger.debug('Remote session was no longer active when disconnect was requested', {
+                    id,
+                    targetWindowId: connectionState.windowId
+                });
+            }
+            return;
+        }
+
+        await remoteSessionRegistryService.unregister(id, vscode.env.sessionId).catch(error =>
+            this.logger.error('Failed to unregister active remote session on manual disconnect', { error, id })
+        );
+
+        // Re-check reachability now that the session is gone, so the status reflects reality.
+        await deviceReachabilityCheckService.checkDevicesReachability([device]).catch(error =>
+            this.logger.error('Failed to refresh device reachability after disconnect', { error, id })
+        );
+
+        try {
+            await vscode.commands.executeCommand('workbench.action.remote.close');
+        } catch (error) {
+            this.logger.error('Failed to close remote connection', { error, id });
+            vscode.window.showErrorMessage('Could not close the remote connection automatically. Please close this window manually.');
         }
     }
 
@@ -658,7 +916,6 @@ export class DeviceManagerViewController extends BaseViewController {
             this.logger.error('device not found for app management', { id });
             throw new Error(`device not found: ${id}`);
         }
-
         await this.navigateTo(AppSelectionViewController.viewId(), { device });
     }
 
@@ -766,6 +1023,39 @@ export class DeviceManagerViewController extends BaseViewController {
         }
     }
 
+    /**
+     * Check if a specific device is reachable over the network.
+     * @param id The identifier of the device to check reachability for.
+     */
+
+    private async checkDeviceReachability(id: string): Promise<void> {
+        const device = await this.deviceService.getDevice(id);
+        if (!device) { return; }
+        await deviceReachabilityCheckService.checkDevicesReachability([device], true);
+    }
+
+    /**
+     * Refresh the reachability status for all devices.
+     */ 
+
+    private async refreshAllReachability(): Promise<void> {
+        this.telemetry.trackEvent({
+            eventType: TelemetryEventType.Device,
+            action: 'refreshStatus'
+        });
+
+        this.isRefreshingReachability = true;
+        try {
+            const devices = await this.deviceService.getAllDevices();
+            await deviceReachabilityCheckService.checkDevicesReachability(devices, true);
+        } finally {
+            // Cleared before the final store-triggered refresh so that render reflects the reset state.
+            this.isRefreshingReachability = false;
+            this.sendMessageToWebview({ type: 'reachability-refresh-completed' });
+        }
+    }
+
+
     dispose(): void {
         if (this.deviceUnsubscribe) {
             this.deviceUnsubscribe();
@@ -773,6 +1063,13 @@ export class DeviceManagerViewController extends BaseViewController {
         if (this.groupUnsubscribe) {
             this.groupUnsubscribe();
         }
+        if (this.connectionStateUnsubscribe) {
+            this.connectionStateUnsubscribe();
+        }
+        if (this.reachabilityUnsubscribe) {
+            this.reachabilityUnsubscribe();
+        }
         super.dispose();
     }
+
 }

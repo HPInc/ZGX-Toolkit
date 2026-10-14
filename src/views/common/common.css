@@ -65,6 +65,43 @@ body {
   text-align: left;
 }
 
+@keyframes device-attention-border-pulse {
+  0%, 100% {
+    border-left-color: var(--vscode-foreground);
+  }
+
+  50% {
+    border-left-color: var(--hp-electric-blue);
+  }
+}
+
+@keyframes device-attention-failed-pulse {
+  0%, 100% {
+    border-left-color: var(--vscode-foreground);
+  }
+
+  50% {
+    border-left-color: var(--vscode-errorForeground);
+  }
+}
+
+.device-attention--connecting,
+.device-attention--checking {
+  animation: device-attention-border-pulse 1.1s ease-in-out infinite;
+}
+
+.device-attention--failed {
+  animation: device-attention-failed-pulse 650ms ease-out 2;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .device-attention--connecting,
+  .device-attention--checking,
+  .device-attention--failed {
+    animation: none;
+  }
+}
+
 .header {
   margin: var(--spacing-xl) 0;
   text-align: center;
@@ -260,6 +297,17 @@ p {
   background-color: var(--vscode-button-hoverBackground);
 }
 
+.split-button-secondary .split-button-main,
+.split-button-secondary .split-button-dropdown {
+  background-color: var(--vscode-button-secondaryBackground);
+  color: var(--vscode-button-secondaryForeground);
+}
+
+.split-button-secondary .split-button-main:hover:not(:disabled),
+.split-button-secondary .split-button-dropdown:hover {
+  background-color: var(--vscode-button-secondaryHoverBackground);
+}
+
 .split-button-dropdown::after {
   content: '';
   width: 0;
@@ -309,6 +357,77 @@ p {
 
 .dropdown-item:last-child {
   border-radius: 0 0 var(--border-radius) var(--border-radius);
+}
+
+/* Connection status */
+.btn-connected {
+  background: var(--vscode-testing-iconPassed);
+  color: var(--vscode-button-foreground);
+}
+
+.btn-connected:hover {
+  background: color-mix(in srgb, var(--vscode-testing-iconPassed) 85%, black 15%);
+}
+
+.status-connected {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--spacing-xs);
+  padding: var(--spacing-sm) var(--spacing-md);
+  color: var(--vscode-descriptionForeground);
+  font-size: 0.85em;
+}
+
+.device-status {
+  position: absolute;
+  top: var(--spacing-sm);
+  right: var(--spacing-md);
+    display: inline-flex;
+    align-items: center;
+    gap: var(--spacing-xs);
+    color: var(--vscode-foreground);
+    font-size: 0.9em;
+}
+
+.device-status-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--vscode-descriptionForeground);
+}
+
+.device-status-connected .device-status-dot {
+    background: var(--vscode-testing-iconPassed);
+}
+
+.device-status-connected-elsewhere .device-status-dot {
+    background: var(--vscode-testing-iconPassed);
+}
+
+.device-status-reachable .device-status-dot {
+    background: var(--hp-electric-blue);
+}
+
+.device-status-unreachable .device-status-dot {
+  background: var(--vscode-errorForeground);
+}
+
+.device-status-complete-setup .device-status-dot,
+.device-status-check-status .device-status-dot {
+    background: transparent;
+    border: 1px solid var(--vscode-foreground);
+}
+
+.manage-apps-group {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.manage-apps-hint {
+  display: block;
+  color: var(--vscode-descriptionForeground);
+  font-size: 0.8em;
 }
 
 /* Links */

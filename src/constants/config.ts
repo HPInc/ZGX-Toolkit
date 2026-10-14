@@ -24,6 +24,10 @@ export const CONFIG_KEYS = {
     LOG_LEVEL: 'zToolkit.logLevel',
     /** Whether telemetry is enabled */
     TELEMETRY_ENABLED: 'zToolkit.telemetry.enabled',
+    /** Background device reachability check interval, in seconds */
+    REACHABILITY_REFRESH_INTERVAL: 'zToolkit.reachability.refreshInterval',
+    /** Whether background device reachability checks are enabled */
+    REACHABILITY_ENABLED: 'zToolkit.reachability.enabled',
     /** Storage key for devices in globalState */
     MACHINES_STORAGE_KEY: 'devices'
 } as const;
@@ -38,7 +42,11 @@ export const CONFIG_DEFAULTS = {
    * Telemetry enabled by default. VSCode's telemetry setting also
    * needs to be enabled for our telemetry to be active.
    */
-    TELEMETRY_ENABLED: true
+    TELEMETRY_ENABLED: true,
+    /** Default background device reachability check interval: 60 seconds */
+    REACHABILITY_REFRESH_INTERVAL_SECONDS: 60,
+    /** Background device reachability checks are enabled by default */
+    REACHABILITY_ENABLED: false
 } as const;
 
 /**

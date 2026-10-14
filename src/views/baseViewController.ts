@@ -9,6 +9,7 @@ import Handlebars from 'handlebars';
 import { Logger } from '../utils/logger';
 import { ITelemetryService } from '../types/telemetry';
 import { Message } from '../types/messages';
+import { ErrorOverlayHelpLink } from '../types/views';
 
 /**
  * Interface that all views must implement
@@ -45,6 +46,12 @@ export interface IView {
      * @param callback Function to call when the view needs to update its HTML
      */
     setRefreshCallback(callback: (params?: Record<string, unknown>) => void): void;
+
+    /**
+     * Set the callback used to close the editor panel if it is currently showing a given view
+     * @param callback Function to call with the view id (and optional device id) that should trigger closing the editor panel
+     */
+    setCloseEditorCallback(callback: (viewId: string, deviceId?: string) => void): void;
 
     /**
      * Clean up resources when the view is disposed
@@ -84,6 +91,7 @@ export abstract class BaseViewController implements IView {
     private messageCallback?: (message: Record<string, unknown>) => void;
     private navigationCallback?: (viewId: string, params?: Record<string, unknown>, panel?: 'sidebar' | 'editor') => Promise<void>;
     private refreshCallback?: (params?: Record<string, unknown>) => void;
+    private closeEditorCallback?: (viewId: string, deviceId?: string) => void;
     private baseOverlayEnabled = false;
 
     public static viewId(): string {
@@ -165,6 +173,14 @@ export abstract class BaseViewController implements IView {
     }
 
     /**
+     * Set the callback used to close the editor panel if it is currently showing a given view.
+     * This is called by the provider when it wants to allow views to close the editor panel.
+     */
+    public setCloseEditorCallback(callback: (viewId: string, deviceId?: string) => void): void {
+        this.closeEditorCallback = callback;
+    }
+
+    /**
      * Request navigation to another view.
      * This is called by views when they need to navigate programmatically.
      */
@@ -177,6 +193,14 @@ export abstract class BaseViewController implements IView {
                 targetView: viewId
             });
         }
+    }
+
+    /**
+     * Close the editor panel if it is currently showing the given view.
+     * This is called by views when an action makes an open editor panel view stale (e.g. connecting to a device while its Manage Apps view is open).
+     */
+    protected closeEditorIfShowing(viewId: string, deviceId?: string): void {
+        this.closeEditorCallback?.(viewId, deviceId);
     }
 
     /**
@@ -251,14 +275,16 @@ export abstract class BaseViewController implements IView {
      * @param details - The error details/message displayed in the overlay body
      * @param error - The original error object or message
      * @param buttonText - Optional custom text for the close button
+    * @param helpLinks - Optional HTTP(S) help links
      */
-    protected showErrorOverlay(title: string, details: string, error: string, buttonText?: string): void {
+    protected showErrorOverlay(title: string, details: string, error: string, buttonText?: string, helpLinks?: ErrorOverlayHelpLink[]): void {
         this.sendMessageToWebview({
             type: 'show-error-overlay',
             errorTitle: title,
             errorDetails: details,
             error: error,
-            buttonText: buttonText
+            buttonText: buttonText,
+            ...(helpLinks === undefined ? {} : { helpLinks })
         });
     }
 

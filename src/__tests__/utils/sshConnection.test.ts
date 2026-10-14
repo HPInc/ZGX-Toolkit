@@ -1,5 +1,5 @@
 /*
- * Copyright ©2025 HP Development Company, L.P.
+ * Copyright ©2025-2026 HP Development Company, L.P.
  * Licensed under the X11 License. See LICENSE file in the project root for details.
  */
 
@@ -22,6 +22,7 @@ jest.mock('node:fs', () => ({
     readFileSync: jest.fn()
 }));
 jest.mock('node:os', () => ({
+    ...jest.requireActual<typeof import('node:os')>('node:os'),
     homedir: jest.fn(() => '/home/testuser')
 }));
 
@@ -50,7 +51,7 @@ describe('sshConnection utilities', () => {
         mockSSHClient = new SSHClient() as jest.Mocked<SSHClient>;
         (SSHClient as jest.MockedClass<typeof SSHClient>).mockImplementation(() => mockSSHClient);
 
-        (getSSHConfig as jest.Mock).mockReturnValue({
+        (getSSHConfig as jest.Mock).mockResolvedValue({
             host: mockDevice.host,
             port: mockDevice.port,
             username: mockDevice.username,
@@ -79,7 +80,8 @@ describe('sshConnection utilities', () => {
             expect(mockSSHClient.connect).toHaveBeenCalled();
             expect(getSSHConfig).toHaveBeenCalledWith(mockDevice, {
                 readyTimeout: undefined,
-                timeout: undefined
+                timeout: undefined,
+                onHostVerificationFailure: expect.any(Function)
             });
         });
 
@@ -104,7 +106,8 @@ describe('sshConnection utilities', () => {
 
             expect(getSSHConfig).toHaveBeenCalledWith(mockDevice, {
                 readyTimeout: 10000,
-                timeout: 5000
+                timeout: 5000,
+                onHostVerificationFailure: expect.any(Function)
             });
 
             // Verify keepalive settings were applied to config
@@ -1322,7 +1325,8 @@ describe('sshConnection utilities', () => {
             // Just verify it was called with default options
             expect(getSSHConfig).toHaveBeenCalledWith(mockDevice, {
                 readyTimeout: 5000,
-                timeout: undefined
+                timeout: undefined,
+                onHostVerificationFailure: expect.any(Function)
             });
         });
     });

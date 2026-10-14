@@ -502,6 +502,26 @@ describe('BaseView', () => {
             });
         });
 
+        it('should forward multiple help links when provided', () => {
+            const messageCallback = jest.fn();
+            view.setMessageCallback(messageCallback);
+            const helpLinks = [
+                { text: 'Troubleshooting', url: 'https://example.com/troubleshooting' },
+                { text: 'Support', url: 'https://example.com/support' }
+            ];
+
+            view['showErrorOverlay']('Error Title', 'Error Details', 'Error message', 'Return', helpLinks);
+
+            expect(messageCallback).toHaveBeenCalledWith({
+                type: 'show-error-overlay',
+                errorTitle: 'Error Title',
+                errorDetails: 'Error Details',
+                error: 'Error message',
+                buttonText: 'Return',
+                helpLinks
+            });
+        });
+
         it('should show error overlay with custom button text', () => {
             const messageCallback = jest.fn();
             view.setMessageCallback(messageCallback);

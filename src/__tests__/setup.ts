@@ -1,5 +1,5 @@
 /*
- * Copyright ©2025 HP Development Company, L.P.
+ * Copyright ©2025-2026 HP Development Company, L.P.
  * Licensed under the X11 License. See LICENSE file in the project root for details.
  */
 
@@ -23,6 +23,10 @@ jest.mock('fs', () => {
     const actualFs = jest.requireActual('fs') as any;
   
     return {
+        constants: actualFs.constants,
+        promises: {
+            open: jest.fn(async () => { throw Object.assign(new Error('File not found'), { code: 'ENOENT' }); })
+        },
         existsSync: jest.fn((path: string) => {
             // Return true for codicon resource files during tests
             if (path && (path.includes('codicon.css') || path.includes('codicon.ttf'))) {
@@ -69,6 +73,7 @@ jest.mock('fs', () => {
 });
 
 jest.mock('os', () => ({
+    ...jest.requireActual<typeof import('os')>('os'),
     homedir: jest.fn().mockReturnValue('/mock/home'),
     platform: jest.fn().mockReturnValue('linux')
 }));

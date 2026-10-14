@@ -152,6 +152,34 @@ describe('ConfigService', () => {
         });
     });
 
+    describe('Get Reachability Refresh Interval', () => {
+        it('converts the configured seconds to milliseconds', () => {
+            mockWorkspaceConfig.get.mockReturnValue(45);
+
+            expect(configService.getReachabilityRefreshIntervalMs()).toBe(45000);
+            expect(mockWorkspaceConfig.get).toHaveBeenCalledWith('reachability.refreshInterval', 60);
+        });
+
+        it('falls back to 60 seconds when the configured value is invalid', () => {
+            mockWorkspaceConfig.get.mockReturnValue(0);
+
+            expect(configService.getReachabilityRefreshIntervalMs()).toBe(60000);
+        });
+
+        it.each([NaN, Infinity, -1])('falls back when the configured value is %s', (value) => {
+            mockWorkspaceConfig.get.mockReturnValue(value);
+
+            expect(configService.getReachabilityRefreshIntervalMs()).toBe(60000);
+        });
+
+        it('reads whether background reachability checks are enabled', () => {
+            mockWorkspaceConfig.get.mockReturnValue(true);
+
+            expect(configService.getReachabilityEnabled()).toBe(true);
+            expect(mockWorkspaceConfig.get).toHaveBeenCalledWith('reachability.enabled', false);
+        });
+    });
+
     describe('Generic Get', () => {
         it('should get configuration value', () => {
             mockWorkspaceConfig.get.mockReturnValue('test-value');

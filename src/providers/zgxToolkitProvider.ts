@@ -10,6 +10,7 @@ import { ViewFactory } from '../views/viewFactory';
 import { MessageRouter } from '../utils/messageRouter';
 import { Logger } from '../utils/logger';
 import { Message } from '../types/messages';
+import { connectionStateStore } from '../store';
 
 /**
  * Unified provider that handles both sidebar and editor panel webviews.
@@ -27,11 +28,13 @@ export class ZgxToolkitProvider implements vscode.WebviewViewProvider {
     private editorWebview?: vscode.Webview;
     private editorCurrentView?: IView;
     private editorCurrentViewId?: string;
+    private editorCurrentParams?: Record<string, unknown>;
 
     private lastSidebarHtml?: string;
     private lastEditorHtml?: string;
 
     private readonly nonce: string;
+    private readonly connectionStateUnsubscribe: () => void;
 
     constructor(
         private readonly context: vscode.ExtensionContext,
@@ -41,6 +44,12 @@ export class ZgxToolkitProvider implements vscode.WebviewViewProvider {
     ) {
         // Generate nonce once for the provider's lifetime
         this.nonce = this.generateNonce();
+        this.connectionStateUnsubscribe = connectionStateStore.subscribe(() => {
+            this.updateSidebarTitle();
+            if (this.isConnectedHere()) {
+                this.closeEditorForActiveConnection();
+            }
+        });
 
         this.logger.debug('Provider initialized');
     }
@@ -60,6 +69,7 @@ export class ZgxToolkitProvider implements vscode.WebviewViewProvider {
 
         this.sidebarView = webviewView;
         this.sidebarWebview = webviewView.webview;
+        this.updateSidebarTitle();
 
         // Configure webview options
         webviewView.webview.options = {
@@ -133,6 +143,12 @@ export class ZgxToolkitProvider implements vscode.WebviewViewProvider {
      */
     async openInEditor(viewId = 'devices/manager', params?: Record<string, unknown>): Promise<void> {
         this.logger.debug('Opening view in editor panel', { viewId, params });
+
+        if (this.isConnectedHere()) {
+            this.closeEditorForActiveConnection();
+            this.logger.debug('Ignoring request to open extension editor while connected to a device', { viewId });
+            return;
+        }
 
         // If editor panel already exists, reuse it
         if (this.editorPanel) {
@@ -236,6 +252,12 @@ export class ZgxToolkitProvider implements vscode.WebviewViewProvider {
      * @param target The target display ('sidebar' or 'editor')
      */
     private async navigateTo(viewId: string, params: Record<string, unknown> | undefined, target: 'sidebar' | 'editor'): Promise<void> {
+        if (target === 'editor' && this.isConnectedHere()) {
+            this.closeEditorForActiveConnection();
+            this.logger.debug('Ignoring extension editor navigation while connected to a device', { viewId });
+            return;
+        }
+
         if (target === 'sidebar') {
             await this.navigateSidebar(viewId, params);
         } else if (this.editorPanel) {
@@ -276,7 +298,12 @@ export class ZgxToolkitProvider implements vscode.WebviewViewProvider {
             // Set navigation callback so view can trigger navigation
             this.sidebarCurrentView.setNavigationCallback(async (targetViewId: string, params?: Record<string, unknown>, panel: 'sidebar' | 'editor' = 'sidebar') => {
                 await this.navigateTo(targetViewId, params, panel);
-            });            
+            });
+
+            // Set close-editor callback so view can close the editor panel if it's showing a given view
+            this.sidebarCurrentView.setCloseEditorCallback((viewId: string, deviceId?: string) => {
+                this.closeEditorIfShowing(viewId, deviceId);
+            });
 
             // Set refresh callback so view can update the webview HTML
             this.sidebarCurrentView.setRefreshCallback(async (params?: Record<string, unknown>) => {
@@ -333,6 +360,7 @@ export class ZgxToolkitProvider implements vscode.WebviewViewProvider {
             // Create new view
             this.editorCurrentView = this.viewFactory.create(viewId);
             this.editorCurrentViewId = viewId;
+            this.editorCurrentParams = params;
 
             // Set message callback so view can send async messages back
             this.editorCurrentView.setMessageCallback((message: Record<string, unknown>) => {
@@ -345,6 +373,11 @@ export class ZgxToolkitProvider implements vscode.WebviewViewProvider {
             // Set navigation callback so view can trigger navigation
             this.editorCurrentView.setNavigationCallback(async (targetViewId: string, params?: Record<string, unknown>, panel: 'sidebar' | 'editor' = 'editor') => {
                 await this.navigateTo(targetViewId, params, panel);
+            });
+
+            // Set close-editor callback so view can close the editor panel if it's showing a given view
+            this.editorCurrentView.setCloseEditorCallback((viewId: string, deviceId?: string) => {
+                this.closeEditorIfShowing(viewId, deviceId);
             });
 
             // Set refresh callback so view can update the webview HTML
@@ -393,6 +426,11 @@ export class ZgxToolkitProvider implements vscode.WebviewViewProvider {
             // Validate message
             if (!this.messageRouter.validateMessage(message)) {
                 this.logger.warn('Invalid message received', { message, target });
+                return;
+            }
+
+            if (this.isConnectedHere() && message.type !== 'disconnect-device' && message.type !== 'refresh') {
+                this.logger.warn('Ignoring extension action while connected to a device', { type: message.type, target });
                 return;
             }
 
@@ -590,6 +628,48 @@ export class ZgxToolkitProvider implements vscode.WebviewViewProvider {
         return text;
     }
 
+    private isConnectedHere(): boolean {
+        return Array.from(connectionStateStore.getAll().values()).some(connection =>
+            connection.connected && connection.windowId === vscode.env.sessionId
+        );
+    }
+
+    private updateSidebarTitle(): void {
+        if (this.sidebarView) {
+            this.sidebarView.title = this.isConnectedHere() ? 'Device' : undefined;
+        }
+    }
+
+    private closeEditorForActiveConnection(): void {
+        if (!this.editorPanel) {
+            return;
+        }
+
+        this.logger.debug('Closing extension editor panel while connected to a device');
+        this.editorPanel.dispose();
+    }
+
+    /**
+     * Close the editor panel if it is currently showing the given view for the given device.
+     * @param viewId The view identifier expected to be showing in the editor panel
+     * @param deviceId If provided, only close when the editor panel's current view is for this device
+     */
+    closeEditorIfShowing(viewId: string, deviceId?: string): void {
+        if (!this.editorPanel || this.editorCurrentViewId !== viewId) {
+            return;
+        }
+
+        if (deviceId) {
+            const currentDevice = this.editorCurrentParams?.device as { id?: string } | undefined;
+            if (currentDevice?.id !== deviceId) {
+                return;
+            }
+        }
+
+        this.logger.debug('Closing editor panel showing stale view', { viewId, deviceId });
+        this.editorPanel.dispose();
+    }
+
     /**
      * Refresh the sidebar view
      */
@@ -643,6 +723,7 @@ export class ZgxToolkitProvider implements vscode.WebviewViewProvider {
             this.editorCurrentView = undefined;
         }
         this.editorCurrentViewId = undefined;
+        this.editorCurrentParams = undefined;
         this.editorWebview = undefined;
         this.editorPanel = undefined;
         this.logger.debug('Editor panel disposed');
@@ -652,6 +733,7 @@ export class ZgxToolkitProvider implements vscode.WebviewViewProvider {
      * Clean up all resources
      */
     dispose(): void {
+        this.connectionStateUnsubscribe();
         this.disposeSidebar();
         
         // Clean up editor panel

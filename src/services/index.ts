@@ -22,3 +22,4 @@ export { DeviceHealthCheckService, deviceHealthCheckService } from './deviceHeal
 export { DeviceFingerprintService, deviceFingerprintService } from './deviceFingerprintService';
 export type { FingerprintProbe } from './probes';
 export { migrateSettings } from './configMigrationService';
+export { RemoteSessionRegistryService, remoteSessionRegistryService } from './remoteSessionRegistryService';

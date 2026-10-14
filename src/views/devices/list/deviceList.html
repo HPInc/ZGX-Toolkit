@@ -4,6 +4,15 @@
 -->
 
 <div class="container fill-vertical">
+    {{#if connectedInThisWindow}}
+    <div class="content-area">
+        <ul class="list device-list" aria-label="Connected device">
+            {{#each connectedDevices}}
+            {{> deviceListItem}}
+            {{/each}}
+        </ul>
+    </div>
+    {{else}}
     <div class="header-buttons">
         <button class="btn btn-block mb-2" id="add-device-btn">Add Device</button>
         <button class="btn btn-secondary btn-block mb-2" id="open-editor-btn">Open ZTK Device Manager</button>
@@ -96,4 +105,5 @@
             </li>
         </ul>
     </div>
+    {{/if}}
 </div>

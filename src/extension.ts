@@ -11,19 +11,36 @@ import { logger } from './utils/logger';
 import { telemetryService } from './services/telemetryService';
 import { TelemetryEventType } from './types/telemetry';
 import { configService } from './services/configService';
-import { deviceStore, groupStore } from './store';
-import { deviceService, AppInstallationService, PasswordService, deviceDiscoveryService, extensionStateService, dnsServiceRegistration, connectxGroupService, deviceHealthCheckService, deviceFingerprintService, DeviceService, migrateSettings } from './services';
+import { deviceStore, groupStore, connectionStateStore, deviceReachabilityStore } from './store';
+import { deviceService, AppInstallationService, PasswordService, deviceDiscoveryService, extensionStateService, dnsServiceRegistration, connectxGroupService, deviceHealthCheckService, deviceFingerprintService, DeviceService, migrateSettings, remoteSessionRegistryService } from './services';
 import { ConfigurationSchemaNotRegisteredError } from './services/configMigrationService';
 import { ConnectionService } from './services/connectionService';
 import { registerCommands } from './commands';
 import { createGlobalStatePersistenceService } from './services/globalStatePersistenceService';
-import { DeviceType } from './types/devices';
+import { DeviceType, Device } from './types/devices';
+import { DeviceStatus } from './types/devicestatus';
+import { ActiveSessionEntry } from './types/remoteSession';
 import { GLOBAL_STATE_KEYS } from './constants/globalState';
+import { REMOTE_SESSION_HEARTBEAT_INTERVAL_MS } from './constants/time';
+import { CONFIG_KEYS } from './constants/config';
+import { extractConnectLabelFromRemoteAuthority, findDeviceByConnectLabel } from './utils/remoteConnectLabel';
+import { deviceReachabilityCheckService } from './services/deviceReachabilityCheckService';
 
 let isActivated = false;
 let provider: ZgxToolkitProvider | undefined;
+let activeRemoteSessionDeviceId: string | undefined;
+let activeRemoteSessionRegistration: ActiveRemoteSessionRegistration | undefined;
+let activeRemoteSessionAuthority: string | undefined;
 
 const TYPES_THAT_TRIGGER_NOTIFICATION = new Set<DeviceType>([DeviceType.Unknown]);
+
+interface ActiveRemoteSessionRegistration extends vscode.Disposable {
+    unregister(): Promise<void>;
+}
+
+function isCanceledNotificationError(error: unknown): boolean {
+    return error instanceof Error && (error.name === 'Canceled' || error.name === 'CancellationError');
+}
 
 /**
  * Checks the device store for devices that need a manually selected device type: **those without
@@ -52,6 +69,292 @@ export async function notifyDevicesWithUnknownType(
         + 'Some of your existing devices may need a type defined. Click Edit on a device to update it to get the best experience.';
 
     await vscodeWindow.showInformationMessage(message, 'Dismiss');
+}
+
+function notifyDeviceConnectedInDedicatedWindow(device: { id: string; name: string }): void {
+    void (async () => {
+        const selection = await vscode.window.showInformationMessage(
+            `Connected to ${device.name} in dedicated window.`,
+            'Dismiss',
+            'Disconnect'
+        );
+
+        if (selection !== 'Disconnect') {
+            return;
+        }
+
+        await remoteSessionRegistryService.unregister(device.id, vscode.env.sessionId).catch(error =>
+            logger.error('Failed to unregister active remote session on dedicated window disconnect', { error, deviceId: device.id })
+        );
+
+        try {
+            await vscode.commands.executeCommand('workbench.action.remote.close');
+        } catch (error) {
+            logger.error('Failed to close remote connection', { error, deviceId: device.id });
+            vscode.window.showErrorMessage('Could not close the remote connection automatically. Please close this window manually.');
+        }
+    })().catch(error => {
+        if (!isCanceledNotificationError(error)) {
+            logger.error('Failed to process dedicated window connection notification', { error, deviceId: device.id });
+        }
+    });
+}
+
+/**
+ * If this window is connected to a device via Remote-SSH, register it in the shared active
+ * session registry (backed by active-sessions.json) and keep its heartbeat alive for the
+ * lifetime of the window, so other windows can be notified without polling.
+ */
+function registerActiveRemoteSessionIfApplicable(context: vscode.ExtensionContext): void {
+    const disposeRegistration = () => {
+        activeRemoteSessionRegistration?.dispose();
+        activeRemoteSessionRegistration = undefined;
+        activeRemoteSessionAuthority = undefined;
+    };
+
+    const refreshRegistration = () => {
+        const remoteAuthority = vscode.env.remoteName === 'ssh-remote'
+            ? vscode.workspace.workspaceFolders?.[0]?.uri.authority
+            : undefined;
+
+        if (remoteAuthority === activeRemoteSessionAuthority) {
+            return;
+        }
+
+        disposeRegistration();
+
+        if (vscode.env.remoteName !== 'ssh-remote') {
+            return;
+        }
+
+        const registration = tryRegisterActiveRemoteSession(remoteAuthority);
+        if (!registration) {
+            return;
+        }
+
+        activeRemoteSessionRegistration = registration;
+        activeRemoteSessionAuthority = remoteAuthority;
+    };
+
+    refreshRegistration();
+
+    context.subscriptions.push(
+        vscode.workspace.onDidChangeWorkspaceFolders(refreshRegistration),
+        {
+            dispose: disposeRegistration
+        }
+    );
+}
+
+/**
+ * Attempt to resolve this window's connected device from its workspace folder authority and,
+ * if found, register it (and start its heartbeat) in the shared active session registry.
+ *
+ * @returns a disposable registration when a matching device is found
+ */
+function tryRegisterActiveRemoteSession(remoteAuthority: string | undefined): ActiveRemoteSessionRegistration | undefined {
+    const connectLabel = extractConnectLabelFromRemoteAuthority(remoteAuthority);
+    if (!connectLabel) {
+        return undefined;
+    }
+
+    const device = findDeviceByConnectLabel(deviceStore.getAll(), connectLabel);
+    if (!device) {
+        logger.debug('Connected via Remote-SSH but no matching device found for connect label', { connectLabel });
+        return undefined;
+    }
+
+    activeRemoteSessionDeviceId = device.id;
+
+    void vscode.commands.executeCommand('workbench.view.extension.zgx-toolkit').then(
+        undefined,
+        (error: unknown) => logger.error('Failed to reveal Z Toolkit view in connected window', { error, deviceId: device.id })
+    );
+
+    let isDisconnecting = false;
+    let isCheckingDisconnectRequest = false;
+    const disconnectIfRequested = async (): Promise<void> => {
+        if (isDisconnecting || isCheckingDisconnectRequest) {
+            return;
+        }
+
+        isCheckingDisconnectRequest = true;
+        try {
+            const disconnectRequested = await remoteSessionRegistryService.consumeDisconnectRequest(
+                device.id,
+                vscode.env.sessionId
+            );
+            if (!disconnectRequested) {
+                return;
+            }
+
+            isDisconnecting = true;
+            logger.info('Disconnecting active remote session requested by another window', { deviceId: device.id });
+            await remoteSessionRegistryService.unregister(device.id, vscode.env.sessionId).catch(error =>
+                logger.error('Failed to unregister active remote session after disconnect request', { error, deviceId: device.id })
+            );
+
+            // Re-check reachability now that the session is gone, so the status reflects reality.
+            await deviceReachabilityCheckService.checkDevicesReachability([device]).catch(error =>
+                logger.error('Failed to refresh device reachability after disconnect request', { error, deviceId: device.id })
+            );
+
+            try {
+                await vscode.commands.executeCommand('workbench.action.remote.close');
+            } catch (error) {
+                logger.error('Failed to close remote connection after disconnect request', { error, deviceId: device.id });
+                vscode.window.showErrorMessage('Could not close the remote connection automatically. Please close this window manually.');
+            }
+        } catch (error) {
+            logger.error('Failed to check for a remote session disconnect request', { error, deviceId: device.id });
+        } finally {
+            isCheckingDisconnectRequest = false;
+        }
+    };
+
+    const remoteSessionChangeSubscription = remoteSessionRegistryService.onDidChange(() => {
+        void disconnectIfRequested();
+    });
+
+    let unregisterPromise: Promise<void> | undefined;
+    const unregister = (): Promise<void> => {
+        unregisterPromise ??= remoteSessionRegistryService.unregister(device.id, vscode.env.sessionId)
+            .catch(error => {
+                unregisterPromise = undefined;
+                throw error;
+            });
+        return unregisterPromise;
+    };
+
+    remoteSessionRegistryService.register({ deviceId: device.id, connectLabel, windowId: vscode.env.sessionId })
+        .then(() => notifyDeviceConnectedInDedicatedWindow(device))
+        .catch(error => logger.error('Failed to register active remote session', { error, deviceId: device.id }));
+
+    const heartbeatHandle = setInterval(() => {
+        remoteSessionRegistryService.heartbeat(device.id, vscode.env.sessionId)
+            .then(disconnectIfRequested)
+            .catch(error => logger.error('Failed to refresh remote session heartbeat', { error, deviceId: device.id }));
+    }, REMOTE_SESSION_HEARTBEAT_INTERVAL_MS);
+
+    logger.info('Registered active remote session', { deviceId: device.id, connectLabel });
+    return {
+        dispose: () => {
+            remoteSessionChangeSubscription.dispose();
+            clearInterval(heartbeatHandle);
+            activeRemoteSessionDeviceId = undefined;
+            void unregister().catch(error =>
+                logger.error('Failed to unregister active remote session', { error, deviceId: device.id })
+            );
+        },
+        unregister
+    };
+}
+
+/**
+ * Keep the connection state store in sync with the shared active session registry: seed it
+ * with the current snapshot, then reconcile it (pruning stale entries) whenever the registry
+ * changes. Also reconciles on a timer, since a window that disappears without unregistering
+ * (e.g. crashed, or closed before its dispose ran) won't trigger any further file-change
+ * events - without a timer, the store would keep showing it as "connected" indefinitely
+ * instead of pruning it once its heartbeat goes stale.
+ */
+function subscribeConnectionStateStore(context: vscode.ExtensionContext): void {
+    const handleReconciliation = (entries: ActiveSessionEntry[]): void => {
+        const { disconnectedDeviceIds, staleDeviceIds } = connectionStateStore.reconcile(entries);
+        const staleDeviceIdSet = new Set(staleDeviceIds);
+        // Single notify for all stale devices instead of one per device.
+        deviceReachabilityStore.setManyResults(staleDeviceIds.map(deviceId => ({
+            deviceId,
+            status: DeviceStatus.CheckStatus,
+            error: 'Connection session became stale'
+        })));
+
+        const devicesToRecheck = disconnectedDeviceIds
+            .filter(id => !staleDeviceIdSet.has(id))
+            .map(id => deviceStore.get(id))
+            .filter((device): device is Device => !!device);
+
+        if (devicesToRecheck.length > 0) {
+            deviceReachabilityCheckService.checkDevicesReachability(devicesToRecheck).catch(error =>
+                logger.error('Failed to refresh device reachability after observing a disconnect', {
+                    error,
+                    deviceIds: devicesToRecheck.map(device => device.id)
+                })
+            );
+        }
+    };
+
+    const reconcileFromRegistry = () => {
+        remoteSessionRegistryService.readAll()
+            .then(handleReconciliation)
+            .catch(error => logger.error('Failed to reconcile connection state store from registry', { error }));
+    };
+
+    context.subscriptions.push(
+        remoteSessionRegistryService.onDidChange(handleReconciliation)
+    );
+
+    const reconcileInterval = setInterval(reconcileFromRegistry, REMOTE_SESSION_HEARTBEAT_INTERVAL_MS);
+    context.subscriptions.push({ dispose: () => clearInterval(reconcileInterval) });
+
+    reconcileFromRegistry();
+}
+
+function startDeviceReachabilityUpdater(context: vscode.ExtensionContext): void {
+    let checkInProgress = false;
+    let interval: ReturnType<typeof setInterval> | undefined;
+
+    const checkDevices = async (): Promise<void> => {
+        if (checkInProgress) {
+            return;
+        }
+
+        checkInProgress = true;
+        try {
+            await deviceReachabilityCheckService.checkDevicesReachability(deviceStore.getAll());
+        } catch (error) {
+            logger.error('Background device reachability check failed', { error });
+        } finally {
+            checkInProgress = false;
+        }
+    };
+
+    const startInterval = (): void => {
+        if (interval) {
+            clearInterval(interval);
+            interval = undefined;
+        }
+        if (!configService.getReachabilityEnabled()) {
+            return;
+        }
+        interval = setInterval(() => {
+            void checkDevices();
+        }, configService.getReachabilityRefreshIntervalMs());
+    };
+
+    if (configService.getReachabilityEnabled()) {
+        void checkDevices();
+    }
+    startInterval();
+
+    const configListener = vscode.workspace.onDidChangeConfiguration(event => {
+        if (event.affectsConfiguration(CONFIG_KEYS.REACHABILITY_REFRESH_INTERVAL)
+            || event.affectsConfiguration(CONFIG_KEYS.REACHABILITY_ENABLED)) {
+            logger.debug('Device reachability refresh settings changed, restarting timer', {
+                enabled: configService.getReachabilityEnabled(),
+                intervalMs: configService.getReachabilityRefreshIntervalMs()
+            });
+            startInterval();
+        }
+    });
+
+    context.subscriptions.push(configListener, {
+        dispose: () => {
+            if (interval) {
+                clearInterval(interval);
+            }
+        }
+    });
 }
 
 /** Returns false when migration requests a window reload; returns true when migration succeeds or is skipped and activation should continue. */
@@ -136,11 +439,20 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
         const messageRouter = new MessageRouter(logger);
 
         // Initialize global state persistence service (subscribes to store changes and persists them)
-        const storageService = await createGlobalStatePersistenceService(context, deviceStore, groupStore);
+        const storageService = await createGlobalStatePersistenceService(
+            context,
+            deviceStore,
+            groupStore,
+            deviceReachabilityStore
+        );
         context.subscriptions.push({
             dispose: () => storageService.dispose()
         });
         logger.debug('Storage service initialized (devices and groups)');
+
+        // Keep derived connection state in sync with the shared active session registry
+        subscribeConnectionStateStore(context);
+        startDeviceReachabilityUpdater(context);
 
         // Run DNS service migration for existing devices (backwards compatibility)
         // This runs asynchronously and doesn't block extension activation
@@ -186,6 +498,10 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
         );
 
         logger.debug('Z Toolkit provider registered');
+
+        // The provider must be registered before the connected Remote-SSH window reveals its
+        // Z Toolkit view container.
+        registerActiveRemoteSessionIfApplicable(context);
 
         // Register all commands
         registerCommands(context, provider);
@@ -237,13 +553,38 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
 /**
  * Deactivate the extension.
  * This is called when the extension is being unloaded.
+ *
+ * Returns a promise so VS Code awaits it before killing the extension host: the
+ * context.subscriptions disposable also unregisters the active remote session, but its
+ * dispose() is fire-and-forget, so this is what actually guarantees active-sessions.json
+ * is updated (matching the manual "Disconnect" button flow) before the process exits.
  */
-export function deactivate(): void {
+export async function deactivate(): Promise<void> {
     logger.info('Deactivating Z Toolkit extension');
 
     // Stop background updater
     deviceService.stopBackgroundUpdater();
     logger.debug('Background device updater stopped');
+
+    const activeSessionRegistration = activeRemoteSessionRegistration;
+    const activeSessionDeviceId = activeRemoteSessionDeviceId;
+    activeSessionRegistration?.dispose();
+    activeRemoteSessionRegistration = undefined;
+    activeRemoteSessionAuthority = undefined;
+
+    // Unregister this window's active remote session, if any
+    if (activeSessionRegistration || activeSessionDeviceId) {
+        try {
+            if (activeSessionRegistration) {
+                await activeSessionRegistration.unregister();
+            } else if (activeSessionDeviceId) {
+                await remoteSessionRegistryService.unregister(activeSessionDeviceId, vscode.env.sessionId);
+            }
+        } catch (error) {
+            logger.error('Failed to unregister active remote session during deactivation', { error });
+        }
+        activeRemoteSessionDeviceId = undefined;
+    }
 
     // Cleanup provider
     if (provider) {
@@ -260,4 +601,7 @@ export function deactivate(): void {
 export function resetActivationState(): void {
     isActivated = false;
     provider = undefined;
+    activeRemoteSessionDeviceId = undefined;
+    activeRemoteSessionRegistration = undefined;
+    activeRemoteSessionAuthority = undefined;
 }

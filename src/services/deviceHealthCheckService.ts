@@ -1,5 +1,5 @@
 /*
- * Copyright ©2025 HP Development Company, L.P.
+ * Copyright ©2025-2026 HP Development Company, L.P.
  * Licensed under the X11 License. See LICENSE file in the project root for details.
  */
 
@@ -19,6 +19,7 @@ export interface DeviceHealthCheckResult {
     isHealthy: boolean;
     error?: string;
     device: string;
+    hostVerificationFailed?: boolean;
 }
 
 /**
@@ -57,6 +58,9 @@ export class DeviceHealthCheckService {
                 logger.info('Device health check successful', { device: device.name });
             } else {
                 result.error = connectionResult.error || 'Failed to establish SSH connection';
+                if (connectionResult.hostVerificationFailed) {
+                    result.hostVerificationFailed = true;
+                }
                 
                 logger.warn('Device health check failed', { 
                     device: device.name,

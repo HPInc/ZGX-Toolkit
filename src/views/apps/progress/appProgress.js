@@ -1,5 +1,5 @@
 /*
- * Copyright ©2025 HP Development Company, L.P.
+ * Copyright ©2025-2026 HP Development Company, L.P.
  * Licensed under the X11 License. See LICENSE file in the project root for details.
  */
 
@@ -16,6 +16,13 @@
         const passwordInput = document.getElementById('password-input');
         const passwordSubmitBtn = document.getElementById('password-submit-btn');
         const passwordFeedback = document.getElementById('password-feedback');
+        const hostTrustActions = document.getElementById('host-trust-actions');
+        const hostTrustReturnBtn = document.getElementById('host-trust-return-btn');
+        let hostVerificationFailed = false;
+
+        hostTrustReturnBtn?.addEventListener('click', () => {
+            vscode.postMessage({ type: 'cancel' });
+        });
 
         // Password submission handler
         if (passwordSubmitBtn) {
@@ -31,6 +38,7 @@
         }
 
         function submitPassword() {
+            if (hostVerificationFailed) return;
             const password = passwordInput?.value;
             if (!password || password.trim().length === 0) {
                 showPasswordFeedback('Password cannot be empty', 'error');
@@ -102,8 +110,18 @@
                             hidePasswordSection();
                         }, 500);
                     } else {
-                        showPasswordFeedback('Invalid password.', 'error');
-                        resetPasswordInput();
+                        hostVerificationFailed = message.hostVerificationFailed === true;
+                        showPasswordFeedback(message.error || 'Invalid password.', 'error');
+                        if (hostVerificationFailed) {
+                            if (passwordInput) {
+                                passwordInput.value = '';
+                                passwordInput.disabled = true;
+                            }
+                            if (passwordSubmitBtn) passwordSubmitBtn.disabled = true;
+                            hostTrustActions?.classList.remove('hidden');
+                        } else {
+                            resetPasswordInput();
+                        }
                     }
                     break;
 

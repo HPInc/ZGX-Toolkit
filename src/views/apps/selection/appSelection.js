@@ -655,7 +655,9 @@
                         message.errorDetails, 
                         message.error,
                         onClose,
-                        message.buttonText
+                        message.buttonText,
+                        undefined,
+                        message.helpLinks
                     );
                 } else {
                     console.error('Error overlay component not loaded');

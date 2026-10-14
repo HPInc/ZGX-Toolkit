@@ -50,6 +50,7 @@
 
 .password-input {
     flex: 1;
+    min-width: 0;
     padding: 10px 14px;
     background-color: var(--vscode-input-background);
     color: var(--vscode-input-foreground);
@@ -67,6 +68,15 @@
 .password-input:disabled {
     opacity: 0.5;
     cursor: not-allowed;
+}
+
+.password-input-container .btn {
+    flex-shrink: 0;
+}
+
+#host-trust-return-btn {
+    max-width: 100%;
+    white-space: normal;
 }
 
 .btn-primary {
@@ -96,6 +106,8 @@
     border-radius: 4px;
     font-size: 0.95em;
     display: none;
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
 }
 
 .password-feedback.visible {

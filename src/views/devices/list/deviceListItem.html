@@ -3,17 +3,30 @@
   Licensed under the X11 License. See LICENSE file in the project root for details.
 -->
 
-<li class="device-item" data-id="{{id}}">
+<li 
+    class="device-item
+        {{#if isConnected}} device-item-connected{{/if}}
+        {{#if notReachable}}device-item-not-reachable{{/if}}
+        {{#if unreachable}} device-item-unreachable{{/if}}"
+    data-id="{{id}}"
+    data-device-status="{{deviceStatus}}"
+    data-not-reachable="{{notReachable}}"
+    data-unreachable="{{unreachable}}"
+    data-reachability-checking="{{reachabilityChecking}}"
+    data-reachability-checked-at="{{reachabilityCheckedAt}}"
+    data-reachability-explicit="{{reachabilityExplicit}}">
     <div class="device-item-icons">
+        {{#unless isConnectedHere}}
         {{#if needsDnsRegistration}}
         <button class="device-item-icon dns-warning-icon" data-action="register-dns" data-id="{{id}}" title="mDNS service not registered. Click to register for device discovery." aria-label="Register mDNS service for {{name}}">
             <i class="codicon codicon-warning" aria-hidden="true"></i>
         </button>
         {{/if}}
-        <button class="device-item-icon edit-icon" data-action="edit" data-id="{{id}}" title="Edit device" aria-label="Edit device {{name}}">
+        {{/unless}}
+        <button class="device-item-icon edit-icon" data-action="edit" data-id="{{id}}" title="{{#if isConnected}}This action is unavailable while connected to device.{{else}}Edit device{{/if}}" aria-label="Edit device {{name}}"{{#if isConnected}} disabled{{/if}}>
             <i class="codicon codicon-edit" aria-hidden="true"></i>
         </button>
-        <button class="device-item-icon remove-icon" data-action="delete" data-id="{{id}}" title="Remove device" aria-label="Remove device {{name}}">
+        <button class="device-item-icon remove-icon" data-action="delete" data-id="{{id}}" title="{{#if isConnected}}This action is unavailable while connected to device.{{else}}Remove device{{/if}}" aria-label="Remove device {{name}}"{{#if isConnected}} disabled{{/if}}>
             <i class="codicon codicon-trash" aria-hidden="true"></i>
         </button>
     </div>
@@ -26,25 +39,59 @@
     </div>
     {{/unless}}
     {{/if}}
-    <div class="device-actions">
+    <div class="device-actions{{#if isConnectedElsewhere}} device-actions-connected-elsewhere{{/if}}">
+        {{#if isConnectedHere}}
+        <fieldset class="split-button split-button-secondary" aria-label="Connection status for {{name}}">
+            <button class="split-button-main" type="button" title="Connected to {{name}}" aria-label="Connected to {{name}}" disabled>Connected</button>
+            <button class="split-button-dropdown" type="button" data-action="toggle-dropdown" data-id="{{id}}" aria-controls="connected-dropdown-{{id}}" aria-label="Show connection options" aria-haspopup="true" aria-expanded="false"></button>
+            <div class="dropdown-content" id="connected-dropdown-{{id}}" role="menu" aria-label="Connection options">
+                <button class="dropdown-item" type="button" data-action="disconnect-device" data-id="{{id}}" role="menuitem">Disconnect</button>
+            </div>
+        </fieldset>
+        <div class="manage-apps-group">
+            <button class="btn btn-secondary manage-apps-button" data-action="manage-apps" data-id="{{id}}" title="Disconnect from the device to manage applications." aria-label="Manage Apps for {{name}}" disabled>
+                Manage Apps
+            </button>
+        </div>
+        {{else}}
         {{#if isSetup}}
         {{#if useKeyAuth}}
+        {{#if isConnectedElsewhere}}
+        <output class="status-connected" aria-label="{{name}} is connected in another window">
+            <span class="codicon codicon-vm-connect" aria-hidden="true"></span> Connected in another window
+        </output>
+        <fieldset class="split-button split-button-secondary" aria-label="Connection status for {{name}}">
+            <button class="split-button-main" type="button" title="Connected to {{name}}" aria-label="Connected to {{name}}" disabled>Connected</button>
+            <button class="split-button-dropdown" type="button" data-action="toggle-dropdown" data-id="{{id}}" aria-controls="connected-elsewhere-dropdown-{{id}}" aria-label="Show connection options" aria-haspopup="true" aria-expanded="false"></button>
+            <div class="dropdown-content" id="connected-elsewhere-dropdown-{{id}}" role="menu" aria-label="Connection options">
+                <button class="dropdown-item" type="button" data-action="disconnect-device" data-id="{{id}}" role="menuitem">Disconnect</button>
+            </div>
+        </fieldset>
+        {{else}}
         <fieldset class="split-button" aria-label="Connection options for {{name}}">
             <button class="split-button-main" data-action="connect-default" data-id="{{id}}" aria-label="Connect to {{name}} using default method">Connect</button>
-            <button class="split-button-dropdown" data-action="toggle-dropdown" data-id="{{id}}" aria-label="Show connection options" aria-haspopup="true" aria-expanded="false"></button>
+            <button class="split-button-dropdown" data-action="toggle-dropdown" data-id="{{id}}" aria-controls="dropdown-{{id}}" aria-label="Show connection options" aria-haspopup="true" aria-expanded="false"></button>
             <div class="dropdown-content" id="dropdown-{{id}}" role="menu" aria-label="Connection options">
+                <button class="dropdown-item" data-action="check-device-reachability" data-id="{{id}}" role="menuitem">Refresh Status</button>
                 <button class="dropdown-item" data-action="connect-current" data-id="{{id}}" role="menuitem">Current Window</button>
                 <button class="dropdown-item" data-action="connect-new" data-id="{{id}}" role="menuitem">New Window</button>
             </div>
         </fieldset>
-        <button class="btn btn-secondary manage-apps-button" data-action="manage-apps" data-id="{{id}}" title="Manage applications" aria-label="Manage Apps for {{name}}">
-            Manage Apps
-        </button>
+        {{/if}}
+        <div class="manage-apps-group">
+            <button class="btn btn-secondary manage-apps-button" data-action="manage-apps" data-id="{{id}}" title="{{#if isConnectedHere}}Disconnect to Manage Apps{{else}}Manage applications{{/if}}" aria-label="Manage Apps for {{name}}"{{#if isConnectedHere}} disabled{{/if}}>
+                Manage Apps
+            </button>
+            {{#if isConnectedHere}}
+            <span class="manage-apps-hint">Disconnect to Manage Apps</span>
+            {{/if}}
+        </div>
         {{else}}
         <button class="btn" data-action="setup" data-id="{{id}}" aria-label="Set up device {{name}}">Setup</button>
         {{/if}}
         {{else}}
         <button class="btn" data-action="setup" data-id="{{id}}" aria-label="Set up device {{name}}">Setup</button>
+        {{/if}}
         {{/if}}
     </div>
 </li>

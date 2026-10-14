@@ -8,6 +8,7 @@ import { Device, DeviceType } from '../types/devices';
 import { ConnectXGroup } from '../types/connectxGroup';
 import { DeviceStore } from '../store/deviceStore';
 import { GroupStore } from '../store/groupStore';
+import { DeviceReachabilityStore, DeviceReachabilitySnapshot } from '../store/deviceReachabilityStore';
 import { logger } from '../utils/logger';
 
 /**
@@ -20,6 +21,8 @@ export interface StorageServiceConfig {
     deviceStore: DeviceStore;
     /** group store to persist */
     groupStore: GroupStore;
+    /** Reachability state to persist */
+    deviceReachabilityStore?: DeviceReachabilityStore;
 }
 
 /**
@@ -34,6 +37,8 @@ export class GlobalStatePersistenceService {
     private static readonly GROUPS_STORAGE_KEY = 'HPInc.zgx-toolkit.groups';
     private deviceUnsubscribe?: () => void;
     private groupUnsubscribe?: () => void;
+    private reachabilityUnsubscribe?: () => void;
+    private static readonly REACHABILITY_STORAGE_KEY = 'HPInc.zgx-toolkit.deviceReachability';
 
     constructor(private readonly config: StorageServiceConfig) { }
 
@@ -48,6 +53,7 @@ export class GlobalStatePersistenceService {
             // Load devices and groups from storage
             await this.loadDevices();
             await this.loadGroups();
+            await this.loadReachability();
 
             // Subscribe to store changes for auto-save
             this.deviceUnsubscribe = this.config.deviceStore.subscribe(async (devices) => {
@@ -58,11 +64,45 @@ export class GlobalStatePersistenceService {
                 await this.saveGroups(groups);
             });
 
+            if (this.config.deviceReachabilityStore) {
+                this.reachabilityUnsubscribe = this.config.deviceReachabilityStore.subscribe(async () => {
+                    await this.saveReachability();
+                });
+            }
+
             logger.info('Storage service initialized successfully');
         } catch (error) {
             logger.error('Failed to initialize storage service', { error });
             throw error;
         }
+    }
+
+    private async loadReachability(): Promise<void> {
+        if (!this.config.deviceReachabilityStore) {
+            return;
+        }
+
+        const snapshot = this.config.context.globalState.get<DeviceReachabilitySnapshot>(
+            GlobalStatePersistenceService.REACHABILITY_STORAGE_KEY
+        );
+
+        if (snapshot?.states && typeof snapshot.states === 'object') {
+            this.config.deviceReachabilityStore.restore(snapshot);
+            logger.info('Device reachability state loaded from storage', {
+                count: Object.keys(snapshot.states).length
+            });
+        }
+    }
+
+    private async saveReachability(): Promise<void> {
+        if (!this.config.deviceReachabilityStore) {
+            return;
+        }
+
+        await this.config.context.globalState.update(
+            GlobalStatePersistenceService.REACHABILITY_STORAGE_KEY,
+            this.config.deviceReachabilityStore.getSnapshot()
+        );
     }
 
     /**
@@ -464,6 +504,11 @@ export class GlobalStatePersistenceService {
             this.groupUnsubscribe();
             this.groupUnsubscribe = undefined;
         }
+
+        if (this.reachabilityUnsubscribe) {
+            this.reachabilityUnsubscribe();
+            this.reachabilityUnsubscribe = undefined;
+        }
     }
 
     /**
@@ -494,9 +539,10 @@ export class GlobalStatePersistenceService {
 export async function createGlobalStatePersistenceService(
     context: vscode.ExtensionContext,
     deviceStore: DeviceStore,
-    groupStore: GroupStore
+    groupStore: GroupStore,
+    deviceReachabilityStore: DeviceReachabilityStore
 ): Promise<GlobalStatePersistenceService> {
-    const service = new GlobalStatePersistenceService({ context, deviceStore, groupStore });
+    const service = new GlobalStatePersistenceService({ context, deviceStore, groupStore, deviceReachabilityStore });
     await service.initialize();
     return service;
 }

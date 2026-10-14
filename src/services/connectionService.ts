@@ -14,8 +14,13 @@ import * as path from 'node:path';
 import * as fs from 'node:fs';
 import { ChildProcess, spawn, SpawnOptions } from 'node:child_process';
 import { Device } from '../types/devices';
+import { ActiveSessionEntry } from '../types/remoteSession';
 import { logger } from '../utils/logger';
+import { buildRemoteConnectLabel } from '../utils/remoteConnectLabel';
+import { REMOTE_SESSION_CONFIRMATION_TIMEOUT_MS, STALE_SESSION_THRESHOLD_MS } from '../constants/time';
 import { DnsServiceRegistrationResult, dnsServiceRegistration } from './dnsRegistrationService';
+import { remoteSessionRegistryService } from './remoteSessionRegistryService';
+import { SSHHostVerificationError } from '../utils/sshHostVerifier';
 
 type TrustedSshBinaryName = 'ssh' | 'ssh-keygen';
 
@@ -44,6 +49,11 @@ export interface ManualSSHCommands {
     linux: { keyGen: string; copy: string };
     mac: { keyGen: string; copy: string };
     testCommand: string;
+}
+
+interface RemoteSessionIdentity {
+    windowId: string;
+    connectedAt: string;
 }
 
 /**
@@ -482,7 +492,7 @@ export class ConnectionService {
      * @param password The password to validate
      * @returns Promise resolving to validation result
      */
-    public async validatePasswordForDNS(device: Device, password: string): Promise<{ valid: boolean; isConnectionError: boolean; error?: string }> {
+    public async validatePasswordForDNS(device: Device, password: string): Promise<{ valid: boolean; isConnectionError: boolean; hostVerificationFailed?: boolean; error?: string }> {
         logger.info('Validating password for mDNS registration', { device: device.name });
 
         try {
@@ -492,6 +502,10 @@ export class ConnectionService {
                 device: device.name,
                 error: error instanceof Error ? error.message : String(error)
             });
+
+            if (error instanceof SSHHostVerificationError) {
+                return { valid: false, isConnectionError: true, hostVerificationFailed: true, error: error.message };
+            }
             
             return {
                 valid: false,
@@ -563,6 +577,7 @@ export class ConnectionService {
             // Use Remote Explorer's connection method
             const remoteUri = `vscode-remote://ssh-remote+${connectLabel}/home/${device.username}`;
             logger.debug('Opening remote folder', { uri: remoteUri });
+            const preConnectSessionIdentity = await this.getRemoteSessionIdentity(device.id);
 
             await vscode.commands.executeCommand(
                 'vscode.openFolder',
@@ -570,8 +585,26 @@ export class ConnectionService {
                 { forceNewWindow: forceNewWindow ?? false }
             );
 
-            logger.info('Connection initiated successfully', { device: device.name });
-            vscode.window.showInformationMessage(`Successfully connected to ${device.name}!`);
+            logger.info('Connection initiated, waiting for remote-side confirmation', { device: device.name });
+
+            // The openFolder command only starts the connection; treat the arrival of the
+            // remote side's active session registry entry as the real success signal instead
+            // of assuming success immediately (a false positive if the remote never connects).
+            const confirmed = await this.waitForRemoteSessionConfirmation(
+                device.id,
+                REMOTE_SESSION_CONFIRMATION_TIMEOUT_MS,
+                preConnectSessionIdentity
+            );
+
+            if (confirmed) {
+                logger.info('Connection confirmed via active session registry', { device: device.name });
+                vscode.window.showInformationMessage(`Successfully connected to ${device.name}!`);
+            } else {
+                logger.warn('Could not confirm connection within the timeout window', { device: device.name });
+                vscode.window.showWarningMessage(
+                    `Couldn't confirm the connection to ${device.name}. It may still be establishing - check the new window.`
+                );
+            }
         } catch (error) {
             logger.error('Failed to connect via Remote-SSH', {
                 error: error instanceof Error ? error.message : String(error),
@@ -617,21 +650,129 @@ export class ConnectionService {
     }
 
     /**
+     * Wait for the remote side to register its active session entry for a device (the real
+     * signal that the Remote-SSH connection succeeded), racing against a bounded timeout.
+     *
+     * @param deviceId The device identifier to watch for
+     * @param timeoutMs Maximum time to wait before giving up
+     * @returns true if the device's session entry appeared in time, false if the timeout elapsed
+     */
+    private async waitForRemoteSessionConfirmation(
+        deviceId: string,
+        timeoutMs: number,
+        preConnectSessionIdentity?: RemoteSessionIdentity
+    ): Promise<boolean> {
+        return new Promise<boolean>(resolve => {
+            let settled = false;
+            // Mutable holder (rather than reassigned `let`s) since the onDidChange listener
+            // may fire synchronously, before a plain `let` assignment would complete.
+            const handles: {
+                poll?: ReturnType<typeof setInterval>;
+                timeout?: ReturnType<typeof setTimeout>;
+                changeSubscription?: vscode.Disposable;
+            } = {};
+
+            const finish = (result: boolean) => {
+                if (settled) {
+                    return;
+                }
+                settled = true;
+                clearInterval(handles.poll);
+                clearTimeout(handles.timeout);
+                handles.changeSubscription?.dispose();
+                resolve(result);
+            };
+
+            handles.changeSubscription = remoteSessionRegistryService.onDidChange(entries => {
+                if (entries.some(entry => this.isConfirmedSessionForAttempt(entry, deviceId, preConnectSessionIdentity))) {
+                    finish(true);
+                }
+            });
+
+            // The listener above may have fired synchronously and already settled the promise;
+            // in that case, don't leave the poll/timeout handles running forever uncleared.
+            if (settled) {
+                return;
+            }
+
+            handles.poll = setInterval(async () => {
+                if (await this.hasRemoteSession(deviceId, preConnectSessionIdentity)) {
+                    finish(true);
+                }
+            }, 1000);
+
+            handles.timeout = setTimeout(() => finish(false), timeoutMs);
+        });
+    }
+
+    private async hasRemoteSession(
+        deviceId: string,
+        preConnectSessionIdentity?: RemoteSessionIdentity
+    ): Promise<boolean> {
+        try {
+            const entries = await remoteSessionRegistryService.readAll();
+            return entries.some(entry => this.isConfirmedSessionForAttempt(entry, deviceId, preConnectSessionIdentity));
+        } catch (error) {
+            logger.error('Failed to poll active session registry', { error, deviceId });
+            return false;
+        }
+    }
+
+    private async getRemoteSessionIdentity(deviceId: string): Promise<RemoteSessionIdentity | undefined> {
+        try {
+            const entries = await remoteSessionRegistryService.readAll();
+            const existingEntry = entries.find(entry => entry.deviceId === deviceId);
+            if (!existingEntry) {
+                return undefined;
+            }
+
+            return {
+                windowId: existingEntry.windowId,
+                connectedAt: existingEntry.connectedAt
+            };
+        } catch (error) {
+            logger.error('Failed to read active session registry before connection attempt', { error, deviceId });
+            return undefined;
+        }
+    }
+
+    private isConfirmedSessionForAttempt(
+        entry: ActiveSessionEntry,
+        deviceId: string,
+        preConnectSessionIdentity?: RemoteSessionIdentity
+    ): boolean {
+        if (entry.deviceId !== deviceId) {
+            return false;
+        }
+
+        const lastHeartbeatMs = Date.parse(entry.lastHeartbeat);
+        if (!Number.isFinite(lastHeartbeatMs) || Date.now() - lastHeartbeatMs > STALE_SESSION_THRESHOLD_MS) {
+            return false;
+        }
+
+        if (!preConnectSessionIdentity) {
+            return true;
+        }
+
+        return (
+            entry.windowId !== preConnectSessionIdentity.windowId ||
+            entry.connectedAt !== preConnectSessionIdentity.connectedAt
+        );
+    }
+
+    /**
      * Build the SSH connect label, registering a config alias when a non-default port is used.
      */
     private async resolveConnectLabel(device: Device): Promise<string> {
-        const sshTarget = `${device.username}@${device.host}`;
-        logger.debug('SSH target', { target: sshTarget, port: device.port });
+        const connectLabel = buildRemoteConnectLabel(device);
+        logger.debug('SSH target', { target: connectLabel, port: device.port });
 
         if (device.port === 22) {
-            return sshTarget;
+            return connectLabel;
         }
 
-        // Derive a stable alias
-        const filteredHost = device.host.replaceAll(/[^a-zA-Z0-9_.-]/g, '');
-        const alias = `zgx-${filteredHost}-${device.port}`;
-        await this.ensureSSHConfigEntry(alias, device);
-        return alias;
+        await this.ensureSSHConfigEntry(connectLabel, device);
+        return connectLabel;
     }
 
     /**

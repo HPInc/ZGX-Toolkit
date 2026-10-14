@@ -34,8 +34,9 @@
      * @param {function|string} onClose - Optional callback to handle close action. Can be a function or a message type string. If not provided, sends 'close-error-overlay' message.
      * @param {string} buttonText - Optional custom text for the close button. Defaults to 'Return to Device Manager'.
      * @param {object} secondaryButton - Optional secondary button config: { text: string, onClick: function|string }
+    * @param {Array<{text: string, url: string}>} helpLinks - Optional HTTP(S) help links.
      */
-    window.showErrorOverlay = function(errorTitle, errorDetails, error, onClose, buttonText, secondaryButton) {
+    window.showErrorOverlay = function(errorTitle, errorDetails, error, onClose, buttonText, secondaryButton, helpLinks = []) {
         // Store callbacks
         closeCallback = onClose;
         secondaryCallback = secondaryButton ? secondaryButton.onClick : null;
@@ -46,7 +47,7 @@
             callbacks: { closeCallback, secondaryCallback },
             
             onSetupContent: function(overlayContent) {
-                setupErrorOverlayContent(overlayContent, errorTitle, errorDetails, error, buttonText, secondaryButton);
+                setupErrorOverlayContent(overlayContent, errorTitle, errorDetails, error, buttonText, secondaryButton, helpLinks);
             },
             
             onAttachEvents: function() {
@@ -58,13 +59,42 @@
     /**
      * Setup error overlay content
      */
-    function setupErrorOverlayContent(overlayContent, errorTitle, errorDetails, error, buttonText, secondaryButton) {
+    function setupErrorOverlayContent(overlayContent, errorTitle, errorDetails, error, buttonText, secondaryButton, helpLinks) {
         const titleEl = overlayContent.querySelector('#error-overlay-title');
         const messageEl = overlayContent.querySelector('#error-overlay-message');
         const detailsTextEl = overlayContent.querySelector('#error-overlay-details-text');
         const detailsEl = overlayContent.querySelector('#error-overlay-details');
         const closeBtnEl = overlayContent.querySelector('#error-overlay-close-btn');
         const secondaryBtnEl = overlayContent.querySelector('#error-overlay-secondary-btn');
+        const helpLinksEl = overlayContent.querySelector('#error-overlay-help-links');
+
+        if (helpLinksEl) {
+            helpLinksEl.replaceChildren();
+            helpLinksEl.hidden = true;
+            for (const link of Array.isArray(helpLinks) ? helpLinks : []) {
+                if (!link || typeof link.text !== 'string' || !link.text.trim() || typeof link.url !== 'string') {
+                    continue;
+                }
+                let url;
+                try {
+                    url = new URL(link.url);
+                } catch {
+                    continue;
+                }
+                if (!['https:', 'http:'].includes(url.protocol) || url.username || url.password) {
+                    continue;
+                }
+                const paragraph = document.createElement('p');
+                const anchor = document.createElement('a');
+                anchor.textContent = link.text;
+                anchor.href = url.href;
+                anchor.target = '_blank';
+                anchor.rel = 'noopener noreferrer';
+                paragraph.appendChild(anchor);
+                helpLinksEl.appendChild(paragraph);
+                helpLinksEl.hidden = false;
+            }
+        }
         
         if (titleEl) {
             titleEl.textContent = errorTitle;

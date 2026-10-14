@@ -188,6 +188,31 @@ export interface TestConnectionMessage {
 }
 
 /**
+ * Check device reachability message to verify if a specific device is reachable over the network.
+ */
+export interface CheckDeviceReachabilityMessage {
+    type: 'check-device-reachability';
+    deviceId: string;
+}
+
+/**
+ * Refresh all reachability message to trigger a re-evaluation of the reachability status for all devices.
+ */
+export interface RefreshAllReachabilityMessage {
+    type: 'refresh-all-reachability';
+}
+
+/**
+ * Device manager form state tracking from the webview. Used so background refreshes
+ * preserve an open add/edit form instead of closing it while the user is working.
+ */
+export interface DeviceFormStateMessage {
+    type: 'device-form-state';
+    mode: 'add' | 'edit' | 'closed';
+    deviceId?: string;
+}
+
+/**
  * Show error message in the UI.
  */
 export interface ShowErrorMessage {
@@ -496,12 +521,12 @@ export interface ConfirmUnpairMessage {
 }
 
 /**
- * Password submitted message - contains sudo password for ConnectX configuration.
+ * Password submitted message - contains per-device sudo passwords for ConnectX configuration.
  */
 export interface PasswordSubmittedMessage {
     type: 'password-submitted';
-    /** Sudo password for configuration */
-    password: string;
+    /** Sudo passwords keyed by device identifier */
+    passwords: Record<string, string>;
     /** Device IDs to be paired */
     deviceIds: string[];
     /** Device names for display purposes */
@@ -528,12 +553,12 @@ export interface ConfirmDeletePairedDeviceMessage {
 }
 
 /**
- * Password submitted for delete message - contains sudo password for paired device deletion.
+ * Password submitted for delete message - contains per-device sudo passwords for paired device deletion.
  */
 export interface PasswordSubmittedForDeleteMessage {
     type: 'password-submitted-for-delete';
-    /** Sudo password for unconfiguration */
-    password: string;
+    /** Sudo passwords keyed by device identifier */
+    passwords: Record<string, string>;
     /** Device ID to delete */
     deviceId: string;
     /** Group ID to unconfigure */
@@ -646,7 +671,10 @@ export type Message =
   | ZrtAnnouncementDismissMessage
   | ZrtAnnouncementLearnMoreMessage
   | ZrtInfoLearnMoreMessage
-  | ZrtInfoCloseMessage;
+  | ZrtInfoCloseMessage
+  | CheckDeviceReachabilityMessage
+  | RefreshAllReachabilityMessage
+  | DeviceFormStateMessage;
 
 /**
  * Helper type to extract message payload by type.

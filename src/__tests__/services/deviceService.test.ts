@@ -14,6 +14,16 @@ import { DeviceConfig, Device, DeviceType } from '../../types/devices';
 import { ITelemetryService } from '../../types/telemetry';
 import { DeviceDiscoveryService } from '../../services/deviceDiscoveryService';
 
+// Mock the connectionService singleton so connectToDevice resolves deterministically instead
+// of exercising the real Remote-SSH confirmation wait (which races real timers).
+jest.mock('../../services/connectionService', () => ({
+    connectionService: {
+        connectViaRemoteSSH: jest.fn().mockResolvedValue(undefined)
+    }
+}));
+
+import { connectionService } from '../../services/connectionService';
+
 // Mock telemetry service
 const mockTelemetryService: ITelemetryService = {
     trackEvent: jest.fn(),
@@ -466,31 +476,9 @@ describe('DeviceService', () => {
             const device = await createTestDevice(service, 'Test Device');
             await service.updateDevice(device.id, { isSetup: true });
 
-            // Mock the connectionService module
-            const mockConnectViaRemoteSSH = jest.fn().mockResolvedValue(undefined);
-            jest.doMock('../../services/connectionService', () => ({
-                connectionService: {
-                    connectViaRemoteSSH: mockConnectViaRemoteSSH
-                }
-            }), { virtual: true });
+            await service.connectToDevice(device.id, false);
 
-            // Import fresh to get mocked version
-            const { DeviceService: FreshDeviceService } = await import('../../services/deviceService.js');
-            const freshService = new FreshDeviceService({ 
-                store, 
-                telemetry: mockTelemetryService,
-                discovery: mockDiscoveryService
-            });
-
-            try {
-                await freshService.connectToDevice(device.id, false);
-            } catch {
-                // Expected to fail because connection service is complex to mock
-                // But we're testing the flow reaches that point
-            }
-
-            // Cleanup
-            jest.dontMock('../../services/connectionService');
+            expect(connectionService.connectViaRemoteSSH).toHaveBeenCalled();
         });
 
         it('should update lastConnectionMethod when newWindow is specified', async () => {

@@ -1,5 +1,5 @@
 <!--
-    Copyright ©2025-2026 HP Development Company, L.P.
+  Copyright ©2026 HP Development Company, L.P.
   Licensed under the X11 License. See LICENSE file in the project root for details.
 --> 
   
@@ -21,8 +21,12 @@
                 <input type="password" id="password-input" class="password-input" placeholder="Enter your password for {{deviceName}}" />
                 <button id="password-submit-btn" class="btn btn-primary">Continue</button>
             </div>
-            <p class="password-info"><span class="info-icon" title="Security notice">ℹ️</span> Your password is used locally, never stored or shared.</p>
-            <div class="password-feedback" id="password-feedback"></div>
+            <p class="password-info"><span class="info-icon" title="Security notice">ℹ️</span> Your password is sent over encrypted SSH only after the device's host key is verified and never stored or shared.</p>
+            <div class="password-feedback" id="password-feedback" role="alert"></div>
+            <div id="host-trust-actions" class="hidden">
+                <p><a href="https://github.com/HPInc/ZGX-Toolkit/wiki/SSH-Host-Key-Troubleshooting" target="_blank" rel="noopener noreferrer">SSH Host Key Troubleshooting</a></p>
+                <button id="host-trust-return-btn" class="btn btn-secondary"><span class="codicon codicon-arrow-left" aria-hidden="true"></span> Return to Device Manager</button>
+            </div>
         </div>
     </div>
 

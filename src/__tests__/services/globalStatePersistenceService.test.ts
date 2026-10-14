@@ -11,8 +11,10 @@
 import { GlobalStatePersistenceService } from '../../services/globalStatePersistenceService';
 import { DeviceStore } from '../../store/deviceStore';
 import { GroupStore } from '../../store/groupStore';
+import { DeviceReachabilityStore } from '../../store/deviceReachabilityStore';
 import { Device, DeviceType } from '../../types/devices';
 import { ConnectXGroup } from '../../types/connectxGroup';
+import { DeviceStatus } from '../../types/devicestatus';
 import * as vscode from 'vscode';
 
 // Mock logger
@@ -31,6 +33,7 @@ describe('GlobalStatePersistenceService', () => {
     let mockContext: jest.Mocked<vscode.ExtensionContext>;
     let mockDeviceStore: DeviceStore;
     let mockGroupStore: GroupStore;
+    let mockReachabilityStore: DeviceReachabilityStore;
     let mockGlobalState: Map<string, any>;
     let mockDevices: Device[];
     let mockGroups: ConnectXGroup[];
@@ -123,12 +126,14 @@ describe('GlobalStatePersistenceService', () => {
         // Create real stores
         mockDeviceStore = new DeviceStore();
         mockGroupStore = new GroupStore();
+        mockReachabilityStore = new DeviceReachabilityStore();
 
         // Create service
         service = new GlobalStatePersistenceService({
             context: mockContext,
             deviceStore: mockDeviceStore,
-            groupStore: mockGroupStore
+            groupStore: mockGroupStore,
+            deviceReachabilityStore: mockReachabilityStore
         });
     });
 
@@ -164,6 +169,46 @@ describe('GlobalStatePersistenceService', () => {
             const groups = mockGroupStore.getAll();
             expect(groups).toHaveLength(1);
             expect(groups[0].id).toBe('group-1');
+        });
+
+        it('should initialize persisted reachability state as check-status', async () => {
+            mockGlobalState.set('HPInc.zgx-toolkit.deviceReachability', {
+                states: {
+                    'device-1': { status: DeviceStatus.Reachable, checking: false }
+                },
+                lastQueryTimestamp: '2026-09-18T10:00:00.000Z'
+            });
+
+            await service.initialize();
+
+            expect(mockReachabilityStore.get('device-1')).toEqual({
+                status: DeviceStatus.CheckStatus,
+                checking: false
+            });
+            expect(mockReachabilityStore.getLastQueryTimestamp()).toBe('Never');
+        });
+    });
+
+    describe('reachability persistence', () => {
+        it('saves reachability changes and unsubscribes on dispose', async () => {
+            await service.initialize();
+            mockReachabilityStore.setResult('device-1', DeviceStatus.Reachable);
+            await new Promise(resolve => setTimeout(resolve, 10));
+
+            expect(mockContext.globalState.update).toHaveBeenCalledWith(
+                'HPInc.zgx-toolkit.deviceReachability',
+                expect.objectContaining({
+                    states: expect.objectContaining({
+                        'device-1': expect.objectContaining({ status: DeviceStatus.Reachable })
+                    })
+                })
+            );
+
+            const updateCalls = (mockContext.globalState.update as jest.Mock).mock.calls.length;
+            service.dispose();
+            mockReachabilityStore.clear();
+            await new Promise(resolve => setTimeout(resolve, 10));
+            expect((mockContext.globalState.update as jest.Mock).mock.calls.length).toBe(updateCalls);
         });
     });
 

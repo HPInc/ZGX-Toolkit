@@ -38,6 +38,7 @@ export interface GroupServiceConfig {
  * Minimum number of devices required in a group
  */
 const MIN_GROUP_SIZE = 2;
+type DevicePasswords = Record<string, string>;
 
 /**
  * Shape of a single network interface entry parsed from `lshw -class network -json` output.
@@ -114,10 +115,10 @@ export class ConnectXGroupService {
      * If NIC configuration fails, the group is automatically rolled back (removed from the store).
      *
      * @param groupConfig Configuration for the new group (device IDs, optional metadata)
-     * @param password Sudo password used to configure each device
+    * @param passwords Sudo passwords keyed by device identifier used to configure each device
      * @returns Operation result indicating success or failure, including the created group on success
      */
-    public async createGroupAndConfigureNICs(groupConfig: ConnectXGroupConfig, password: string): Promise<ConnectXGroupOperationResult> {
+    public async createGroupAndConfigureNICs(groupConfig: ConnectXGroupConfig, passwords: DevicePasswords): Promise<ConnectXGroupOperationResult> {
         // Create the group first
         const creationResult = await this.createGroup(groupConfig);
         if (!creationResult.success || !creationResult.group) {
@@ -127,7 +128,7 @@ export class ConnectXGroupService {
         // If group creation succeeded, proceed to configure NICs for the group
         const group = creationResult.group;
         try {
-            await this.configureConnectXNICsForGroup(group.id, password);
+            await this.configureConnectXNICsForGroup(group.id, passwords);
             return {
                 success: true,
                 group: group,
@@ -135,7 +136,7 @@ export class ConnectXGroupService {
             };
         } catch (error) {
             // Roll back group creation if NIC configuration fails.
-            await this.rollbackGroupCreationAfterNICFailure(group.id, password);
+            await this.rollbackGroupCreationAfterNICFailure(group.id, passwords);
 
             const errorMessage = error instanceof Error ? error.message : String(error);
             logger.error('Failed to configure ConnectX NICs after group creation', { groupId: group.id, error: errorMessage });
@@ -155,9 +156,9 @@ export class ConnectXGroupService {
      * Best-effort rollback of NIC configuration and group creation after a failed NIC configuration attempt.
      * Makes a best effort to unconfigure any devices that were successfully configured before the failure.
      */
-    private async rollbackGroupCreationAfterNICFailure(groupId: string, password: string): Promise<void> {
+    private async rollbackGroupCreationAfterNICFailure(groupId: string, passwords: DevicePasswords): Promise<void> {
         try {
-            await this.unconfigureConnectXNICsForGroup(groupId, password);
+            await this.unconfigureConnectXNICsForGroup(groupId, passwords);
             logger.info('Devices unconfigured after NIC configuration failure', { groupId });
         } catch (unconfigureError) {
             const unconfigureErrorMessage = unconfigureError instanceof Error ? unconfigureError.message : String(unconfigureError);
@@ -405,10 +406,10 @@ export class ConnectXGroupService {
      * If there was an error during unconfiguration, it is included in the result as a non-fatal error.
      *
      * @param groupId ID of the group to remove
-     * @param password Sudo password used for NIC unconfiguration on each device
+     * @param passwords Sudo passwords keyed by device identifier used to unconfigure each device
      * @returns Operation result indicating success or failure
      */
-    public async removeGroupAndUnconfigureNICs(groupId: string, password: string): Promise<ConnectXGroupOperationResult> {
+    public async removeGroupAndUnconfigureNICs(groupId: string, passwords: DevicePasswords): Promise<ConnectXGroupOperationResult> {
         // Verify group exists before proceeding
         const group = this.config.store.get(groupId);
         if (!group) {
@@ -422,7 +423,7 @@ export class ConnectXGroupService {
         // First, attempt to unconfigure NICs for all devices in the group
         let unconfigureError: string | undefined;
         try {
-            await this.unconfigureConnectXNICsForGroup(groupId, password);
+            await this.unconfigureConnectXNICsForGroup(groupId, passwords);
         } catch (error) {
             unconfigureError = error instanceof Error ? error.message : String(error);
             logger.error('Failed to unconfigure ConnectX NICs for group', { groupId, error: unconfigureError });
@@ -465,7 +466,7 @@ export class ConnectXGroupService {
         );
 
         // Filter out any null devices (in case a device was deleted)
-        const validDevices = devices.filter((device): device is Device => device !== null);
+        const validDevices = devices.filter((device): device is Device => device !== null && device !== undefined);
 
         // Clean up group if it has fewer than minimum required devices
         if (validDevices.length < MIN_GROUP_SIZE) {
@@ -572,7 +573,9 @@ export class ConnectXGroupService {
             config.deviceIds.map(deviceId => this.deviceService.getDevice(deviceId))
         );
         
-        const missingDevices = config.deviceIds.filter((deviceId, index) => deviceExistenceChecks[index] === null);
+        const missingDevices = config.deviceIds.filter((deviceId, index) =>
+            deviceExistenceChecks[index] === null || deviceExistenceChecks[index] === undefined
+        );
         
         if (missingDevices.length > 0) {
             const error = `Devices not found: ${missingDevices.join(', ')}`;
@@ -907,10 +910,10 @@ export class ConnectXGroupService {
      * If any device fails configuration, an aggregated error is thrown after all attempts complete.
      *
      * @param groupId ID of the group whose devices should be configured
-     * @param password Sudo password used for netplan configuration on each device
+     * @param passwords Sudo passwords keyed by device identifier used to configure each device
      * @throws Error if the group or any device is missing, or if any device fails to configure
      */
-    public async configureConnectXNICsForGroup(groupId: string, password: string): Promise<void> {
+    public async configureConnectXNICsForGroup(groupId: string, passwords: DevicePasswords): Promise<void> {
         const group = this.config.store.get(groupId);
         if (!group) {
             throw new Error(`Group not found: ${groupId}`);
@@ -921,20 +924,12 @@ export class ConnectXGroupService {
             deviceCount: group.deviceIds.length
         });
 
-        const deviceResults = await Promise.all(
-            group.deviceIds.map(deviceId => this.deviceService.getDevice(deviceId))
-        );
-
-        const missingDevices = group.deviceIds.filter((deviceId, index) => deviceResults[index] === null);
-        if (missingDevices.length > 0) {
-            throw new Error(`Devices not found in group ${groupId}: ${missingDevices.join(', ')}`);
-        }
-
-        const devices = deviceResults.filter((device): device is Device => device !== null);
+        const devices = await this.resolveGroupDevices(group);
         const failures: { deviceId: string; deviceName: string; error: string }[] = [];
 
         for (const device of devices) {
             try {
+                const password = this.getDevicePassword(device, passwords);
                 await this.configureConnectXNICsForDevice(device, password);
             } catch (error) {
                 const errorMessage = error instanceof Error ? error.message : String(error);
@@ -1075,10 +1070,10 @@ export class ConnectXGroupService {
      * If any device fails to unconfigure, an aggregated error is thrown after all attempts complete.
      *
      * @param groupId ID of the group whose devices should be unconfigured
-     * @param password Sudo password used for file removal and netplan apply on each device
+     * @param passwords Sudo passwords keyed by device identifier used to unconfigure each device
      * @throws Error if the group or any device is missing, or if any device fails to unconfigure
      */
-    public async unconfigureConnectXNICsForGroup(groupId: string, password: string): Promise<void> {
+    public async unconfigureConnectXNICsForGroup(groupId: string, passwords: DevicePasswords): Promise<void> {
         const group = this.config.store.get(groupId);
         if (!group) {
             throw new Error(`Group not found: ${groupId}`);
@@ -1089,20 +1084,12 @@ export class ConnectXGroupService {
             deviceCount: group.deviceIds.length
         });
 
-        const deviceResults = await Promise.all(
-            group.deviceIds.map(deviceId => this.deviceService.getDevice(deviceId))
-        );
-
-        const missingDevices = group.deviceIds.filter((deviceId, index) => deviceResults[index] === null);
-        if (missingDevices.length > 0) {
-            throw new Error(`Devices not found in group ${groupId}: ${missingDevices.join(', ')}`);
-        }
-
-        const devices = deviceResults.filter((device): device is Device => device !== null);
+        const devices = await this.resolveGroupDevices(group);
         const failures: { deviceId: string; deviceName: string; error: string }[] = [];
 
         for (const device of devices) {
             try {
+                const password = this.getDevicePassword(device, passwords);
                 const success = await this.unconfigureConnectXNICsForDevice(device, password);
                 if (!success) {
                     const errorMessage = 'Unconfiguration failed';
@@ -1137,6 +1124,29 @@ export class ConnectXGroupService {
             groupId: group.id,
             deviceCount: devices.length
         });
+    }
+
+    private async resolveGroupDevices(group: ConnectXGroup): Promise<Device[]> {
+        const deviceResults = await Promise.all(
+            group.deviceIds.map(deviceId => this.deviceService.getDevice(deviceId))
+        );
+
+        const missingDevices = group.deviceIds.filter((deviceId, index) =>
+            deviceResults[index] === null || deviceResults[index] === undefined
+        );
+        if (missingDevices.length > 0) {
+            throw new Error(`Devices not found in group ${group.id}: ${missingDevices.join(', ')}`);
+        }
+
+        return deviceResults.filter((device): device is Device => device !== null && device !== undefined);
+    }
+
+    private getDevicePassword(device: Device, passwords: DevicePasswords): string {
+        const password = passwords[device.id];
+        if (!password || password.trim().length === 0) {
+            throw new Error(`Sudo password is required for device ${device.name}`);
+        }
+        return password;
     }
 
     /**

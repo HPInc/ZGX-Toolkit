@@ -368,20 +368,23 @@
                 // Show password input overlay to prompt for sudo password
                 if (window.showPasswordInputOverlay) {
                     window.showPasswordInputOverlay({
-                        title: 'Sudo Password Required',
-                        message: 'Enter your sudo password to configure ConnectX network interfaces for the paired devices.',
+                        title: 'Sudo Passwords Required',
+                        message: 'Enter your sudo password for each device to complete pairing.',
+                        messageEmphasis: 'Devices may use different sudo passwords.',
                         icon: 'codicon-lock',
-                        fieldLabel: 'Sudo Password:',
+                        devices: message.deviceIds.map(function(deviceId, index) {
+                            return { id: deviceId, name: message.deviceNames[index] };
+                        }),
                         placeholder: 'Enter password...',
-                        hint: 'This password is required to configure network settings on your devices. It will be used for the sudo commands needed during the pairing process.',
+                        hint: 'The passwords are only used to configure the ConnectX network settings required for pairing.',
                         submitButtonText: 'Continue',
                         cancelButtonText: 'Cancel',
                         validationErrorMessage: 'Password is required',
-                        onSubmit: function(password) {
-                            // Send password back to backend to create group and configure NICs
+                        onSubmit: function(passwords) {
+                            // Send passwords back to backend to create group and configure NICs
                             vscode.postMessage({
                                 type: 'password-submitted',
-                                password: password,
+                                passwords: passwords,
                                 deviceIds: message.deviceIds,
                                 deviceNames: message.deviceNames
                             });
@@ -448,7 +451,8 @@
                         message.error,
                         onClose,
                         message.buttonText,
-                        secondaryButton
+                        secondaryButton,
+                        message.helpLinks
                     );
                 }
                 break;

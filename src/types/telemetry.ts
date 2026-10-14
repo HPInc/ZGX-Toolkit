@@ -114,7 +114,7 @@ export interface CommandExecutionEvent extends TelemetryEvent {
  */
 export interface DeviceLifecycleEvent extends TelemetryEvent {
     eventType: TelemetryEventType.Device;
-    action: 'create' | 'update' | 'delete' | 'connect' | 'disconnect' | 'discover';
+    action: 'create' | 'update' | 'delete' | 'connect' | 'disconnect' | 'discover' | 'refreshStatus';
 }
 
 /**

@@ -327,7 +327,7 @@ export class PairDevicesViewController extends BaseViewController {
             // Create group and configure NICs
             const result = await this.groupService.createGroupAndConfigureNICs(
                 { deviceIds: message.deviceIds },
-                message.password
+                message.passwords
             );
 
             if (!result.success) {

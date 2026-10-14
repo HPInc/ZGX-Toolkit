@@ -318,7 +318,7 @@ describe('UnpairDevicesView', () => {
                 expect(mockMessageCallback).toHaveBeenCalledWith(
                     expect.objectContaining({
                         type: 'show-password-input',
-                        deviceIds: [],
+                        deviceIds: ['device-1', 'device-2'],
                         deviceNames: ['Device One', 'Device Two']
                     })
                 );
@@ -368,14 +368,14 @@ describe('UnpairDevicesView', () => {
 
                 await view.handleMessage({
                     type: 'password-submitted',
-                    password: 'test-password',
+                    passwords: { 'device-1': 'test-password', 'device-2': 'test-password' },
                     deviceIds: [],
                     deviceNames: ['Device One', 'Device Two']
                 });
 
                 expect(mockGroupService.removeGroupAndUnconfigureNICs).toHaveBeenCalledWith(
                     'group-1',
-                    'test-password'
+                    { 'device-1': 'test-password', 'device-2': 'test-password' }
                 );
             });
 
@@ -388,7 +388,7 @@ describe('UnpairDevicesView', () => {
 
                 await view.handleMessage({
                     type: 'password-submitted',
-                    password: 'test-password',
+                    passwords: { 'device-1': 'test-password', 'device-2': 'test-password' },
                     deviceIds: [],
                     deviceNames: ['Device One', 'Device Two']
                 });
@@ -405,7 +405,7 @@ describe('UnpairDevicesView', () => {
 
                 await view.handleMessage({
                     type: 'password-submitted',
-                    password: 'test-password',
+                    passwords: { 'device-1': 'test-password', 'device-2': 'test-password' },
                     deviceIds: [],
                     deviceNames: ['Device One', 'Device Two']
                 });
@@ -426,7 +426,7 @@ describe('UnpairDevicesView', () => {
 
                 await view.handleMessage({
                     type: 'password-submitted',
-                    password: 'test-password',
+                    passwords: { 'device-1': 'test-password', 'device-2': 'test-password' },
                     deviceIds: [],
                     deviceNames: ['Device One', 'Device Two']
                 });
@@ -446,7 +446,7 @@ describe('UnpairDevicesView', () => {
 
                 await view.handleMessage({
                     type: 'password-submitted',
-                    password: 'test-password',
+                    passwords: { 'device-1': 'test-password', 'device-2': 'test-password' },
                     deviceIds: [],
                     deviceNames: ['Device One', 'Device Two']
                 });
@@ -467,7 +467,7 @@ describe('UnpairDevicesView', () => {
 
                 await view.handleMessage({
                     type: 'password-submitted',
-                    password: 'wrong-password',
+                    passwords: { 'device-1': 'test-password', 'device-2': 'test-password' },
                     deviceIds: [],
                     deviceNames: ['Device One', 'Device Two']
                 });
@@ -492,7 +492,7 @@ describe('UnpairDevicesView', () => {
 
                 await view.handleMessage({
                     type: 'password-submitted',
-                    password: 'wrong-password',
+                    passwords: { 'device-1': 'test-password', 'device-2': 'test-password' },
                     deviceIds: [],
                     deviceNames: ['Device One', 'Device Two']
                 });
@@ -521,7 +521,7 @@ describe('UnpairDevicesView', () => {
 
                 await view.handleMessage({
                     type: 'password-submitted',
-                    password: 'test-password',
+                    passwords: { 'device-1': 'test-password', 'device-2': 'test-password' },
                     deviceIds: [],
                     deviceNames: ['Device One', 'Device Two']
                 });
@@ -540,7 +540,7 @@ describe('UnpairDevicesView', () => {
 
                 await view.handleMessage({
                     type: 'password-submitted',
-                    password: 'test-password',
+                    passwords: { 'device-1': 'test-password', 'device-2': 'test-password' },
                     deviceIds: [],
                     deviceNames: ['Device One', 'Device Two']
                 });
@@ -573,7 +573,7 @@ describe('UnpairDevicesView', () => {
 
                 await view.handleMessage({
                     type: 'password-submitted',
-                    password: 'test-password',
+                    passwords: { 'device-1': 'test-password', 'device-2': 'test-password' },
                     deviceIds: [],
                     deviceNames: ['Device One', 'Device Two']
                 });
@@ -596,7 +596,7 @@ describe('UnpairDevicesView', () => {
 
                 await freshView.handleMessage({
                     type: 'password-submitted',
-                    password: 'test-password',
+                    passwords: { 'device-1': 'test-password', 'device-2': 'test-password' },
                     deviceIds: [],
                     deviceNames: []
                 });
@@ -647,3 +647,5 @@ describe('UnpairDevicesView', () => {
         });
     });
 });
+
+

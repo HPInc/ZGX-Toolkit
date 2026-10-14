@@ -87,8 +87,8 @@ export const APP_CATEGORIES: AppCategory[] = [
     {
         id: 'model-serving',
         name: 'Model Serving',
-        description: 'Model serving and management tools for supported devices',
-        deviceType: 'zgx_fury',
+        description: 'Model serving and management tools',
+        deviceType: 'other',
         apps: [
             {
                 id: 'zrt',

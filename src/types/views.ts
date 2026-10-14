@@ -10,6 +10,11 @@
 
 import { Message } from './messages';
 
+export interface ErrorOverlayHelpLink {
+    text: string;
+    url: string;
+}
+
 /**
  * Interface that all views must implement.
  */

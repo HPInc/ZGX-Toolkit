@@ -1,5 +1,5 @@
 /*
- * Copyright ©2025 HP Development Company, L.P.
+ * Copyright ©2025-2026 HP Development Company, L.P.
  * Licensed under the X11 License. See LICENSE file in the project root for details.
  */
 
@@ -14,6 +14,13 @@ import { GroupStore } from '../../store/groupStore';
 import { Device } from '../../types/devices';
 import { ConnectXGroup, ConnectXGroupConfig, ConnectXNIC } from '../../types/connectxGroup';
 import { ITelemetryService } from '../../types/telemetry';
+
+const passwordsForAllDevices = (password: string): Record<string, string> => ({
+    'device-1': password,
+    'device-2': password,
+    'device-3': password,
+    'device-4': password
+});
 
 // Mock logger
 jest.mock('../../utils/logger', () => ({
@@ -712,6 +719,21 @@ describe('ConnectXGroupService', () => {
             const info = await service.getGroupInfo(createResult.group!.id);
 
             expect(info?.devices.length).toBe(2); // Only device-1 and device-3
+        });
+
+        it('should filter out undefined devices from group info', async () => {
+            const createResult = await service.createGroup({
+                deviceIds: ['device-1', 'device-2', 'device-3']
+            });
+
+            mockDeviceService.getDevice = jest.fn().mockImplementation((id: string) => {
+                if (id === 'device-2') return Promise.resolve(undefined);
+                return Promise.resolve(mockDevices.find(device => device.id === id));
+            });
+
+            const info = await service.getGroupInfo(createResult.group!.id);
+
+            expect(info?.devices.map(device => device.id)).toEqual(['device-1', 'device-3']);
         });
 
         it('should remove group if deleted devices leave fewer than 2 valid devices', async () => {
@@ -1793,11 +1815,14 @@ describe('ConnectXGroupService', () => {
             (service as any).buildNetplanConfig = originalBuildNetplanConfig;
         });
 
-        it('should escape backslashes in netplan config', async () => {
+        it.each([
+            ['backslashes', 'network:\\ntest', '\\\\'],
+            ['double quotes', 'network: "test"', '\\"'],
+            ['backticks', 'network: `command`', '\\`'],
+            ['dollar signs', 'network: $variable', '\\$']
+        ])('preserves %s without adding redundant escapes in netplan config', async (_character, netplanConfig, escapedCharacter) => {
             const originalBuildNetplanConfig = (service as any).buildNetplanConfig;
-            (service as any).buildNetplanConfig = jest.fn().mockReturnValue(
-                'network:\\ntest'
-            );
+            (service as any).buildNetplanConfig = jest.fn().mockReturnValue(netplanConfig);
 
             const lshwOutput = JSON.stringify([
                 {
@@ -1819,104 +1844,7 @@ describe('ConnectXGroupService', () => {
                 call => call[2]?.operationName === 'Write netplan config'
             );
             const writeCommand = writeCall![1] as string;
-            // Backslashes are not escaped
-            expect(writeCommand).not.toContain('\\\\');
-
-            (service as any).buildNetplanConfig = originalBuildNetplanConfig;
-        });
-
-        it('should escape double quotes in netplan config', async () => {
-            const originalBuildNetplanConfig = (service as any).buildNetplanConfig;
-            (service as any).buildNetplanConfig = jest.fn().mockReturnValue(
-                'network: "test"'
-            );
-
-            const lshwOutput = JSON.stringify([
-                {
-                    product: 'MT27800 Family [ConnectX-5]',
-                    vendor: 'Mellanox Technologies',
-                    logicalname: 'enp1s0'
-                }
-            ]);
-
-            mockExecuteCommandOnClient
-                .mockResolvedValueOnce({ success: true, stdout: lshwOutput, stderr: '' })
-                .mockResolvedValueOnce({ success: true, stdout: '', stderr: '' })
-                .mockResolvedValueOnce({ success: true, stdout: '', stderr: '' })
-                .mockResolvedValueOnce({ success: true, stdout: '', stderr: '' });
-
-            await service.configureConnectXNICsForDevice(mockDevices[0], 'testpassword');
-
-            const writeCall = mockExecuteCommandOnClient.mock.calls.find(
-                call => call[2]?.operationName === 'Write netplan config'
-            );
-            const writeCommand = writeCall![1] as string;
-            // Double quotes are not escaped
-            expect(writeCommand).not.toContain('\\"');
-
-            (service as any).buildNetplanConfig = originalBuildNetplanConfig;
-        });
-
-        it('should escape backticks in netplan config', async () => {
-            const originalBuildNetplanConfig = (service as any).buildNetplanConfig;
-            (service as any).buildNetplanConfig = jest.fn().mockReturnValue(
-                'network: `command`'
-            );
-
-            const lshwOutput = JSON.stringify([
-                {
-                    product: 'MT27800 Family [ConnectX-5]',
-                    vendor: 'Mellanox Technologies',
-                    logicalname: 'enp1s0'
-                }
-            ]);
-
-            mockExecuteCommandOnClient
-                .mockResolvedValueOnce({ success: true, stdout: lshwOutput, stderr: '' })
-                .mockResolvedValueOnce({ success: true, stdout: '', stderr: '' })
-                .mockResolvedValueOnce({ success: true, stdout: '', stderr: '' })
-                .mockResolvedValueOnce({ success: true, stdout: '', stderr: '' });
-
-            await service.configureConnectXNICsForDevice(mockDevices[0], 'testpassword');
-
-            const writeCall = mockExecuteCommandOnClient.mock.calls.find(
-                call => call[2]?.operationName === 'Write netplan config'
-            );
-            const writeCommand = writeCall![1] as string;
-            // Backticks are not escaped
-            expect(writeCommand).not.toContain('\\`');
-
-            (service as any).buildNetplanConfig = originalBuildNetplanConfig;
-        });
-
-        it('should escape dollar signs in netplan config', async () => {
-            const originalBuildNetplanConfig = (service as any).buildNetplanConfig;
-            (service as any).buildNetplanConfig = jest.fn().mockReturnValue(
-                'network: $variable'
-            );
-
-            const lshwOutput = JSON.stringify([
-                {
-                    product: 'MT27800 Family [ConnectX-5]',
-                    vendor: 'Mellanox Technologies',
-                    logicalname: 'enp1s0'
-                }
-            ]);
-
-            mockExecuteCommandOnClient
-                .mockResolvedValueOnce({ success: true, stdout: lshwOutput, stderr: '' })
-                .mockResolvedValueOnce({ success: true, stdout: '', stderr: '' })
-                .mockResolvedValueOnce({ success: true, stdout: '', stderr: '' })
-                .mockResolvedValueOnce({ success: true, stdout: '', stderr: '' });
-
-            await service.configureConnectXNICsForDevice(mockDevices[0], 'testpassword');
-
-            const writeCall = mockExecuteCommandOnClient.mock.calls.find(
-                call => call[2]?.operationName === 'Write netplan config'
-            );
-            const writeCommand = writeCall![1] as string;
-            // Dollar signs are not escaped
-            expect(writeCommand).not.toContain('\\$');
+            expect(writeCommand).not.toContain(escapedCharacter);
 
             (service as any).buildNetplanConfig = originalBuildNetplanConfig;
         });
@@ -2160,7 +2088,7 @@ describe('ConnectXGroupService', () => {
         });
 
         it('should throw when group does not exist', async () => {
-            await expect(service.configureConnectXNICsForGroup('missing-group', 'password'))
+            await expect(service.configureConnectXNICsForGroup('missing-group', passwordsForAllDevices('password')))
                 .rejects.toThrow('Group not found: missing-group');
 
             expect(mockDeviceService.getDevice).not.toHaveBeenCalled();
@@ -2172,7 +2100,23 @@ describe('ConnectXGroupService', () => {
 
             const configureSpy = jest.spyOn(service, 'configureConnectXNICsForDevice');
 
-            await expect(service.configureConnectXNICsForGroup(group.id, 'password'))
+            await expect(service.configureConnectXNICsForGroup(group.id, passwordsForAllDevices('password')))
+                .rejects.toThrow('Devices not found in group group-1: missing-device');
+
+            expect(configureSpy).not.toHaveBeenCalled();
+            configureSpy.mockRestore();
+        });
+
+        it('should throw when a device lookup returns undefined', async () => {
+            const group = createGroup('group-1', ['device-1', 'missing-device']);
+            mockGroupStore.set(group.id, group);
+            mockDeviceService.getDevice = jest.fn().mockImplementation((id: string) =>
+                Promise.resolve(id === 'missing-device' ? undefined : mockDevices.find(device => device.id === id))
+            );
+
+            const configureSpy = jest.spyOn(service, 'configureConnectXNICsForDevice');
+
+            await expect(service.configureConnectXNICsForGroup(group.id, passwordsForAllDevices('password')))
                 .rejects.toThrow('Devices not found in group group-1: missing-device');
 
             expect(configureSpy).not.toHaveBeenCalled();
@@ -2190,7 +2134,7 @@ describe('ConnectXGroupService', () => {
 
             let caughtError: unknown;
             try {
-                await service.configureConnectXNICsForGroup(group.id, 'password');
+                await service.configureConnectXNICsForGroup(group.id, passwordsForAllDevices('password'));
             } catch (error) {
                 caughtError = error;
             }
@@ -2213,12 +2157,15 @@ describe('ConnectXGroupService', () => {
                 .spyOn(service, 'configureConnectXNICsForDevice')
                 .mockResolvedValue(undefined);
 
-            await expect(service.configureConnectXNICsForGroup(group.id, 'password'))
+            await expect(service.configureConnectXNICsForGroup(group.id, {
+                'device-1': 'password-for-device-1',
+                'device-2': 'password-for-device-2'
+            }))
                 .resolves.toBeUndefined();
 
             expect(configureSpy).toHaveBeenCalledTimes(2);
-            expect(configureSpy).toHaveBeenNthCalledWith(1, mockDevices[0], 'password');
-            expect(configureSpy).toHaveBeenNthCalledWith(2, mockDevices[1], 'password');
+            expect(configureSpy).toHaveBeenNthCalledWith(1, mockDevices[0], 'password-for-device-1');
+            expect(configureSpy).toHaveBeenNthCalledWith(2, mockDevices[1], 'password-for-device-2');
 
             configureSpy.mockRestore();
         });
@@ -2236,13 +2183,13 @@ describe('ConnectXGroupService', () => {
                 deviceIds: ['device-1', 'device-2']
             };
 
-            const result = await service.createGroupAndConfigureNICs(config, password);
+            const result = await service.createGroupAndConfigureNICs(config, passwordsForAllDevices(password));
 
             expect(result.success).toBe(true);
             expect(result.group).toBeDefined();
             expect(result.group?.deviceIds).toEqual(['device-1', 'device-2']);
             expect(result.message).toContain('Created group and configured ConnectX NICs for all devices');
-            expect(configureSpy).toHaveBeenCalledWith(result.group!.id, password);
+            expect(configureSpy).toHaveBeenCalledWith(result.group!.id, passwordsForAllDevices(password));
             expect(mockGroupStore.set).toHaveBeenCalled();
 
             configureSpy.mockRestore();
@@ -2255,7 +2202,7 @@ describe('ConnectXGroupService', () => {
                 deviceIds: ['device-1'] // Less than minimum
             };
 
-            const result = await service.createGroupAndConfigureNICs(config, password);
+            const result = await service.createGroupAndConfigureNICs(config, passwordsForAllDevices(password));
 
             expect(result.success).toBe(false);
             expect(result.error).toContain('at least 2 devices');
@@ -2271,13 +2218,40 @@ describe('ConnectXGroupService', () => {
                 deviceIds: ['device-1', 'non-existent-device']
             };
 
-            const result = await service.createGroupAndConfigureNICs(config, password);
+            const result = await service.createGroupAndConfigureNICs(config, passwordsForAllDevices(password));
 
             expect(result.success).toBe(false);
             expect(result.error).toContain('Devices not found');
             expect(configureSpy).not.toHaveBeenCalled();
 
             configureSpy.mockRestore();
+        });
+
+        it.each([
+            ['missing', { 'device-1': 'password-for-device-1' }],
+            ['blank', { 'device-1': 'password-for-device-1', 'device-2': '   ' }]
+        ])('should reject a %s password entry and roll back the group', async (_description, passwords) => {
+            const configureDeviceSpy = jest
+                .spyOn(service, 'configureConnectXNICsForDevice')
+                .mockResolvedValue(undefined);
+            const unconfigureDeviceSpy = jest
+                .spyOn(service, 'unconfigureConnectXNICsForDevice')
+                .mockResolvedValue(true);
+
+            const result = await service.createGroupAndConfigureNICs({
+                deviceIds: ['device-1', 'device-2']
+            }, passwords);
+
+            expect(result.success).toBe(false);
+            expect(result.error).toContain('Sudo password is required for device Device 2');
+            expect(configureDeviceSpy).toHaveBeenCalledTimes(1);
+            expect(configureDeviceSpy).toHaveBeenCalledWith(mockDevices[0], 'password-for-device-1');
+            expect(unconfigureDeviceSpy).toHaveBeenCalledWith(mockDevices[0], 'password-for-device-1');
+            expect(mockGroupStore.delete).toHaveBeenCalledWith(result.group!.id);
+            expect(await service.getGroup(result.group!.id)).toBeUndefined();
+
+            configureDeviceSpy.mockRestore();
+            unconfigureDeviceSpy.mockRestore();
         });
 
         it('should roll back group when NIC configuration fails', async () => {
@@ -2293,13 +2267,13 @@ describe('ConnectXGroupService', () => {
                 deviceIds: ['device-1', 'device-2']
             };
 
-            const result = await service.createGroupAndConfigureNICs(config, password);
+            const result = await service.createGroupAndConfigureNICs(config, passwordsForAllDevices(password));
 
             expect(result.success).toBe(false);
             expect(result.error).toContain('Failed to configure ConnectX NICs for devices in group');
             expect(result.group).toBeDefined();
             // Verify devices were unconfigured before group removal
-            expect(unconfigureSpy).toHaveBeenCalledWith(result.group!.id, password);
+            expect(unconfigureSpy).toHaveBeenCalledWith(result.group!.id, passwordsForAllDevices(password));
             // Verify group was rolled back (removed from store)
             expect(mockGroupStore.delete).toHaveBeenCalledWith(result.group!.id);
             expect(mockTelemetryService.trackError).toHaveBeenCalledWith({
@@ -2329,7 +2303,7 @@ describe('ConnectXGroupService', () => {
                 deviceIds: ['device-1', 'device-2']
             };
 
-            const result = await service.createGroupAndConfigureNICs(config, password);
+            const result = await service.createGroupAndConfigureNICs(config, passwordsForAllDevices(password));
 
             expect(result.success).toBe(false);
             expect(result.error).toContain('Failed to configure ConnectX NICs for devices in group');
@@ -2359,7 +2333,7 @@ describe('ConnectXGroupService', () => {
                 deviceIds: ['device-1', 'device-2']
             };
 
-            const result = await service.createGroupAndConfigureNICs(config, password);
+            const result = await service.createGroupAndConfigureNICs(config, passwordsForAllDevices(password));
 
             expect(result.success).toBe(false);
             // Unconfigure was attempted but failed
@@ -2382,11 +2356,11 @@ describe('ConnectXGroupService', () => {
                 deviceIds: ['device-1', 'device-2']
             };
 
-            await service.createGroupAndConfigureNICs(config, 'my-secret-pw');
+            await service.createGroupAndConfigureNICs(config, passwordsForAllDevices('my-secret-pw'));
 
             expect(configureSpy).toHaveBeenCalledWith(
                 expect.any(String),
-                'my-secret-pw'
+                passwordsForAllDevices('my-secret-pw')
             );
 
             configureSpy.mockRestore();
@@ -2403,7 +2377,7 @@ describe('ConnectXGroupService', () => {
                 metadata
             };
 
-            const result = await service.createGroupAndConfigureNICs(config, password);
+            const result = await service.createGroupAndConfigureNICs(config, passwordsForAllDevices(password));
 
             expect(result.success).toBe(true);
             expect(result.group?.metadata).toEqual(metadata);
@@ -2424,11 +2398,11 @@ describe('ConnectXGroupService', () => {
                 deviceIds: ['device-1', 'device-2']
             };
 
-            const result = await service.createGroupAndConfigureNICs(config, password);
+            const result = await service.createGroupAndConfigureNICs(config, passwordsForAllDevices(password));
 
             expect(result.success).toBe(false);
             // Devices should have been unconfigured
-            expect(unconfigureSpy).toHaveBeenCalledWith(result.group!.id, password);
+            expect(unconfigureSpy).toHaveBeenCalledWith(result.group!.id, passwordsForAllDevices(password));
             // After rollback, the group should no longer be in the store
             const storedGroup = mockGroupStore.get(result.group!.id);
             expect(storedGroup).toBeUndefined();
@@ -2451,12 +2425,12 @@ describe('ConnectXGroupService', () => {
                 .spyOn(service, 'unconfigureConnectXNICsForGroup')
                 .mockResolvedValue(undefined);
 
-            const result = await service.removeGroupAndUnconfigureNICs(groupId, password);
+            const result = await service.removeGroupAndUnconfigureNICs(groupId, passwordsForAllDevices(password));
 
             expect(result.success).toBe(true);
             expect(result.message).toContain('Devices ungrouped.');
             expect(result.nonFatalError).toBeUndefined();
-            expect(unconfigureSpy).toHaveBeenCalledWith(groupId, password);
+            expect(unconfigureSpy).toHaveBeenCalledWith(groupId, passwordsForAllDevices(password));
             expect(mockGroupStore.delete).toHaveBeenCalledWith(groupId);
             expect(await service.getGroup(groupId)).toBeUndefined();
 
@@ -2464,7 +2438,7 @@ describe('ConnectXGroupService', () => {
         });
 
         it('should return failure for non-existent group', async () => {
-            const result = await service.removeGroupAndUnconfigureNICs('non-existent-group', password);
+            const result = await service.removeGroupAndUnconfigureNICs('non-existent-group', passwordsForAllDevices(password));
 
             expect(result.success).toBe(false);
             expect(result.error).toContain('Group not found');
@@ -2481,13 +2455,13 @@ describe('ConnectXGroupService', () => {
                 .spyOn(service, 'unconfigureConnectXNICsForGroup')
                 .mockRejectedValue(new Error('Unconfigure failed'));
 
-            const result = await service.removeGroupAndUnconfigureNICs(groupId, password);
+            const result = await service.removeGroupAndUnconfigureNICs(groupId, passwordsForAllDevices(password));
 
             // Group should still be removed even though unconfigure failed
             expect(result.success).toBe(true);
             expect(result.nonFatalError).toBe('Unconfigure failed');
             expect(result.message).toContain('issues unconfiguring ConnectX NICs');
-            expect(unconfigureSpy).toHaveBeenCalledWith(groupId, password);
+            expect(unconfigureSpy).toHaveBeenCalledWith(groupId, passwordsForAllDevices(password));
             expect(mockGroupStore.delete).toHaveBeenCalledWith(groupId);
             expect(await service.getGroup(groupId)).toBeUndefined();
 
@@ -2509,12 +2483,12 @@ describe('ConnectXGroupService', () => {
                 throw new Error('Deletion operation failed');
             });
 
-            const result = await service.removeGroupAndUnconfigureNICs(groupId, password);
+            const result = await service.removeGroupAndUnconfigureNICs(groupId, passwordsForAllDevices(password));
 
             expect(result.success).toBe(false);
             expect(result.error).toBe('Deletion operation failed');
             expect(result.message).toBe('Failed to remove group');
-            expect(unconfigureSpy).toHaveBeenCalledWith(groupId, password);
+            expect(unconfigureSpy).toHaveBeenCalledWith(groupId, passwordsForAllDevices(password));
             expect(mockTelemetryService.trackError).toHaveBeenCalledWith({
                 eventType: 'error',
                 error: expect.any(Error),
@@ -2538,12 +2512,12 @@ describe('ConnectXGroupService', () => {
                 throw new Error('Deletion operation failed');
             });
 
-            const result = await service.removeGroupAndUnconfigureNICs(groupId, password);
+            const result = await service.removeGroupAndUnconfigureNICs(groupId, passwordsForAllDevices(password));
 
             expect(result.success).toBe(false);
             expect(result.error).toBe('Deletion operation failed');
             expect(result.message).toBe('Failed to remove group');
-            expect(unconfigureSpy).toHaveBeenCalledWith(groupId, password);
+            expect(unconfigureSpy).toHaveBeenCalledWith(groupId, passwordsForAllDevices(password));
             expect(mockTelemetryService.trackError).toHaveBeenCalledWith({
                 eventType: 'error',
                 error: expect.any(Error),
@@ -2563,9 +2537,9 @@ describe('ConnectXGroupService', () => {
                 .spyOn(service, 'unconfigureConnectXNICsForGroup')
                 .mockResolvedValue(undefined);
 
-            await service.removeGroupAndUnconfigureNICs(groupId, 'my-secret-pw');
+            await service.removeGroupAndUnconfigureNICs(groupId, passwordsForAllDevices('my-secret-pw'));
 
-            expect(unconfigureSpy).toHaveBeenCalledWith(groupId, 'my-secret-pw');
+            expect(unconfigureSpy).toHaveBeenCalledWith(groupId, passwordsForAllDevices('my-secret-pw'));
 
             unconfigureSpy.mockRestore();
         });
@@ -2591,7 +2565,7 @@ describe('ConnectXGroupService', () => {
                     return { success: true, message: 'removed' };
                 });
 
-            await service.removeGroupAndUnconfigureNICs(groupId, password);
+            await service.removeGroupAndUnconfigureNICs(groupId, passwordsForAllDevices(password));
 
             expect(callOrder).toEqual(['unconfigure', 'removeGroup']);
 
@@ -2753,7 +2727,7 @@ describe('ConnectXGroupService', () => {
         });
 
         it('should throw when group does not exist', async () => {
-            await expect(service.unconfigureConnectXNICsForGroup('missing-group', 'password'))
+            await expect(service.unconfigureConnectXNICsForGroup('missing-group', passwordsForAllDevices('password')))
                 .rejects.toThrow('Group not found: missing-group');
         });
 
@@ -2763,7 +2737,23 @@ describe('ConnectXGroupService', () => {
 
             const unconfigureSpy = jest.spyOn(service, 'unconfigureConnectXNICsForDevice');
 
-            await expect(service.unconfigureConnectXNICsForGroup(group.id, 'password'))
+            await expect(service.unconfigureConnectXNICsForGroup(group.id, passwordsForAllDevices('password')))
+                .rejects.toThrow('Devices not found in group group-1: missing-device');
+
+            expect(unconfigureSpy).not.toHaveBeenCalled();
+            unconfigureSpy.mockRestore();
+        });
+
+        it('should throw when a device lookup returns undefined', async () => {
+            const group = createGroup('group-1', ['device-1', 'missing-device']);
+            mockGroupStore.set(group.id, group);
+            mockDeviceService.getDevice = jest.fn().mockImplementation((id: string) =>
+                Promise.resolve(id === 'missing-device' ? undefined : mockDevices.find(device => device.id === id))
+            );
+
+            const unconfigureSpy = jest.spyOn(service, 'unconfigureConnectXNICsForDevice');
+
+            await expect(service.unconfigureConnectXNICsForGroup(group.id, passwordsForAllDevices('password')))
                 .rejects.toThrow('Devices not found in group group-1: missing-device');
 
             expect(unconfigureSpy).not.toHaveBeenCalled();
@@ -2781,7 +2771,7 @@ describe('ConnectXGroupService', () => {
 
             let caughtError: unknown;
             try {
-                await service.unconfigureConnectXNICsForGroup(group.id, 'password');
+                await service.unconfigureConnectXNICsForGroup(group.id, passwordsForAllDevices('password'));
             } catch (error) {
                 caughtError = error;
             }
@@ -2804,12 +2794,15 @@ describe('ConnectXGroupService', () => {
                 .spyOn(service, 'unconfigureConnectXNICsForDevice')
                 .mockResolvedValue(true);
 
-            await expect(service.unconfigureConnectXNICsForGroup(group.id, 'password'))
+            await expect(service.unconfigureConnectXNICsForGroup(group.id, {
+                'device-1': 'password-for-device-1',
+                'device-2': 'password-for-device-2'
+            }))
                 .resolves.toBeUndefined();
 
             expect(unconfigureSpy).toHaveBeenCalledTimes(2);
-            expect(unconfigureSpy).toHaveBeenNthCalledWith(1, mockDevices[0], 'password');
-            expect(unconfigureSpy).toHaveBeenNthCalledWith(2, mockDevices[1], 'password');
+            expect(unconfigureSpy).toHaveBeenNthCalledWith(1, mockDevices[0], 'password-for-device-1');
+            expect(unconfigureSpy).toHaveBeenNthCalledWith(2, mockDevices[1], 'password-for-device-2');
 
             unconfigureSpy.mockRestore();
         });
@@ -2822,7 +2815,7 @@ describe('ConnectXGroupService', () => {
                 .spyOn(service, 'unconfigureConnectXNICsForDevice')
                 .mockRejectedValue(new Error('boom'));
 
-            await expect(service.unconfigureConnectXNICsForGroup(group.id, 'password'))
+            await expect(service.unconfigureConnectXNICsForGroup(group.id, passwordsForAllDevices('password')))
                 .rejects.toThrow('Failed to unconfigure 1 device(s) in group group-1: Device 1: boom');
 
             expect(unconfigureSpy).toHaveBeenCalledTimes(1);
@@ -3040,3 +3033,4 @@ describe('ConnectXGroupService', () => {
         });
     });
 });
+

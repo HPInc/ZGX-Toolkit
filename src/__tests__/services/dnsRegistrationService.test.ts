@@ -7,13 +7,20 @@ import { DNSServiceRegistration, RegistrationErrorType } from '../../services/dn
 import { Device } from '../../types/devices';
 import { Client as SSHClient } from 'ssh2';
 import { getSSHConfig } from '../../utils/sshConfig';
+import * as sshConnection from '../../utils/sshConnection';
+import { SSHHostVerificationError } from '../../utils/sshHostVerifier';
 
 jest.mock('ssh2');
 jest.mock('node:fs', () => ({
     existsSync: jest.fn(),
-    readFileSync: jest.fn()
+    readFileSync: jest.fn(),
+    statSync: jest.fn(),
+    accessSync: jest.fn(),
+    promises: { open: jest.fn() },
+    constants: jest.requireActual<typeof import('node:fs')>('node:fs').constants
 }));
 jest.mock('node:os', () => ({
+    ...jest.requireActual<typeof import('node:os')>('node:os'),
     homedir: jest.fn(() => '/home/testuser')
 }));
 jest.mock('../../utils/logger');
@@ -24,6 +31,16 @@ describe('DNSServiceRegistration', () => {
     let mockSSHClient: jest.Mocked<SSHClient>;
 
     beforeEach(() => {
+        const fs = require('node:fs');
+        fs.existsSync.mockReturnValue(false);
+        fs.readFileSync.mockReset().mockImplementation(() => {
+            throw Object.assign(new Error('No such file or directory'), { code: 'ENOENT' });
+        });
+        fs.statSync.mockReset().mockImplementation(() => {
+            throw Object.assign(new Error('No such file or directory'), { code: 'ENOENT' });
+        });
+        fs.accessSync.mockReset();
+        fs.promises.open.mockReset().mockRejectedValue(Object.assign(new Error('File not found'), { code: 'ENOENT' }));
         service = new DNSServiceRegistration();
         
         mockDevice = {
@@ -50,6 +67,20 @@ describe('DNSServiceRegistration', () => {
 
     afterEach(() => {
         jest.clearAllMocks();
+    });
+
+    it('reports host trust failures as connection errors with enrollment guidance', async () => {
+        const error = new SSHHostVerificationError('SSH host key verification failed: independently verify this device');
+        const executeSpy = jest.spyOn(sshConnection, 'executeSSHCommand').mockResolvedValueOnce({
+            success: false, exitCode: -1, stdout: '', stderr: error.message, error
+        });
+        try {
+            await expect(service.validatePassword(mockDevice, 'synthetic-password')).resolves.toEqual({
+                valid: false, isConnectionError: true, hostVerificationFailed: true, error: error.message
+            });
+        } finally {
+            executeSpy.mockRestore();
+        }
     });
 
     describe('registerDNSService', () => {
@@ -526,7 +557,7 @@ describe('DNSServiceRegistration', () => {
     });
 
     describe('SSH Config Parsing', () => {
-        it('should handle undefined IdentitiesOnly without crashing', () => {
+        it('should handle undefined IdentitiesOnly without crashing', async () => {
             const fs = require('node:fs');
             
             fs.existsSync.mockReturnValue(true);
@@ -537,16 +568,14 @@ describe('DNSServiceRegistration', () => {
                 Port 22
             `);
 
-            expect(() => {
-                getSSHConfig(mockDevice);
-            }).not.toThrow();
+            await expect(getSSHConfig(mockDevice)).resolves.toBeDefined();
         });
 
-        it('should handle missing SSH config file', () => {
+        it('should handle missing SSH config file', async () => {
             const fs = require('node:fs');
             fs.existsSync.mockReturnValue(false);
 
-            const config = getSSHConfig(mockDevice);
+            const config = (await getSSHConfig(mockDevice));
             
             expect(config).toBeDefined();
             expect(config.host).toBe(mockDevice.host);
@@ -554,7 +583,7 @@ describe('DNSServiceRegistration', () => {
             expect(config.port).toBe(22);
         });
 
-        it('should parse SSH config with IdentityFile', () => {
+        it('should parse SSH config with IdentityFile', async () => {
             const fs = require('node:fs');
             const os = require('node:os');
             
@@ -577,12 +606,15 @@ describe('DNSServiceRegistration', () => {
                         IdentityFile ~/.ssh/id_ed25519
                     `;
                 }
-                return Buffer.from('mock-key-data');
+                if (path.includes('id_ed25519')) {
+                    return Buffer.from('mock-key-data');
+                }
+                throw Object.assign(new Error('No such file or directory'), { code: 'ENOENT' });
             });
 
             os.homedir.mockReturnValue('/home/testuser');
 
-            const config = getSSHConfig(mockDevice);
+            const config = (await getSSHConfig(mockDevice));
             
             expect(config.privateKey).toBeDefined();
         });

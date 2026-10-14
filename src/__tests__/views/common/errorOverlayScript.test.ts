@@ -6,6 +6,7 @@
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import * as vm from 'node:vm';
+import { it } from '@jest/globals';
 
 function loadScript(context: Record<string, unknown>): void {
     const scriptPath = path.resolve(process.cwd(), 'src/views/common/errorOverlay/errorOverlay.js');
@@ -14,7 +15,14 @@ function loadScript(context: Record<string, unknown>): void {
 }
 
 function createElement(overrides: Record<string, unknown> = {}) {
-    return { textContent: '', innerHTML: '', style: {} as Record<string, string>, addEventListener: jest.fn(), ...overrides };
+    const children: any[] = [];
+    return {
+        textContent: '', innerHTML: '', style: {} as Record<string, string>, addEventListener: jest.fn(),
+        hidden: false, children,
+        appendChild: jest.fn((child: any) => children.push(child)),
+        replaceChildren: jest.fn(() => { children.length = 0; }),
+        ...overrides
+    };
 }
 
 function createOverlayContent(elements: Record<string, any>) {
@@ -36,7 +44,11 @@ function createContext() {
     };
     return {
         window: { BaseOverlay, vscodeApi: { postMessage } },
-        document: { getElementById: jest.fn((_id?: string): any => null) },
+        document: {
+            getElementById: jest.fn((_id?: string): any => null),
+            createElement: jest.fn((tagName: string) => createElement({ tagName }))
+        },
+        URL,
         console: { error: jest.fn() },
         showCalls,
         postMessage
@@ -44,6 +56,78 @@ function createContext() {
 }
 
 describe('Error overlay webview script', () => {
+    it.each([undefined, [], null, true])('hides help links when no list is supplied: %s', helpLinks => {
+        const context = createContext();
+        loadScript(context);
+        context.window.showErrorOverlay('Title', 'Details', 'Error', undefined, undefined, undefined, helpLinks);
+        const links = createElement();
+        context.showCalls[0].config.onSetupContent(createOverlayContent({
+            '#error-overlay-message': createElement(), '#error-overlay-help-links': links
+        }));
+
+        expect(links.hidden).toBe(true);
+        expect(links.children).toHaveLength(0);
+    });
+
+    it('renders multiple help links safely without technical error details', () => {
+        const context = createContext();
+        loadScript(context);
+        const helpLinks = [
+            { text: '<img src=x onerror=alert(1)>', url: 'https://example.com/first' },
+            { text: 'Other help', url: 'http://example.com/second' }
+        ];
+        context.window.showErrorOverlay('Title', 'Details', undefined, undefined, undefined, undefined, helpLinks);
+        const links = createElement();
+        const details = createElement();
+        context.showCalls[0].config.onSetupContent(createOverlayContent({
+            '#error-overlay-help-links': links, '#error-overlay-details': details
+        }));
+
+        expect(links.hidden).toBe(false);
+        expect(details.style.display).toBe('none');
+        expect(links.children).toHaveLength(2);
+        helpLinks.forEach((link, index) => {
+            const anchor = links.children[index].children[0];
+            expect(anchor.tagName).toBe('a');
+            expect(anchor.textContent).toBe(link.text);
+            expect(anchor.innerHTML).toBe('');
+            expect(anchor.href).toBe(link.url);
+            expect(anchor.target).toBe('_blank');
+            expect(anchor.rel).toBe('noopener noreferrer');
+        });
+    });
+
+    it.each([
+        'javascript:alert(1)', 'data:text/html,test', 'file:///test', 'command:workbench.action.closeWindow',
+        '/relative', 'not a URL', 'https://user:password@example.com'
+    ])('ignores an unsafe or invalid help URL: %s', url => {
+        const context = createContext();
+        loadScript(context);
+        context.window.showErrorOverlay('Title', 'Details', 'Error', undefined, undefined, undefined, [{ text: 'Help', url }]);
+        const links = createElement();
+        context.showCalls[0].config.onSetupContent(createOverlayContent({ '#error-overlay-help-links': links }));
+
+        expect(links.hidden).toBe(true);
+        expect(links.children).toHaveLength(0);
+    });
+
+    it('skips malformed entries and clears previous links when content is reused', () => {
+        const context = createContext();
+        loadScript(context);
+        const links = createElement();
+        const content = createOverlayContent({ '#error-overlay-help-links': links });
+        const helpLinks = [null, {}, { text: ' ', url: 'https://example.com' }, { text: 'Help', url: 42 },
+            { text: 'Valid help', url: 'https://example.com/help' }];
+        context.window.showErrorOverlay('Title', 'Details', 'Error', undefined, undefined, undefined, helpLinks);
+        context.showCalls[0].config.onSetupContent(content);
+        expect(links.children).toHaveLength(1);
+
+        context.window.showErrorOverlay('Title', 'Details');
+        context.showCalls[1].config.onSetupContent(content);
+        expect(links.hidden).toBe(true);
+        expect(links.children).toHaveLength(0);
+    });
+
     it('throws when BaseOverlay has not been loaded first', () => {
         const context: any = { window: {}, document: { getElementById: jest.fn(() => null) }, console: { error: jest.fn() } };
 

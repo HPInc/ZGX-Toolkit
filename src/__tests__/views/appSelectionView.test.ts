@@ -323,7 +323,7 @@ describe('AppSelectionView', () => {
             expect(html).not.toContain('category category-disabled');
         });
 
-        it('should place Model Serving at the bottom and disabled for x86 (Z8) devices', async () => {
+        it('should place Model Serving at the top and enabled for x86 (Z8) devices', async () => {
             const z8Device: Device = {
                 ...mockDevice,
                 fingerprint: { deviceType: DeviceType.Z8 }
@@ -333,11 +333,10 @@ describe('AppSelectionView', () => {
 
             expect(html).toContain('Model Serving');
             expect(html).toContain('HP Z Runtime');
-            expect(html.indexOf('System Stack')).toBeLessThan(html.indexOf('Model Serving'));
-            expect(html).toContain('category category-disabled');
-            expect(html).toContain('data-disabled="true"');
-            expect(html).toContain('Unsupported on current device');
-            expect(html).toContain('ZRT is currently only supported on HP ZGX Fury and Nano devices.');
+            expect(html.indexOf('Model Serving')).toBeLessThan(html.indexOf('System Stack'));
+            expect(html).not.toContain('category category-disabled');
+            expect(html).not.toContain('data-disabled="true"');
+            expect(html).not.toContain('Unsupported on current device');
             expect(html).not.toContain('class="disabled-badge"');
         });
 
@@ -964,6 +963,73 @@ describe('AppSelectionView', () => {
     });
 
     describe('check-ollama edge cases', () => {
+        it.each([false, true])('shows the trust warning for an unhealthy device (cached: %s)', async cached => {
+            const { deviceHealthCheckService } = require('../../services');
+            deviceHealthCheckService.checkDeviceHealth.mockResolvedValue({
+                isHealthy: false,
+                hostVerificationFailed: true,
+                device: mockDevice.name,
+                error: 'Unknown host key (SHA256:test)'
+            });
+            const messageCallback = jest.fn<(message: Record<string, unknown>) => void>();
+            view.setMessageCallback(messageCallback);
+            await view.render({ device: mockDevice });
+            if (cached) {
+                await view.handleMessage({ type: 'verify-installations', deviceId: mockDevice.id, appIds: ['ollama'] });
+                expect(messageCallback).toHaveBeenCalledWith(expect.objectContaining({
+                    type: 'show-error-overlay',
+                    errorTitle: 'Device identity could not be verified',
+                    helpLinks: [{
+                        text: 'SSH Host Key Troubleshooting',
+                        url: 'https://github.com/HPInc/ZGX-Toolkit/wiki/SSH-Host-Key-Troubleshooting'
+                    }]
+                }));
+            }
+
+            await view.handleMessage({ type: 'check-ollama', deviceId: mockDevice.id });
+
+            expect(deviceHealthCheckService.checkDeviceHealth).toHaveBeenCalledTimes(1);
+            expect(messageCallback).toHaveBeenCalledWith(expect.objectContaining({
+                type: 'show-error-overlay',
+                errorTitle: 'Device identity could not be verified',
+                errorDetails: expect.stringContaining('No password was sent.'),
+                error: 'Unknown host key (SHA256:test)',
+                helpLinks: [{
+                    text: 'SSH Host Key Troubleshooting',
+                    url: 'https://github.com/HPInc/ZGX-Toolkit/wiki/SSH-Host-Key-Troubleshooting'
+                }]
+            }));
+            expect((view as any).appInstallationService.verifyAppInstallation).not.toHaveBeenCalled();
+            expect(messageCallback.mock.calls.filter(([message]) => message.type === 'show-error-overlay')).toHaveLength(1);
+        });
+
+        it('shows only one trust overlay for concurrent startup checks and resets on a new render', async () => {
+            const { deviceHealthCheckService } = require('../../services');
+            deviceHealthCheckService.checkDeviceHealth.mockResolvedValue({
+                isHealthy: false,
+                hostVerificationFailed: true,
+                error: 'Unknown host key'
+            });
+            const messageCallback = jest.fn<(message: Record<string, unknown>) => void>();
+            view.setMessageCallback(messageCallback);
+            await view.render({ device: mockDevice });
+
+            await Promise.all([
+                view.handleMessage({ type: 'check-ollama', deviceId: mockDevice.id }),
+                view.handleMessage({ type: 'verify-installations', deviceId: mockDevice.id, appIds: ['ollama'] })
+            ]);
+
+            expect(messageCallback.mock.calls.filter(([message]) => message.type === 'show-error-overlay')).toHaveLength(1);
+            expect(messageCallback).toHaveBeenCalledWith(expect.objectContaining({ type: 'verification-cancelled' }));
+            expect(messageCallback).toHaveBeenCalledWith(expect.objectContaining({ type: 'ollama-status', isInstalled: false }));
+            expect((view as any).appInstallationService.verifyAppInstallation).not.toHaveBeenCalled();
+
+            await view.render({ device: mockDevice });
+            await view.handleMessage({ type: 'check-ollama', deviceId: mockDevice.id });
+
+            expect(messageCallback.mock.calls.filter(([message]) => message.type === 'show-error-overlay')).toHaveLength(2);
+        });
+
         it('should log and return when device not found', async () => {
             const mockDeviceService = {
                 getDevice: jest.fn().mockReturnValue(undefined)
@@ -1311,6 +1377,26 @@ describe('AppSelectionView', () => {
     });
 
     describe('performDeviceHealthCheck (private method)', () => {
+        it('shows a device identity warning and troubleshooting link for host-trust failures', async () => {
+            const mockMessageCallback = jest.fn();
+            view.setMessageCallback(mockMessageCallback);
+
+            await (view as any).performDeviceHealthCheck(mockDevice, {
+                isHealthy: false, hostVerificationFailed: true, error: 'Unknown host key (SHA256:test)'
+            });
+
+            expect(mockMessageCallback).toHaveBeenCalledWith(expect.objectContaining({
+                type: 'show-error-overlay', errorTitle: 'Device identity could not be verified',
+                errorDetails: expect.stringContaining('No password was sent.'),
+                error: 'Unknown host key (SHA256:test)',
+                helpLinks: [{
+                    text: 'SSH Host Key Troubleshooting',
+                    url: 'https://github.com/HPInc/ZGX-Toolkit/wiki/SSH-Host-Key-Troubleshooting'
+                }],
+                buttonText: 'Return to Device Manager'
+            }));
+        });
+
         it('should perform its own health check when no result is supplied and return early if healthy', async () => {
             const { deviceHealthCheckService } = require('../../services');
             deviceHealthCheckService.checkDeviceHealth.mockResolvedValue({
@@ -1344,6 +1430,18 @@ describe('AppSelectionView', () => {
                     error: 'no route to host'
                 })
             );
+            expect(mockMessageCallback).not.toHaveBeenCalledWith(expect.objectContaining({ helpLinks: expect.anything() }));
+        });
+
+        it.each(['timeout', 'device offline'])('does not attach host-key remediation to ordinary connection failures: %s', error => {
+            const messageCallback = jest.fn<(message: Record<string, unknown>) => void>();
+            view.setMessageCallback(messageCallback);
+            return (view as any).performDeviceHealthCheck(mockDevice, { isHealthy: false, hostVerificationFailed: false, error }).then(() => {
+                expect(messageCallback).toHaveBeenCalledWith(expect.objectContaining({
+                    type: 'show-error-overlay', errorTitle: 'Application installation status cannot be verified at this time', error
+                }));
+                expect(messageCallback.mock.calls[0][0]).not.toHaveProperty('helpLinks');
+            });
         });
 
         it('should fall back to a default error message when the health check result has no error', async () => {

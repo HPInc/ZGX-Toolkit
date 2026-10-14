@@ -6,7 +6,7 @@
 @font-face {
 	font-family: "codicon";
 	font-display: block;
-	src: url("./codicon.ttf?0a3cacc32b1287fa99b52a31880127dd") format("truetype");
+	src: url("./codicon.ttf?721d4c0a96379d0c13d3d5596893c348") format("truetype");
 }
 
 .codicon[class*='codicon-'] {
@@ -79,9 +79,6 @@
 .codicon-person-follow:before { content: "\ea67" }
 .codicon-person-outline:before { content: "\ea67" }
 .codicon-person-filled:before { content: "\ea67" }
-.codicon-git-branch:before { content: "\ea68" }
-.codicon-git-branch-create:before { content: "\ea68" }
-.codicon-git-branch-delete:before { content: "\ea68" }
 .codicon-source-control:before { content: "\ea68" }
 .codicon-mirror:before { content: "\ea69" }
 .codicon-mirror-public:before { content: "\ea69" }
@@ -130,7 +127,6 @@
 .codicon-vm:before { content: "\ea7a" }
 .codicon-device-desktop:before { content: "\ea7a" }
 .codicon-file:before { content: "\ea7b" }
-.codicon-file-text:before { content: "\ea7b" }
 .codicon-more:before { content: "\ea7c" }
 .codicon-ellipsis:before { content: "\ea7c" }
 .codicon-kebab-horizontal:before { content: "\ea7c" }
@@ -312,6 +308,7 @@
 .codicon-italic:before { content: "\eb0d" }
 .codicon-jersey:before { content: "\eb0e" }
 .codicon-json:before { content: "\eb0f" }
+.codicon-bracket:before { content: "\eb0f" }
 .codicon-kebab-vertical:before { content: "\eb10" }
 .codicon-key:before { content: "\eb11" }
 .codicon-law:before { content: "\eb12" }
@@ -538,7 +535,6 @@
 .codicon-graph-line:before { content: "\ebe2" }
 .codicon-graph-scatter:before { content: "\ebe3" }
 .codicon-pie-chart:before { content: "\ebe4" }
-.codicon-bracket:before { content: "\eb0f" }
 .codicon-bracket-dot:before { content: "\ebe5" }
 .codicon-bracket-error:before { content: "\ebe6" }
 .codicon-lock-small:before { content: "\ebe7" }
@@ -661,4 +657,52 @@
 .codicon-comment-discussion-sparkle:before { content: "\ec54" }
 .codicon-chat-sparkle-warning:before { content: "\ec55" }
 .codicon-chat-sparkle-error:before { content: "\ec56" }
+.codicon-collection:before { content: "\ec57" }
+.codicon-new-collection:before { content: "\ec58" }
+.codicon-thinking:before { content: "\ec59" }
+.codicon-build:before { content: "\ec5a" }
+.codicon-comment-discussion-quote:before { content: "\ec5b" }
+.codicon-cursor:before { content: "\ec5c" }
+.codicon-eraser:before { content: "\ec5d" }
+.codicon-file-text:before { content: "\ec5e" }
+.codicon-quotes:before { content: "\ec60" }
+.codicon-rename:before { content: "\ec61" }
+.codicon-run-with-deps:before { content: "\ec62" }
+.codicon-debug-connected:before { content: "\ec63" }
+.codicon-strikethrough:before { content: "\ec64" }
+.codicon-open-in-product:before { content: "\ec65" }
+.codicon-index-zero:before { content: "\ec66" }
+.codicon-agent:before { content: "\ec67" }
+.codicon-edit-code:before { content: "\ec68" }
+.codicon-repo-selected:before { content: "\ec69" }
+.codicon-skip:before { content: "\ec6a" }
+.codicon-merge-into:before { content: "\ec6b" }
+.codicon-git-branch-changes:before { content: "\ec6c" }
+.codicon-git-branch-staged-changes:before { content: "\ec6d" }
+.codicon-git-branch-conflicts:before { content: "\ec6e" }
+.codicon-git-branch:before { content: "\ec6f" }
+.codicon-git-branch-create:before { content: "\ec6f" }
+.codicon-git-branch-delete:before { content: "\ec6f" }
+.codicon-search-large:before { content: "\ec70" }
+.codicon-terminal-git-bash:before { content: "\ec71" }
+.codicon-window-active:before { content: "\ec72" }
+.codicon-forward:before { content: "\ec73" }
+.codicon-download:before { content: "\ec74" }
+.codicon-clockface:before { content: "\ec75" }
+.codicon-unarchive:before { content: "\ec76" }
+.codicon-session-in-progress:before { content: "\ec77" }
+.codicon-collection-small:before { content: "\ec78" }
+.codicon-vm-small:before { content: "\ec79" }
+.codicon-cloud-small:before { content: "\ec7a" }
+.codicon-add-small:before { content: "\ec7b" }
+.codicon-remove-small:before { content: "\ec7c" }
+.codicon-worktree-small:before { content: "\ec7d" }
+.codicon-worktree:before { content: "\ec7e" }
+.codicon-screen-cut:before { content: "\ec7f" }
+.codicon-ask:before { content: "\ec80" }
+.codicon-openai:before { content: "\ec81" }
+.codicon-claude:before { content: "\ec82" }
+.codicon-open-in-window:before { content: "\ec83" }
+.codicon-new-session:before { content: "\ec84" }
 .codicon-git-fetch:before { content: "\f101" }
+.codicon-vm-pending:before { content: "\f102" }

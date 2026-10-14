@@ -13,6 +13,7 @@ import { Device } from '../types/devices';
 import { SSHCommandResult } from '../types/ssh';
 import { logger } from './logger';
 import { getSSHConfig } from './sshConfig';
+import { SSHHostVerificationError } from './sshHostVerifier';
 
 /**
  * Options for SSH connection configuration
@@ -75,6 +76,7 @@ export interface SSHCommandExecutionOptions {
 export interface SSHConnectionTestResult {
     success: boolean;
     error?: string;
+    hostVerificationFailed?: boolean;
 }
 
 /**
@@ -88,6 +90,12 @@ export async function createSSHConnection(
     device: Device,
     options?: SSHConnectionOptions
 ): Promise<SSHClient> {
+    let hostVerificationError: Error | undefined;
+    const config = await getSSHConfig(device, {
+        readyTimeout: options?.readyTimeout,
+        timeout: options?.timeout,
+        onHostVerificationFailure: error => { hostVerificationError = error; }
+    });
     return new Promise((resolve, reject) => {
         const client = new SSHClient();
 
@@ -96,13 +104,8 @@ export async function createSSHConnection(
         });
 
         client.on('error', (err) => {
-            reject(err);
-        });
-
-        // Get SSH configuration including credentials from ~/.ssh/config
-        const config = getSSHConfig(device, {
-            readyTimeout: options?.readyTimeout,
-            timeout: options?.timeout
+            reject(hostVerificationError || err);
+            closeSSHClientForOperation(client, 'SSH connection');
         });
 
         // Apply keepalive settings if specified
@@ -270,6 +273,9 @@ interface SSHAttemptOutcome {
  * Determine whether an SSH error is likely transient and worth retrying.
  */
 function isRetryableSSHError(error: Error): boolean {
+    if (error instanceof SSHHostVerificationError) {
+        return false;
+    }
     const errorMessage = error.message.toLowerCase();
     return errorMessage.includes('timed out') ||
         errorMessage.includes('timeout') ||
@@ -410,6 +416,22 @@ export async function testSSHConnection(
 ): Promise<SSHConnectionTestResult> {
     let client: SSHClient | undefined;
     let timeoutHandle: NodeJS.Timeout | undefined;
+    let hostVerificationError: Error | undefined;
+    const connectionTimeout = options?.readyTimeout ?? 5000;
+    let config;
+    try {
+        config = await getSSHConfig(device, {
+            readyTimeout: connectionTimeout,
+            timeout: options?.timeout,
+            onHostVerificationFailure: error => { hostVerificationError = error; }
+        });
+    } catch (error) {
+        return {
+            success: false,
+            error: error instanceof Error ? error.message : String(error),
+            ...(error instanceof SSHHostVerificationError ? { hostVerificationFailed: true } : {})
+        };
+    }
 
     return new Promise((resolve) => {
         try {
@@ -448,7 +470,7 @@ export async function testSSHConnection(
             });
 
             client.on('error', (err) => {
-                let errorMessage = err.message;
+                let errorMessage = hostVerificationError?.message || err.message;
                 
                 // Normalize timeout errors for better user-facing messages
                 if (errorMessage.includes('Timed out while waiting for handshake')) {
@@ -459,7 +481,11 @@ export async function testSSHConnection(
                     device: device.name,
                     error: err.message
                 });
-                resolveOnce({ success: false, error: errorMessage });
+                resolveOnce({
+                    success: false,
+                    error: errorMessage,
+                    ...(hostVerificationError instanceof SSHHostVerificationError ? { hostVerificationFailed: true } : {})
+                });
             });
 
             client.on('close', () => {
@@ -470,17 +496,11 @@ export async function testSSHConnection(
 
             // Set timeout for connection attempt with a small buffer beyond the SSH library's timeout
             // to ensure the library's more specific error messages are reported first
-            const connectionTimeout = options?.readyTimeout ?? 5000;
             timeoutHandle = setTimeout(() => {
                 logger.debug('SSH connection timeout during test', { device: device.name });
                 resolveOnce({ success: false, error: 'Connection timeout' });
             }, connectionTimeout + 100);
 
-            // Get SSH configuration and connect
-            const config = getSSHConfig(device, {
-                readyTimeout: connectionTimeout,
-                timeout: options?.timeout
-            });
             client.connect(config);
         } catch (error) {
             const errorMessage = error instanceof Error ? error.message : String(error);
@@ -491,7 +511,11 @@ export async function testSSHConnection(
             if (timeoutHandle) {
                 clearTimeout(timeoutHandle);
             }
-            resolve({ success: false, error: errorMessage });
+            resolve({
+                success: false,
+                error: errorMessage,
+                ...(error instanceof SSHHostVerificationError ? { hostVerificationFailed: true } : {})
+            });
         }
     });
 }

@@ -24,6 +24,7 @@ export class UnpairDevicesViewController extends BaseViewController {
 
     private readonly groupService: ConnectXGroupService;
     private groupId: string | undefined;
+    private groupDevices: { id: string; name: string }[] = [];
     private deviceNames: string[] = [];
 
     constructor(deps: {
@@ -51,6 +52,7 @@ export class UnpairDevicesViewController extends BaseViewController {
         this.groupId = params?.groupId;
 
         const devices = await this.loadGroupDevices();
+        this.groupDevices = devices;
         this.deviceNames = devices.map(d => d.name);
 
         const data = {
@@ -77,7 +79,7 @@ export class UnpairDevicesViewController extends BaseViewController {
      * Load device information for the current group.
      * Returns an empty array if no groupId is set or if loading fails.
      */
-    private async loadGroupDevices(): Promise<{ name: string }[]> {
+    private async loadGroupDevices(): Promise<{ id: string; name: string }[]> {
         if (!this.groupId) {
             this.logger.warn('No groupId provided to unpair devices view');
             return [];
@@ -89,7 +91,7 @@ export class UnpairDevicesViewController extends BaseViewController {
                 return [];
             }
 
-            return groupInfo.devices.map(device => ({ name: device.name }));
+            return groupInfo.devices.map(device => ({ id: device.id, name: device.name }));
         } catch (error) {
             const errorMsg = error instanceof Error ? error.message : String(error);
             this.logger.error('Failed to load group devices', { groupId: this.groupId, error: errorMsg });
@@ -153,7 +155,7 @@ export class UnpairDevicesViewController extends BaseViewController {
         // Prompt for sudo password before unpairing
         this.sendMessageToWebview({
             type: 'show-password-input',
-            deviceIds: [],
+            deviceIds: this.groupDevices.map(device => device.id),
             deviceNames: this.deviceNames
         });
     }
@@ -175,7 +177,7 @@ export class UnpairDevicesViewController extends BaseViewController {
         }
 
         try {
-            const result = await this.groupService.removeGroupAndUnconfigureNICs(this.groupId, message.password);
+            const result = await this.groupService.removeGroupAndUnconfigureNICs(this.groupId, message.passwords);
 
             if (!result.success) {
                 const errorMessage = result.error || 'Failed to unpair devices';

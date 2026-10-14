@@ -712,6 +712,27 @@
     position: relative;
 }
 
+.device-card-connected {
+    border-left-color: var(--vscode-testing-iconPassed);
+}
+
+.device-card-not-reachable {
+    border-left-color: var(--vscode-foreground);
+}
+
+.device-card-unreachable {
+    border-left-color: var(--vscode-errorForeground);
+}
+
+.status-refresh {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: var(--spacing-sm);
+    color: var(--vscode-descriptionForeground);
+    white-space: nowrap;
+}
+
 .device-card h3 {
     margin: 0 0 var(--spacing-sm) 0;
     color: var(--vscode-foreground);
@@ -741,17 +762,15 @@
     font-size: 12px;
 }
 
-.device-card-icon:hover {
+.device-card-icon:disabled {
+    color: var(--vscode-disabledForeground);
+    cursor: not-allowed;
+    opacity: 0.45;
+}
+
+.device-card-icon:hover:not(:disabled) {
     background-color: var(--vscode-list-hoverBackground);
     color: var(--vscode-foreground);
-}
-
-.device-card-icon.edit-icon:hover {
-    color: var(--vscode-button-background);
-}
-
-.device-card-icon.remove-icon:hover {
-    color: var(--vscode-errorForeground);
 }
 
 .device-card-icon.dns-warning-icon {

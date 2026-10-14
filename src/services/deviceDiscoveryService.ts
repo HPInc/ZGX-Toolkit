@@ -114,7 +114,7 @@ export interface DeviceDiscoveryServiceConfig {
 
 export class DeviceDiscoveryService {
     private readonly config: DeviceDiscoveryServiceConfig;
-    
+
     private static readonly ZGX_HOSTNAME_PATTERNS = [
         /^zgx-[A-Za-z0-9]{6}$/,     // HP Factory Pattern (6 character): zgx-XXXXXX
         /^zgx-[A-Za-z0-9]{4}$/,     // HP Factory Pattern (4 character): zgx-XXXX

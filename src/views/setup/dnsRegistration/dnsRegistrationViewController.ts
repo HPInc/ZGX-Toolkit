@@ -13,6 +13,8 @@ import { ConnectionService } from '../../../services/connectionService';
 import { DeviceService } from '../../../services/deviceService';
 import { DnsServiceRegistrationResult } from '../../../services/dnsRegistrationService';
 import { SetupSuccessViewController } from '../success/setupSuccessViewController';
+import { DeviceManagerViewController } from '../../devices/manager/deviceManagerViewController';
+import { SSHHostVerificationError, SSH_HOST_VERIFICATION_GUIDANCE } from '../../../utils/sshHostVerifier';
 
 /**
  * DNS registration view - handles DNS service registration with password prompt
@@ -25,6 +27,7 @@ export class DnsRegistrationViewController extends BaseViewController {
     private checkTimeoutHandle?: NodeJS.Timeout;
     private navigationTimeoutHandle?: NodeJS.Timeout;
     private isDisposed = false;
+    private hostVerificationFailed = false;
 
     public static viewId(): string {
         return SETUP_VIEW_IDS.dnsRegistration;
@@ -57,6 +60,7 @@ export class DnsRegistrationViewController extends BaseViewController {
         // Store device and setup type for message handling
         this.currentDevice = params.device;
         this.setupType = params.setupType;
+        this.hostVerificationFailed = false;
 
         const html = this.renderTemplate(this.template, {
             deviceName: params.device.name
@@ -121,6 +125,8 @@ export class DnsRegistrationViewController extends BaseViewController {
 
         if (message.type === 'validatePassword') {
             await this.handlePasswordValidation(message.password);
+        } else if (message.type === 'cancel') {
+            await this.navigateTo(DeviceManagerViewController.viewId());
         } else {
             this.logger.debug('Unhandled message type in mDNS registration', { type: message.type });
         }
@@ -130,6 +136,9 @@ export class DnsRegistrationViewController extends BaseViewController {
      * Handle password validation and DNS registration
      */
     private async handlePasswordValidation(password: string): Promise<void> {
+        if (this.hostVerificationFailed) {
+            return;
+        }
         if (!this.currentDevice) {
             this.logger.error('No device available for password validation');
             return;
@@ -146,11 +155,22 @@ export class DnsRegistrationViewController extends BaseViewController {
                 this.logger.warn('Password validation failed', {
                     isConnectionError: validationResult.isConnectionError
                 });
+
+                if (validationResult.hostVerificationFailed) {
+                    this.hostVerificationFailed = true;
+                    this.sendMessageToWebview({
+                        type: 'passwordValidationResult',
+                        valid: false,
+                        hostVerificationFailed: true,
+                        error: `${SSH_HOST_VERIFICATION_GUIDANCE}\n\n${validationResult.error || 'SSH host-key verification failed.'}`
+                    });
+                    return;
+                }
                 
                 // Determine error message - connection errors are more serious
-                const errorMessage = validationResult.isConnectionError
+                const errorMessage = validationResult.error || (validationResult.isConnectionError
                     ? 'Connection error. Please check your network and try again.'
-                    : (validationResult.error || 'Incorrect password. Please try again.');
+                    : 'Incorrect password. Please try again.');
                 
                 this.sendMessageToWebview({
                     type: 'passwordValidationResult',
@@ -174,6 +194,17 @@ export class DnsRegistrationViewController extends BaseViewController {
             this.logger.error('Error during password validation', {
                 error: error instanceof Error ? error.message : String(error)
             });
+
+            if (error instanceof SSHHostVerificationError) {
+                this.hostVerificationFailed = true;
+                this.sendMessageToWebview({
+                    type: 'passwordValidationResult',
+                    valid: false,
+                    hostVerificationFailed: true,
+                    error: `${SSH_HOST_VERIFICATION_GUIDANCE}\n\n${error.message}`
+                });
+                return;
+            }
 
             this.sendMessageToWebview({
                 type: 'passwordValidationResult',

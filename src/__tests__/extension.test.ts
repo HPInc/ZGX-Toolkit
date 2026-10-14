@@ -14,9 +14,21 @@ import { ConfigurationSchemaNotRegisteredError } from '../services/configMigrati
 import { GLOBAL_STATE_KEYS } from '../constants/globalState';
 import { TelemetryEventType } from '../types/telemetry';
 import { Device, DeviceType } from '../types/devices';
+import { deviceStore } from '../store';
+import { remoteSessionRegistryService } from '../services/remoteSessionRegistryService';
+import { deviceReachabilityCheckService } from '../services/deviceReachabilityCheckService';
+import { connectionStateStore } from '../store/connectionStateStore';
+import { logger } from '../utils/logger';
 
 // Mock the providers
 jest.mock('../providers/zgxToolkitProvider');
+
+// Mock the reachability check service so disconnect handling doesn't perform real network probes
+jest.mock('../services/deviceReachabilityCheckService', () => ({
+    deviceReachabilityCheckService: {
+        checkDevicesReachability: jest.fn().mockResolvedValue(undefined)
+    }
+}));
 
 // Mock extensionStateService
 jest.mock('../services/extensionStateService', () => ({
@@ -40,7 +52,9 @@ jest.mock('../services/telemetryService', () => ({
 jest.mock('../services/configService', () => ({
     configService: {
         getLogLevel: jest.fn().mockReturnValue('info'),
-        getTelemetryEnabled: jest.fn().mockReturnValue(true)
+        getTelemetryEnabled: jest.fn().mockReturnValue(true),
+        getReachabilityRefreshIntervalMs: jest.fn().mockReturnValue(60000),
+        getReachabilityEnabled: jest.fn().mockReturnValue(true)
     }
 }));
 
@@ -96,6 +110,17 @@ describe('Extension', () => {
         // Clear all mocks before each test
         jest.clearAllMocks();
         (extensionStateService.isFirstRun as jest.Mock).mockReturnValue(false);
+        deviceStore.clear();
+        (vscode.env.remoteName as any) = undefined;
+        (vscode.workspace.workspaceFolders as any) = undefined;
+    });
+
+    afterEach(() => {
+        // activate() registers real timers (e.g. connection state reconciliation) as disposables
+        // on the context; dispose them so they don't keep running (and keeping the process alive)
+        // after the test finishes.
+        mockContext.subscriptions.forEach(subscription => subscription?.dispose?.());
+        mockContext.subscriptions.length = 0;
     });
 
     describe('activate', () => {
@@ -152,6 +177,36 @@ describe('Extension', () => {
       
             // Should have the same number of subscriptions
             expect(secondSubscriptionCount).toBe(firstSubscriptionCount);
+        });
+
+        it('starts the reachability updater and restarts it when reachability settings change', async () => {
+            const configurationHandlers: ((event: { affectsConfiguration: (section: string) => boolean }) => void)[] = [];
+            (vscode.workspace.onDidChangeConfiguration as jest.Mock).mockImplementation(handler => {
+                configurationHandlers.push(handler);
+                return { dispose: jest.fn() };
+            });
+
+            await activate(mockContext);
+            await new Promise(resolve => setImmediate(resolve));
+
+            expect(configService.getReachabilityEnabled).toHaveBeenCalled();
+            expect(deviceReachabilityCheckService.checkDevicesReachability).toHaveBeenCalledWith([]);
+            expect(configurationHandlers).toHaveLength(1);
+
+            configurationHandlers[0]({
+                affectsConfiguration: section => section === 'zToolkit.reachability.refreshInterval'
+            });
+
+            expect(configService.getReachabilityRefreshIntervalMs).toHaveBeenCalled();
+        });
+
+        it('does not start a reachability interval when disabled', async () => {
+            (configService.getReachabilityEnabled as jest.Mock).mockReturnValue(false);
+
+            await activate(mockContext);
+
+            expect(deviceReachabilityCheckService.checkDevicesReachability).not.toHaveBeenCalled();
+            (configService.getReachabilityEnabled as jest.Mock).mockReturnValue(true);
         });
 
         it('should track first activation when extension runs for first time', async () => {
@@ -517,7 +572,326 @@ describe('Extension', () => {
         });
     });
 
+    describe('Remote-SSH session registration', () => {
+        const makeDevice = (overrides: Partial<Device> = {}): Device => ({
+            id: 'device-1',
+            name: 'Device',
+            host: '192.168.1.10',
+            username: 'root',
+            port: 22,
+            isSetup: true,
+            useKeyAuth: true,
+            keySetup: { keyGenerated: true, keyCopied: true, connectionTested: true },
+            createdAt: '2026-01-01T00:00:00.000Z',
+            ...overrides
+        });
+
+        it('registers a matching Remote-SSH device and unregisters it during cleanup', async () => {
+            const device = makeDevice();
+            deviceStore.set(device.id, device);
+            (vscode.env.remoteName as any) = 'ssh-remote';
+            (vscode.workspace.workspaceFolders as any) = [{ uri: { authority: 'ssh-remote+root%40192.168.1.10' } }];
+            const registerSpy = jest.spyOn(remoteSessionRegistryService, 'register').mockResolvedValue(undefined);
+            const unregisterSpy = jest.spyOn(remoteSessionRegistryService, 'unregister').mockResolvedValue(undefined);
+            const showInformationMessageSpy = jest.spyOn(vscode.window, 'showInformationMessage');
+            (showInformationMessageSpy as jest.Mock).mockResolvedValue('Dismiss');
+
+            await activate(mockContext);
+            await new Promise(resolve => setTimeout(resolve, 0));
+
+            expect(registerSpy).toHaveBeenCalledWith({
+                deviceId: device.id,
+                connectLabel: 'root@192.168.1.10',
+                windowId: 'mock-session-id'
+            });
+            expect(vscode.commands.executeCommand).toHaveBeenCalledWith('workbench.view.extension.zgx-toolkit');
+            expect(showInformationMessageSpy).toHaveBeenCalledWith(
+                `Connected to ${device.name} in dedicated window.`,
+                'Dismiss',
+                'Disconnect'
+            );
+            expect(unregisterSpy).not.toHaveBeenCalled();
+
+            mockContext.subscriptions.forEach(subscription => subscription?.dispose?.());
+            expect(unregisterSpy).toHaveBeenCalledWith(device.id, 'mock-session-id');
+        });
+
+        it('closes the Remote-SSH connection when Disconnect is selected in the dedicated window notification', async () => {
+            const device = makeDevice();
+            deviceStore.set(device.id, device);
+            (vscode.env.remoteName as any) = 'ssh-remote';
+            (vscode.workspace.workspaceFolders as any) = [{ uri: { authority: 'ssh-remote+root%40192.168.1.10' } }];
+            jest.spyOn(remoteSessionRegistryService, 'register').mockResolvedValue(undefined);
+            const unregisterSpy = jest.spyOn(remoteSessionRegistryService, 'unregister').mockResolvedValue(undefined);
+            const closeRemoteConnectionSpy = jest.spyOn(vscode.commands, 'executeCommand').mockResolvedValue(undefined);
+            const showInformationMessageSpy = jest.spyOn(vscode.window, 'showInformationMessage');
+            (showInformationMessageSpy as jest.Mock).mockResolvedValue('Disconnect');
+
+            await activate(mockContext);
+            await new Promise(resolve => setTimeout(resolve, 0));
+
+            expect(unregisterSpy).toHaveBeenCalledWith(device.id, 'mock-session-id');
+            expect(closeRemoteConnectionSpy).toHaveBeenCalledWith('workbench.action.remote.close');
+        });
+
+        it('does not log an error when the dedicated window notification is canceled', async () => {
+            const device = makeDevice();
+            deviceStore.set(device.id, device);
+            (vscode.env.remoteName as any) = 'ssh-remote';
+            (vscode.workspace.workspaceFolders as any) = [{ uri: { authority: 'ssh-remote+root%40192.168.1.10' } }];
+            jest.spyOn(remoteSessionRegistryService, 'register').mockResolvedValue(undefined);
+            const loggerErrorSpy = jest.spyOn(logger, 'error');
+            const canceledError = Object.assign(new Error('Canceled'), { name: 'Canceled' });
+            (vscode.window.showInformationMessage as jest.Mock).mockRejectedValue(canceledError);
+
+            await activate(mockContext);
+            await new Promise(resolve => setTimeout(resolve, 0));
+
+            expect(loggerErrorSpy).not.toHaveBeenCalledWith(
+                'Failed to process dedicated window connection notification',
+                expect.anything()
+            );
+
+            loggerErrorSpy.mockRestore();
+        });
+
+        it('closes the Remote-SSH connection when another window requests a disconnect', async () => {
+            const device = makeDevice();
+            deviceStore.set(device.id, device);
+            (vscode.env.remoteName as any) = 'ssh-remote';
+            (vscode.workspace.workspaceFolders as any) = [{ uri: { authority: 'ssh-remote+root%40192.168.1.10' } }];
+            const changeHandlers: Parameters<typeof remoteSessionRegistryService.onDidChange>[0][] = [];
+            jest.spyOn(remoteSessionRegistryService, 'onDidChange').mockImplementation(listener => {
+                changeHandlers.push(listener);
+                return { dispose: jest.fn() };
+            });
+            jest.spyOn(remoteSessionRegistryService, 'register').mockResolvedValue(undefined);
+            const consumeDisconnectRequestSpy = jest.spyOn(remoteSessionRegistryService, 'consumeDisconnectRequest').mockResolvedValue(true);
+            const unregisterSpy = jest.spyOn(remoteSessionRegistryService, 'unregister').mockResolvedValue(undefined);
+            const closeRemoteConnectionSpy = jest.spyOn(vscode.commands, 'executeCommand').mockResolvedValue(undefined);
+            (vscode.window.showInformationMessage as jest.Mock).mockResolvedValue('Dismiss');
+
+            await activate(mockContext);
+            const remoteSessionChangeHandler = changeHandlers[changeHandlers.length - 1];
+            remoteSessionChangeHandler([]);
+            await new Promise(resolve => setTimeout(resolve, 0));
+
+            expect(consumeDisconnectRequestSpy).toHaveBeenCalledWith(device.id, 'mock-session-id');
+            expect(unregisterSpy).toHaveBeenCalledWith(device.id, 'mock-session-id');
+            expect(deviceReachabilityCheckService.checkDevicesReachability).toHaveBeenCalledWith([device]);
+            expect(closeRemoteConnectionSpy).toHaveBeenCalledWith('workbench.action.remote.close');
+        });
+
+        it('does not register a Remote-SSH session for an unknown connect label', async () => {
+            (vscode.env.remoteName as any) = 'ssh-remote';
+            (vscode.workspace.workspaceFolders as any) = [{ uri: { authority: 'ssh-remote+unknown-host' } }];
+            const registerSpy = jest.spyOn(remoteSessionRegistryService, 'register').mockResolvedValue(undefined);
+
+            await activate(mockContext);
+
+            expect(registerSpy).not.toHaveBeenCalled();
+            expect(vscode.commands.executeCommand).not.toHaveBeenCalledWith('workbench.view.extension.zgx-toolkit');
+        });
+
+        it('does not register a Remote-SSH session without a workspace authority', async () => {
+            (vscode.env.remoteName as any) = 'ssh-remote';
+            (vscode.workspace.workspaceFolders as any) = [{ uri: { authority: '' } }];
+            const registerSpy = jest.spyOn(remoteSessionRegistryService, 'register').mockResolvedValue(undefined);
+
+            await activate(mockContext);
+
+            expect(registerSpy).not.toHaveBeenCalled();
+        });
+
+        it('retries Remote-SSH registration when workspace folders become available', async () => {
+            const device = makeDevice();
+            deviceStore.set(device.id, device);
+            (vscode.env.remoteName as any) = 'ssh-remote';
+            let workspaceFolderChangeHandler: (() => void) | undefined;
+            (vscode.workspace.onDidChangeWorkspaceFolders as jest.Mock).mockImplementation((handler) => {
+                workspaceFolderChangeHandler = handler;
+                return { dispose: jest.fn() };
+            });
+            const registerSpy = jest.spyOn(remoteSessionRegistryService, 'register').mockResolvedValue(undefined);
+
+            await activate(mockContext);
+            (vscode.workspace.workspaceFolders as any) = [{ uri: { authority: 'ssh-remote+root%40192.168.1.10' } }];
+            workspaceFolderChangeHandler?.();
+
+            expect(registerSpy).toHaveBeenCalledWith({
+                deviceId: device.id,
+                connectLabel: 'root@192.168.1.10',
+                windowId: 'mock-session-id'
+            });
+        });
+
+        it('registers when the window transitions from local to Remote-SSH', async () => {
+            const device = makeDevice();
+            deviceStore.set(device.id, device);
+            let workspaceFolderChangeHandler: (() => void) | undefined;
+            (vscode.workspace.onDidChangeWorkspaceFolders as jest.Mock).mockImplementation((handler) => {
+                workspaceFolderChangeHandler = handler;
+                return { dispose: jest.fn() };
+            });
+            const registerSpy = jest.spyOn(remoteSessionRegistryService, 'register').mockResolvedValue(undefined);
+
+            await activate(mockContext);
+            expect(registerSpy).not.toHaveBeenCalled();
+
+            (vscode.env.remoteName as any) = 'ssh-remote';
+            (vscode.workspace.workspaceFolders as any) = [{ uri: { authority: 'ssh-remote+root%40192.168.1.10' } }];
+            workspaceFolderChangeHandler?.();
+
+            expect(registerSpy).toHaveBeenCalledWith({
+                deviceId: device.id,
+                connectLabel: 'root@192.168.1.10',
+                windowId: 'mock-session-id'
+            });
+        });
+
+        it('unregisters and re-registers when the Remote-SSH authority changes', async () => {
+            const firstDevice = makeDevice();
+            const secondDevice = makeDevice({ id: 'device-2', host: '192.168.1.11' });
+            deviceStore.set(firstDevice.id, firstDevice);
+            deviceStore.set(secondDevice.id, secondDevice);
+            (vscode.env.remoteName as any) = 'ssh-remote';
+            (vscode.workspace.workspaceFolders as any) = [{ uri: { authority: 'ssh-remote+root%40192.168.1.10' } }];
+            let workspaceFolderChangeHandler: (() => void) | undefined;
+            (vscode.workspace.onDidChangeWorkspaceFolders as jest.Mock).mockImplementation((handler) => {
+                workspaceFolderChangeHandler = handler;
+                return { dispose: jest.fn() };
+            });
+            const registerSpy = jest.spyOn(remoteSessionRegistryService, 'register').mockResolvedValue(undefined);
+            const unregisterSpy = jest.spyOn(remoteSessionRegistryService, 'unregister').mockResolvedValue(undefined);
+
+            await activate(mockContext);
+            await new Promise(resolve => setTimeout(resolve, 0));
+
+            (vscode.workspace.workspaceFolders as any) = [{ uri: { authority: 'ssh-remote+root%40192.168.1.11' } }];
+            workspaceFolderChangeHandler?.();
+            await new Promise(resolve => setTimeout(resolve, 0));
+
+            expect(registerSpy).toHaveBeenNthCalledWith(1, {
+                deviceId: firstDevice.id,
+                connectLabel: 'root@192.168.1.10',
+                windowId: 'mock-session-id'
+            });
+            expect(registerSpy).toHaveBeenNthCalledWith(2, {
+                deviceId: secondDevice.id,
+                connectLabel: 'root@192.168.1.11',
+                windowId: 'mock-session-id'
+            });
+            expect(unregisterSpy).toHaveBeenCalledWith(firstDevice.id, 'mock-session-id');
+        });
+
+        it('does not attempt Remote-SSH registration in a local window', async () => {
+            const registerSpy = jest.spyOn(remoteSessionRegistryService, 'register').mockResolvedValue(undefined);
+
+            await activate(mockContext);
+
+            expect(registerSpy).not.toHaveBeenCalled();
+        });
+    });
+
+    describe('Cross-window reachability recheck', () => {
+        afterEach(() => {
+            connectionStateStore.clear();
+        });
+
+        it('re-checks reachability in this window when the shared registry reports a device disconnected elsewhere', async () => {
+            const device = {
+                id: 'device-1',
+                name: 'Device',
+                host: '192.168.1.10',
+                username: 'zgx',
+                port: 22,
+                isSetup: true,
+                useKeyAuth: true,
+                keySetup: { keyGenerated: true, keyCopied: true, connectionTested: true },
+                createdAt: '2025-01-01T00:00:00Z',
+                updatedAt: '2025-01-01T00:00:00Z'
+            } as Device;
+            deviceStore.set(device.id, device);
+            connectionStateStore.reconcile([{
+                deviceId: device.id,
+                connectLabel: 'zgx@192.168.1.10',
+                windowId: 'another-window',
+                connectedAt: new Date().toISOString(),
+                lastHeartbeat: new Date().toISOString()
+            }]);
+            jest.spyOn(remoteSessionRegistryService, 'readAll').mockResolvedValue([]);
+
+            await activate(mockContext);
+
+            expect(deviceReachabilityCheckService.checkDevicesReachability).toHaveBeenCalledWith([device]);
+        });
+    });
+
     describe('deactivate', () => {
+        it('unregisters an active Remote-SSH session during deactivation', async () => {
+            const device = {
+                id: 'device-1',
+                name: 'Device',
+                host: '192.168.1.10',
+                username: 'root',
+                port: 22,
+                isSetup: true,
+                useKeyAuth: true,
+                keySetup: { keyGenerated: true, keyCopied: true, connectionTested: true },
+                createdAt: '2026-01-01T00:00:00.000Z'
+            } as Device;
+            deviceStore.set(device.id, device);
+            (vscode.env.remoteName as any) = 'ssh-remote';
+            (vscode.workspace.workspaceFolders as any) = [{ uri: { authority: 'ssh-remote+root%40192.168.1.10' } }];
+            const unregisterSpy = jest.spyOn(remoteSessionRegistryService, 'unregister').mockResolvedValue(undefined);
+
+            await activate(mockContext);
+            await deactivate();
+
+            expect(unregisterSpy).toHaveBeenCalledWith(device.id, 'mock-session-id');
+        });
+
+        it('waits for the active Remote-SSH session to unregister during deactivation', async () => {
+            const device = {
+                id: 'device-1',
+                name: 'Device',
+                host: '192.168.1.10',
+                username: 'root',
+                port: 22,
+                isSetup: true,
+                useKeyAuth: true,
+                keySetup: { keyGenerated: true, keyCopied: true, connectionTested: true },
+                createdAt: '2026-01-01T00:00:00.000Z'
+            } as Device;
+            deviceStore.set(device.id, device);
+            (vscode.env.remoteName as any) = 'ssh-remote';
+            (vscode.workspace.workspaceFolders as any) = [{ uri: { authority: 'ssh-remote+root%40192.168.1.10' } }];
+            jest.spyOn(remoteSessionRegistryService, 'register').mockResolvedValue(undefined);
+            let resolveUnregister: (() => void) | undefined;
+            const unregisterSpy = jest.spyOn(remoteSessionRegistryService, 'unregister').mockImplementation(
+                () => new Promise<void>(resolve => {
+                    resolveUnregister = resolve;
+                })
+            );
+
+            await activate(mockContext);
+            const deactivation = deactivate();
+            let deactivated = false;
+            void deactivation.then(() => {
+                deactivated = true;
+            });
+
+            await Promise.resolve();
+
+            expect(unregisterSpy).toHaveBeenCalledWith(device.id, 'mock-session-id');
+            expect(unregisterSpy).toHaveBeenCalledTimes(1);
+            expect(deactivated).toBe(false);
+
+            resolveUnregister?.();
+            await deactivation;
+            expect(deactivated).toBe(true);
+        });
+
         it('should deactivate without errors', () => {
             // deactivate function should complete without throwing
             expect(() => deactivate()).not.toThrow();

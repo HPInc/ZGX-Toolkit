@@ -74,11 +74,11 @@ describe('apps constants - snapd', () => {
 });
 
 describe('apps constants - Model Serving / zrt', () => {
-    it('should define a model-serving category targeted at zgx_fury device type', () => {
+    it('should define a model-serving category targeted at other device type', () => {
         const modelServing = APP_CATEGORIES.find(cat => cat.id === 'model-serving');
 
         expect(modelServing).toBeDefined();
-        expect(modelServing?.deviceType).toBe('zgx_fury');
+        expect(modelServing?.deviceType).toBe('other');
     });
 
     it('should be the first category in APP_CATEGORIES', () => {

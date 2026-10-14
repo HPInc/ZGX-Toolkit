@@ -6,14 +6,23 @@
 import { DeviceListViewController } from '../../views/devices/list/deviceListViewController';
 import { Logger } from '../../utils/logger';
 import { ITelemetryService, TelemetryEventType } from '../../types/telemetry';
-import { DeviceService, ConnectXGroupService, extensionStateService } from '../../services';
+import { DeviceService, ConnectXGroupService, extensionStateService, remoteSessionRegistryService } from '../../services';
 import { Device } from '../../types/devices';
 import { ConnectXGroup } from '../../types/connectxGroup';
 import { Message } from '../../types/messages';
+import { connectionStateStore } from '../../store';
 import * as vscode from 'vscode';
+import { deviceReachabilityCheckService } from '../../services/deviceReachabilityCheckService';
 
 // Mock vscode module
 jest.mock('vscode');
+
+// Mock the reachability check service so disconnect tests don't perform real network probes
+jest.mock('../../services/deviceReachabilityCheckService', () => ({
+    deviceReachabilityCheckService: {
+        checkDevicesReachability: jest.fn().mockResolvedValue(undefined)
+    }
+}));
 
 describe('DeviceListViewController', () => {
     let controller: DeviceListViewController;
@@ -147,6 +156,7 @@ describe('DeviceListViewController', () => {
 
     afterEach(() => {
         controller.dispose();
+        connectionStateStore.clear();
         jest.clearAllMocks();
     });
 
@@ -217,6 +227,21 @@ describe('DeviceListViewController', () => {
                 'Failed to refresh device list view after group store update',
                 { error: refreshError }
             );
+        });
+
+        it('should refresh when connection state changes', () => {
+            const refreshSpy = jest.spyOn(controller as any, 'refresh').mockResolvedValue(undefined);
+
+            connectionStateStore.reconcile([{
+                deviceId: mockDevice.id,
+                connectLabel: 'zgx@192.168.1.100',
+                windowId: 'another-window',
+                connectedAt: new Date().toISOString(),
+                lastHeartbeat: new Date().toISOString()
+            }]);
+
+            expect(mockLogger.trace).toHaveBeenCalledWith('Connection state store updated, refreshing device list view');
+            expect(refreshSpy).toHaveBeenCalled();
         });
     });
 
@@ -289,6 +314,124 @@ describe('DeviceListViewController', () => {
             await controller.render();
 
             expect(mockConnectxGroupService.getAllGroups).toHaveBeenCalled();
+        });
+
+        describe('connection state reconciliation', () => {
+            afterEach(() => {
+                jest.restoreAllMocks();
+                connectionStateStore.clear();
+            });
+
+            it('should reconcile connection state from the shared registry before reading button state', async () => {
+                const readAllSpy = jest.spyOn(remoteSessionRegistryService, 'readAll').mockResolvedValue([{
+                    deviceId: mockDevice.id,
+                    connectLabel: 'zgx@192.168.1.100',
+                    windowId: (vscode.env as any).sessionId,
+                    connectedAt: new Date().toISOString(),
+                    lastHeartbeat: new Date().toISOString()
+                }]);
+
+                const html = await controller.render();
+
+                expect(readAllSpy).toHaveBeenCalled();
+                expect(html).toMatch(/class="device-item\s+device-item-connected/);
+                expect(html).toContain('title="Connected to Test Device"');
+            });
+
+            it('should render only the current device with disabled actions and a Connected dropdown when connected in this window', async () => {
+                jest.spyOn(remoteSessionRegistryService, 'readAll').mockResolvedValue([{
+                    deviceId: mockDevice.id,
+                    connectLabel: 'zgx@192.168.1.100',
+                    windowId: (vscode.env as any).sessionId,
+                    connectedAt: new Date().toISOString(),
+                    lastHeartbeat: new Date().toISOString()
+                }]);
+                mockConnectxGroupService.getAllGroups.mockResolvedValue([mockGroup]);
+
+                const html = await controller.render();
+
+                expect(html).toContain('Test Device');
+                expect(html).not.toContain('Second Device');
+                const connectedDropdown = html.match(/<fieldset class="split-button split-button-secondary" aria-label="Connection status for Test Device">[\s\S]*?<\/fieldset>/)?.[0] ?? '';
+                const connectedButton = connectedDropdown.match(/<button[^>]*class="[^"]*split-button-main[^"]*"[^>]*>Connected<\/button>/)?.[0] ?? '';
+                const disconnectButtons = connectedDropdown.match(/data-action="disconnect-device"/g) ?? [];
+                expect(connectedButton).toContain('disabled');
+                expect(connectedDropdown).toContain('split-button-secondary');
+                expect(connectedDropdown).toContain('data-action="toggle-dropdown"');
+                expect(connectedDropdown).toContain('aria-controls="connected-dropdown-device-1"');
+                expect(disconnectButtons).toHaveLength(1);
+                expect(connectedDropdown).toContain('role="menuitem">Disconnect</button>');
+                const editButton = html.match(/<button[^>]*data-action="edit"[^>]*>/)?.[0] ?? '';
+                const deleteButton = html.match(/<button[^>]*data-action="delete"[^>]*>/)?.[0] ?? '';
+                const manageAppsButton = html.match(/<button[^>]*data-action="manage-apps"[^>]*>/)?.[0] ?? '';
+                expect(editButton).toContain('disabled');
+                expect(deleteButton).toContain('disabled');
+                expect(manageAppsButton).toContain('title="Disconnect from the device to manage applications."');
+                expect(manageAppsButton).toContain('disabled');
+                expect(html).not.toContain('class="manage-apps-hint"');
+                expect(html).not.toContain('Pairing Details');
+                expect(html).not.toContain('Add Device</button>');
+                expect(html).not.toContain('Open ZTK Device Manager</button>');
+                expect(html).not.toContain('<div class="quick-links-root">');
+            });
+
+            it('should keep the full device list available when connected in another window', async () => {
+                jest.spyOn(remoteSessionRegistryService, 'readAll').mockResolvedValue([{
+                    deviceId: mockDevice.id,
+                    connectLabel: 'zgx@192.168.1.100',
+                    windowId: 'another-window',
+                    connectedAt: new Date().toISOString(),
+                    lastHeartbeat: new Date().toISOString()
+                }]);
+
+                const html = await controller.render();
+
+                expect(html).toContain('Test Device');
+                expect(html).toContain('Second Device');
+                expect(html).toContain('Connected in another window');
+                expect(html).toMatch(/class="device-item\s+device-item-connected/);
+                expect(html).toContain('class="device-actions device-actions-connected-elsewhere"');
+                const connectedDropdown = html.match(/<fieldset class="split-button split-button-secondary" aria-label="Connection status for Test Device">[\s\S]*?<\/fieldset>/)?.[0] ?? '';
+                expect(connectedDropdown).toContain('title="Connected to Test Device"');
+                expect(connectedDropdown).toContain('data-action="disconnect-device"');
+                const manageAppsButton = html.match(/<button[^>]*data-action="manage-apps"[^>]*>/)?.[0] ?? '';
+                expect(manageAppsButton).toContain('title="Manage applications"');
+                expect(manageAppsButton).not.toContain('disabled');
+                const editButton = html.match(/<button[^>]*data-action="edit"[^>]*>/)?.[0] ?? '';
+                const deleteButton = html.match(/<button[^>]*data-action="delete"[^>]*>/)?.[0] ?? '';
+                expect(editButton).toContain('title="This action is unavailable while connected to device."');
+                expect(editButton).toContain('disabled');
+                expect(deleteButton).toContain('title="This action is unavailable while connected to device."');
+                expect(deleteButton).toContain('disabled');
+            });
+
+            it('should enable Edit and Delete when the device is disconnected', async () => {
+                jest.spyOn(remoteSessionRegistryService, 'readAll').mockResolvedValue([]);
+
+                const html = await controller.render();
+                const editButton = html.match(/<button[^>]*class="[^"]*edit-icon[^"]*"[^>]*>/)?.[0] ?? '';
+                const deleteButton = html.match(/<button[^>]*class="[^"]*remove-icon[^"]*"[^>]*>/)?.[0] ?? '';
+
+                expect(editButton).toContain('title="Edit device"');
+                expect(editButton).not.toContain('disabled');
+                expect(deleteButton).toContain('title="Remove device"');
+                expect(deleteButton).not.toContain('disabled');
+                expect(html).not.toContain('class="device-item device-item-connected"');
+            });
+
+            it('should still render (with devices treated as disconnected) if reconciliation fails', async () => {
+                const readAllError = new Error('read failed');
+                jest.spyOn(remoteSessionRegistryService, 'readAll').mockRejectedValue(readAllError);
+
+                const html = await controller.render();
+
+                expect(mockLogger.error).toHaveBeenCalledWith(
+                    'Failed to reconcile connection state before rendering device list',
+                    { error: readAllError }
+                );
+                expect(html).toContain('Test Device');
+                expect(html).not.toContain('title="Connected to Test Device"');
+            });
         });
 
         it('should separate paired devices from unpaired devices', async () => {
@@ -478,6 +621,91 @@ describe('DeviceListViewController', () => {
     });
 
     describe('handleMessage', () => {
+        it('should ignore device actions other than Disconnect when connected in this window', async () => {
+            connectionStateStore.reconcile([{
+                deviceId: mockDevice.id,
+                connectLabel: 'zgx@192.168.1.100',
+                windowId: (vscode.env as any).sessionId,
+                connectedAt: new Date().toISOString(),
+                lastHeartbeat: new Date().toISOString()
+            }]);
+            const navigateToSpy = jest.spyOn(controller as any, 'navigateTo').mockResolvedValue(undefined);
+
+            await controller.handleMessage({ type: 'manage-apps', id: mockDevice.id } as Message);
+
+            expect(navigateToSpy).not.toHaveBeenCalled();
+            expect(mockLogger.warn).toHaveBeenCalledWith(
+                'Ignoring device list action while connected to a device',
+                { type: 'manage-apps' }
+            );
+        });
+
+        it('should allow Disconnect when connected in this window', async () => {
+            connectionStateStore.reconcile([{
+                deviceId: mockDevice.id,
+                connectLabel: 'zgx@192.168.1.100',
+                windowId: (vscode.env as any).sessionId,
+                connectedAt: new Date().toISOString(),
+                lastHeartbeat: new Date().toISOString()
+            }]);
+            const unregisterSpy = jest.spyOn(remoteSessionRegistryService, 'unregister').mockResolvedValue(undefined);
+            (vscode.window.showWarningMessage as jest.Mock).mockResolvedValue('Disconnect');
+
+            await controller.handleMessage({ type: 'disconnect-device', id: mockDevice.id } as Message);
+
+            expect(unregisterSpy).toHaveBeenCalledWith(mockDevice.id, (vscode.env as any).sessionId);
+            expect(deviceReachabilityCheckService.checkDevicesReachability).toHaveBeenCalledWith([mockDevice]);
+            expect(vscode.commands.executeCommand).toHaveBeenCalledWith('workbench.action.remote.close');
+            unregisterSpy.mockRestore();
+        });
+
+        it('checks reachability for a specific device', async () => {
+            await controller.handleMessage({ type: 'check-device-reachability', deviceId: mockDevice.id } as Message);
+
+            expect(deviceReachabilityCheckService.checkDevicesReachability).toHaveBeenCalledWith([mockDevice], true);
+        });
+
+        it('refreshes reachability for all devices', async () => {
+            await controller.handleMessage({ type: 'refresh-all-reachability' } as Message);
+
+            expect(deviceReachabilityCheckService.checkDevicesReachability).toHaveBeenCalledWith([mockDevice, mockDevice2], true);
+        });
+
+        it('requests a disconnect from the window that owns the active session', async () => {
+            connectionStateStore.reconcile([{
+                deviceId: mockDevice.id,
+                connectLabel: 'zgx@192.168.1.100',
+                windowId: 'another-window',
+                connectedAt: new Date().toISOString(),
+                lastHeartbeat: new Date().toISOString()
+            }]);
+            const requestDisconnectSpy = jest.spyOn(remoteSessionRegistryService, 'requestDisconnect').mockResolvedValue(true);
+            const unregisterSpy = jest.spyOn(remoteSessionRegistryService, 'unregister').mockResolvedValue(undefined);
+            (vscode.window.showWarningMessage as jest.Mock).mockResolvedValue('Disconnect');
+
+            await controller.handleMessage({ type: 'disconnect-device', id: mockDevice.id } as Message);
+
+            expect(requestDisconnectSpy).toHaveBeenCalledWith(mockDevice.id, 'another-window');
+            expect(unregisterSpy).not.toHaveBeenCalled();
+            requestDisconnectSpy.mockRestore();
+            unregisterSpy.mockRestore();
+        });
+
+        it('should allow refresh while connected in this window', async () => {
+            connectionStateStore.reconcile([{
+                deviceId: mockDevice.id,
+                connectLabel: 'zgx@192.168.1.100',
+                windowId: (vscode.env as any).sessionId,
+                connectedAt: new Date().toISOString(),
+                lastHeartbeat: new Date().toISOString()
+            }]);
+            const refreshSpy = jest.spyOn(controller as any, 'refresh').mockResolvedValue(undefined);
+
+            await controller.handleMessage({ type: 'refresh' } as Message);
+
+            expect(refreshSpy).toHaveBeenCalledTimes(1);
+        });
+
         describe('refresh', () => {
             it('should handle refresh message', async () => {
                 const refreshSpy = jest.spyOn(controller as any, 'refresh').mockResolvedValue(undefined);
@@ -557,6 +785,26 @@ describe('DeviceListViewController', () => {
         });
 
         describe('connect-device', () => {
+            it('should not open another connection when the active-session prompt is declined', async () => {
+                (vscode.window.showWarningMessage as jest.Mock).mockResolvedValue(undefined);
+                connectionStateStore.reconcile([{
+                    deviceId: mockDevice.id,
+                    connectLabel: 'zgx@192.168.1.100',
+                    windowId: 'another-window',
+                    connectedAt: new Date().toISOString(),
+                    lastHeartbeat: new Date().toISOString()
+                }]);
+
+                await controller.handleMessage({ type: 'connect-device', id: mockDevice.id } as Message);
+
+                expect(vscode.window.showWarningMessage).toHaveBeenCalledWith(
+                    `Already connected to ${mockDevice.name}. Open another session anyway?`,
+                    { modal: true },
+                    'Open Anyway'
+                );
+                expect(mockDeviceService.connectToDevice).not.toHaveBeenCalled();
+            });
+
             it('should connect to device successfully', async () => {
                 await controller.handleMessage({ 
                     type: 'connect-device',
@@ -620,6 +868,30 @@ describe('DeviceListViewController', () => {
                     id: 'device-1' 
                 });
             });
+
+            it('should close the Manage Apps editor view if it is open', async () => {
+                const closeEditorIfShowingSpy = jest.spyOn(controller as any, 'closeEditorIfShowing');
+
+                await controller.handleMessage({ 
+                    type: 'connect-device',
+                    id: 'device-1',
+                    newWindow: false
+                } as Message);
+
+                expect(closeEditorIfShowingSpy).toHaveBeenCalledWith('apps/selection', 'device-1');
+            });
+
+            it('should leave the Manage Apps editor view open when connecting in a new window', async () => {
+                const closeEditorIfShowingSpy = jest.spyOn(controller as any, 'closeEditorIfShowing');
+
+                await controller.handleMessage({
+                    type: 'connect-device',
+                    id: 'device-1',
+                    newWindow: true
+                } as Message);
+
+                expect(closeEditorIfShowingSpy).not.toHaveBeenCalled();
+            });
         });
 
         describe('setup-device', () => {
@@ -665,6 +937,7 @@ describe('DeviceListViewController', () => {
         describe('delete-device', () => {
             it('should delete device after confirmation', async () => {
                 (vscode.window as any).showWarningMessage = jest.fn().mockResolvedValue('Delete');
+                const navigateToSpy = jest.spyOn(controller as any, 'navigateTo').mockResolvedValue(undefined);
 
                 await controller.handleMessage({ 
                     type: 'delete-device',
@@ -682,6 +955,7 @@ describe('DeviceListViewController', () => {
                     id: 'device-1',
                     deviceName: 'Test Device' 
                 });
+                expect(navigateToSpy).toHaveBeenCalledWith('devices/manager', {}, 'editor');
             });
 
             it('should cancel deletion when user cancels', async () => {
@@ -772,6 +1046,25 @@ describe('DeviceListViewController', () => {
                 } as Message);
 
                 expect(mockDeviceService.getDevice).toHaveBeenCalledWith('device-1');
+                expect(navigateToSpy).toHaveBeenCalledWith('apps/selection', { device: mockDevice }, 'editor');
+            });
+
+            it('should navigate to app management when the device is connected in another window', async () => {
+                connectionStateStore.reconcile([{
+                    deviceId: mockDevice.id,
+                    connectLabel: 'zgx@192.168.1.100',
+                    windowId: 'another-window',
+                    connectedAt: new Date().toISOString(),
+                    lastHeartbeat: new Date().toISOString()
+                }]);
+                const navigateToSpy = jest.spyOn(controller as any, 'navigateTo').mockResolvedValue(undefined);
+
+                await controller.handleMessage({
+                    type: 'manage-apps',
+                    id: mockDevice.id
+                } as Message);
+
+                expect(vscode.window.showWarningMessage).not.toHaveBeenCalled();
                 expect(navigateToSpy).toHaveBeenCalledWith('apps/selection', { device: mockDevice }, 'editor');
             });
 

@@ -51,19 +51,22 @@
                     // Show password input overlay to prompt for sudo password
                     if (window.showPasswordInputOverlay) {
                         window.showPasswordInputOverlay({
-                            title: 'Sudo Password Required',
-                            message: 'Enter your sudo password to unconfigure ConnectX network interfaces on the devices.',
+                            title: 'Sudo Passwords Required',
+                            message: 'Enter your sudo password for each device to complete unpairing.',
+                            messageEmphasis: 'Devices may use different sudo passwords.',
                             icon: 'codicon-lock',
-                            fieldLabel: 'Sudo Password:',
+                            devices: message.deviceIds.map(function(deviceId, index) {
+                                return { id: deviceId, name: message.deviceNames[index] };
+                            }),
                             placeholder: 'Enter password...',
-                            hint: 'This password is required to remove network configuration from your devices.',
+                            hint: 'The passwords are only used to remove the ConnectX network settings required for pairing.',
                             submitButtonText: 'Continue',
                             cancelButtonText: 'Cancel',
                             validationErrorMessage: 'Password is required',
-                            onSubmit: function(password) {
+                            onSubmit: function(passwords) {
                                 vscode.postMessage({
                                     type: 'password-submitted',
-                                    password: password,
+                                    passwords: passwords,
                                     deviceIds: message.deviceIds,
                                     deviceNames: message.deviceNames
                                 });
@@ -109,7 +112,8 @@
                             message.error,
                             onClose,
                             message.buttonText,
-                            secondaryButton
+                            secondaryButton,
+                            message.helpLinks
                         );
                     }
                     break;

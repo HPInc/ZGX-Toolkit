@@ -11,6 +11,7 @@
 import { Device } from '../types/devices';
 import { logger } from '../utils/logger';
 import { executeSSHCommand } from '../utils/sshConnection';
+import { SSHHostVerificationError } from '../utils/sshHostVerifier';
 import { NET_DNSSD_SERVICES, NET_PROTOCOLS } from '../constants/net';
 import type * as vscode from 'vscode';
 import type { DeviceService } from './deviceService';
@@ -453,7 +454,7 @@ export class DNSServiceRegistration {
      * @param password The sudo password to validate
      * @returns Promise resolving to validation result with connection error indicator
      */
-    public async validatePassword(device: Device, password: string): Promise<{valid: boolean, isConnectionError: boolean, error?: string}> {
+    public async validatePassword(device: Device, password: string): Promise<{valid: boolean, isConnectionError: boolean, hostVerificationFailed?: boolean, error?: string}> {
         logger.info('Validating sudo password');
 
         // Use executeSSHCommand with a simple sudo test command
@@ -466,6 +467,9 @@ export class DNSServiceRegistration {
         );
 
         if (!result.success) {
+            if (result.error instanceof SSHHostVerificationError) {
+                return { valid: false, isConnectionError: true, hostVerificationFailed: true, error: result.error.message };
+            }
             const errorMessage = result.error?.message || result.stderr || '';
             const errorMessageLower = errorMessage.toLowerCase();
             const isConnectionError = errorMessageLower.includes('econnrefused') || 

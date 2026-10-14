@@ -1,5 +1,5 @@
 /*
- * Copyright ©2025 HP Development Company, L.P.
+ * Copyright ©2025-2026 HP Development Company, L.P.
  * Licensed under the X11 License. See LICENSE file in the project root for details.
  */
 
@@ -11,6 +11,8 @@
     let passwordFeedback;
     let passwordSection;
     let statusText;
+    let hostTrustActions;
+    let hostVerificationFailed = false;
 
     document.addEventListener('DOMContentLoaded', function() {
         passwordInput = document.getElementById('password-input');
@@ -18,6 +20,10 @@
         passwordFeedback = document.getElementById('password-feedback');
         passwordSection = document.getElementById('password-section');
         statusText = document.getElementById('status-text');
+        hostTrustActions = document.getElementById('host-trust-actions');
+        document.getElementById('host-trust-return-btn')?.addEventListener('click', () => {
+            vscode.postMessage({ type: 'cancel' });
+        });
 
         if (passwordSubmitBtn) {
             passwordSubmitBtn.addEventListener('click', validatePassword);
@@ -33,6 +39,7 @@
     });
 
     function validatePassword() {
+        if (hostVerificationFailed) return;
         const password = passwordInput.value;
 
         if (!password) {
@@ -97,8 +104,16 @@
                         document.getElementById('status-container').classList.remove('hidden');
                     }, 800);
                 } else {
-                    // Password is invalid - allow retry
                     showPasswordFeedback(msg.error || 'Invalid password. Please try again.', 'error');
+                    hostVerificationFailed = msg.hostVerificationFailed === true;
+                    if (hostVerificationFailed) {
+                        passwordInput.value = '';
+                        passwordInput.disabled = true;
+                        passwordSubmitBtn.disabled = true;
+                        passwordSubmitBtn.textContent = 'Continue';
+                        hostTrustActions?.classList.remove('hidden');
+                        break;
+                    }
                     passwordInput.disabled = false;
                     passwordSubmitBtn.disabled = false;
                     passwordSubmitBtn.innerHTML = 'Verify Password';

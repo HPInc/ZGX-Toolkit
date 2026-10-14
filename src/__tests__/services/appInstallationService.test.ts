@@ -7,6 +7,8 @@ import { AppInstallationService } from '../../services/appInstallationService';
 import { Device } from '../../types/devices';
 import { Client as SSHClient } from 'ssh2';
 import { getSSHConfig } from '../../utils/sshConfig';
+import * as sshConnection from '../../utils/sshConnection';
+import { SSHHostVerificationError } from '../../utils/sshHostVerifier';
 
 jest.mock('ssh2');
 jest.mock('fs');
@@ -26,6 +28,17 @@ describe('AppInstallationService - Password Authentication', () => {
     let mockSSHClient: jest.Mocked<SSHClient>;
 
     beforeEach(() => {
+        const fs = require('fs');
+        fs.existsSync.mockReturnValue(false);
+        fs.readFileSync.mockReset().mockImplementation(() => {
+            throw Object.assign(new Error('No such file or directory'), { code: 'ENOENT' });
+        });
+        fs.statSync.mockReset().mockImplementation(() => {
+            throw Object.assign(new Error('No such file or directory'), { code: 'ENOENT' });
+        });
+        fs.accessSync = jest.fn();
+        fs.promises = { open: jest.fn().mockRejectedValue(Object.assign(new Error('File not found'), { code: 'ENOENT' })) };
+        fs.constants = jest.requireActual<typeof import('fs')>('fs').constants;
         service = new AppInstallationService();
         
         mockDevice = {
@@ -55,7 +68,7 @@ describe('AppInstallationService - Password Authentication', () => {
     });
 
     describe('SSH Config Parsing', () => {
-        it('should handle undefined IdentitiesOnly without crashing', () => {
+        it('should handle undefined IdentitiesOnly without crashing', async () => {
             const fs = require('fs');
             
             // Mock SSH config without IdentitiesOnly
@@ -68,12 +81,10 @@ Host test-host
 `);
 
             // This should not throw "Cannot read properties of undefined (reading '0')"
-            expect(() => {
-                getSSHConfig(mockDevice);
-            }).not.toThrow();
+            await expect(getSSHConfig(mockDevice)).resolves.toBeDefined();
         });
 
-        it('should handle IdentitiesOnly as undefined gracefully', () => {
+        it('should handle IdentitiesOnly as undefined gracefully', async () => {
             const fs = require('fs');
             
             fs.existsSync.mockReturnValue(true);
@@ -83,7 +94,7 @@ Host 192.168.1.100
     User zgx
 `);
 
-            const config = getSSHConfig(mockDevice);
+            const config = (await getSSHConfig(mockDevice));
             
             // Should not crash and should return valid config
             expect(config).toBeDefined();
@@ -91,11 +102,11 @@ Host 192.168.1.100
             expect(config.username).toBe('zgx');
         });
 
-        it('should handle missing SSH config file', () => {
+        it('should handle missing SSH config file', async () => {
             const fs = require('fs');
             fs.existsSync.mockReturnValue(false);
 
-            const config = getSSHConfig(mockDevice);
+            const config = (await getSSHConfig(mockDevice));
             
             expect(config).toBeDefined();
             expect(config.host).toBe(mockDevice.host);
@@ -104,6 +115,18 @@ Host 192.168.1.100
     });
 
     describe('Password Validation', () => {
+        it('surfaces host trust failures instead of reporting an invalid sudo password', async () => {
+            const error = new SSHHostVerificationError('SSH host key verification failed: independently verify this device');
+            const executeSpy = jest.spyOn(sshConnection, 'executeSSHCommand').mockResolvedValueOnce({
+                success: false, exitCode: -1, stdout: '', stderr: error.message, error
+            });
+            try {
+                await expect(service.validatePassword(mockDevice, 'synthetic-password')).rejects.toBe(error);
+            } finally {
+                executeSpy.mockRestore();
+            }
+        });
+
         it('should require password for apps with sudo commands during uninstall', async () => {
             const result = await service.uninstallApplications(
                 mockDevice,

@@ -7,7 +7,7 @@
  * Tests for the store barrel export.
  */
 
-import { deviceStore, DeviceStore, groupStore, GroupStore } from '../../store';
+import { deviceStore, DeviceStore, groupStore, GroupStore, connectionStateStore, ConnectionStateStore } from '../../store';
 
 describe('store barrel export', () => {
     it('re-exports the deviceStore singleton and DeviceStore class', () => {
@@ -16,5 +16,9 @@ describe('store barrel export', () => {
 
     it('re-exports the groupStore singleton and GroupStore class', () => {
         expect(groupStore).toBeInstanceOf(GroupStore);
+    });
+
+    it('re-exports the connectionStateStore singleton and ConnectionStateStore class', () => {
+        expect(connectionStateStore).toBeInstanceOf(ConnectionStateStore);
     });
 });

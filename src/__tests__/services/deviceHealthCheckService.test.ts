@@ -1,5 +1,5 @@
 /*
- * Copyright ©2025 HP Development Company, L.P.
+ * Copyright ©2025-2026 HP Development Company, L.P.
  * Licensed under the X11 License. See LICENSE file in the project root for details.
  */
 
@@ -15,10 +15,15 @@ import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
 import * as SSHConfig from 'ssh-config';
+import { SSHHostVerificationError } from '../../utils/sshHostVerifier';
 
 // Mock dependencies
 jest.mock('ssh2');
-jest.mock('node:fs');
+jest.mock('node:fs', () => ({
+    ...jest.createMockFromModule<typeof import('node:fs')>('node:fs'),
+    constants: jest.requireActual<typeof import('node:fs')>('node:fs').constants,
+    promises: { open: jest.fn() }
+}));
 jest.mock('node:os');
 jest.mock('ssh-config');
 
@@ -66,7 +71,13 @@ describe('DeviceHealthCheckService', () => {
 
         // Setup fs mocks
         (fs.existsSync as jest.Mock).mockReturnValue(false);
-        (fs.readFileSync as jest.Mock).mockReturnValue('');
+        (fs.readFileSync as jest.Mock).mockImplementation(() => {
+            throw Object.assign(new Error('File not found'), { code: 'ENOENT' });
+        });
+        (fs.statSync as jest.Mock).mockImplementation(() => {
+            throw Object.assign(new Error('File not found'), { code: 'ENOENT' });
+        });
+        (fs.promises.open as jest.Mock).mockRejectedValue(Object.assign(new Error('File not found'), { code: 'ENOENT' }));
 
         // Setup os mocks
         (os.homedir as jest.Mock).mockReturnValue(path.join(path.sep, 'home', 'testuser'));
@@ -79,6 +90,21 @@ describe('DeviceHealthCheckService', () => {
     });
 
     describe('checkDeviceHealth', () => {
+        it('preserves the trust-failure classification from the SSH connection check', async () => {
+            mockSSHClient.connect.mockImplementation(() => {
+                throw new SSHHostVerificationError('Cannot verify host trust');
+            });
+
+            const result = await service.checkDeviceHealth(testDevice);
+
+            expect(result).toEqual({
+                isHealthy: false,
+                device: testDevice.name,
+                error: 'Cannot verify host trust',
+                hostVerificationFailed: true
+            });
+        });
+
         it('should return healthy status when SSH connection succeeds', async () => {
             // Mock successful connection
             mockSSHClient.on.mockImplementation((event: string, handler: any) => {
@@ -319,7 +345,8 @@ Host test-device
                 if (filePath.includes('id_rsa')) {
                     return Buffer.from('rsa-key-content');
                 }
-                throw new Error('File not found');
+                if (['config', 'ssh_config'].includes(path.basename(filePath))) return '';
+                throw Object.assign(new Error('File not found'), { code: 'ENOENT' });
             });
 
             const mockCompute = jest.fn().mockReturnValue({
@@ -415,7 +442,7 @@ Host test-device
                 if (filePath.includes('id_ecdsa')) {
                     return Buffer.from('ecdsa-key-content');
                 }
-                throw new Error('File not found');
+                throw Object.assign(new Error('File not found'), { code: 'ENOENT' });
             });
 
             mockSSHClient.on.mockImplementation((event: string, handler: any) => {
@@ -492,30 +519,25 @@ Host test-device
             );
         });
 
-        it('should handle SSH config parse errors gracefully', async () => {
+        it('refuses to connect when SSH configuration cannot be parsed safely', async () => {
             (fs.existsSync as jest.Mock).mockReturnValue(true);
             (fs.readFileSync as jest.Mock).mockReturnValue('invalid ssh config');
             (SSHConfig.parse as jest.Mock).mockImplementation(() => {
                 throw new Error('Parse error');
             });
 
-            mockSSHClient.on.mockImplementation((event: string, handler: any) => {
-                if (event === 'ready') {
-                    setTimeout(() => handler(), 10);
-                }
-                return mockSSHClient;
-            });
-
-            // Should not throw, should continue with default config
             const result = await service.checkDeviceHealth(testDevice);
 
-            expect(result.isHealthy).toBe(true);
-            expect(mockSSHClient.connect).toHaveBeenCalled();
+            expect(result.isHealthy).toBe(false);
+            expect(mockSSHClient.connect).not.toHaveBeenCalled();
         });
 
         it('should handle identity file read errors gracefully', async () => {
             (fs.existsSync as jest.Mock).mockReturnValue(true);
-            (fs.readFileSync as jest.Mock).mockImplementation(() => {
+            (fs.readFileSync as jest.Mock).mockImplementation((filePath: string) => {
+                if (['config', 'ssh_config'].includes(path.basename(filePath))) {
+                    return '';
+                }
                 throw new Error('Permission denied');
             });
 

@@ -13,11 +13,15 @@ import { URLS } from '../../../constants/config';
 import * as vscode from 'vscode';
 import { SetupOptionsViewController } from '../../setup/options/setupOptionsViewController';
 import { AppSelectionViewController } from '../../apps/selection/appSelectionViewController';
-import { DeviceService, ConnectXGroupService, extensionStateService } from '../../../services';
+import { DeviceService, ConnectXGroupService, extensionStateService, remoteSessionRegistryService } from '../../../services';
 import { TemplateListViewController } from '../../templates/templateListViewController';
 import { DnsRegistrationViewController } from '../../setup/dnsRegistration/dnsRegistrationViewController';
 import { DeviceManagerViewController } from '../manager/deviceManagerViewController';
 import { PairDetailsViewController } from '../../groups/pairDetails/pairDetailsViewController';
+import { connectionStateStore, deviceReachabilityStore } from '../../../store';
+import { DEVICE_STATUS_LABELS, DeviceStatus } from '../../../types/devicestatus';
+import { getDeviceStatus } from '../../../utils/deviceStatus';
+import { deviceReachabilityCheckService } from '../../../services/deviceReachabilityCheckService';
 
 /**
  * Device list view for the sidebar.
@@ -67,6 +71,20 @@ export class DeviceListViewController extends BaseViewController {
                 this.refresh(this.lastRenderParams).catch(error => {
                     this.logger.error('Failed to refresh device list view after group store update', { error });
                 });
+            }),
+            // Subscribe to connection state updates (active Remote-SSH sessions across windows)
+            connectionStateStore.subscribe(() => {
+                this.logger.trace('Connection state store updated, refreshing device list view');
+                this.refresh(this.lastRenderParams).catch(error => {
+                    this.logger.error('Failed to refresh device list view after connection state update', { error });
+                });
+            }),
+            // Subscribe to device reachability updates
+            deviceReachabilityStore.subscribe(() => {
+                this.logger.trace('Device reachability updated, updating device list status indicators');
+                this.updateReachabilityIndicators().catch(error => {
+                    this.logger.error('Failed to update device list reachability indicators', { error });
+                });
             })
         );
     }
@@ -76,6 +94,11 @@ export class DeviceListViewController extends BaseViewController {
 
         // Store params for later use in refresh
         this.lastRenderParams = params;
+
+        // Re-read the shared active session registry immediately rather than trusting the
+        // last background reconcile, so a device connected in another window doesn't still
+        // show "Connect" for several seconds after opening/refreshing this view.
+        await this.reconcileConnectionState();
 
         const devices = await this.deviceService.getAllDevices();
         const groups = await this.connectxGroupService.getAllGroups();
@@ -99,19 +122,50 @@ export class DeviceListViewController extends BaseViewController {
             
             const group = deviceToGroupMap.get(device.id);
 
+            const connectionState = connectionStateStore.get(device.id);
+            const isConnected = !!connectionState;
+            const isConnectedHere = connectionState?.windowId === vscode.env.sessionId;
+            const isConnectedElsewhere = isConnected && !isConnectedHere;
+            // Determine device reachability and status
+            const reachabilityState = deviceReachabilityStore.get(device.id);
+            const deviceStatus = getDeviceStatus(
+                device,
+                connectionState,
+                reachabilityState,
+                isConnectedHere,
+                isConnectedElsewhere
+            );
+            const deviceStatusLabel = DEVICE_STATUS_LABELS[deviceStatus] || 'Unknown';
+            const notReachable = deviceStatus === DeviceStatus.CheckStatus
+                || deviceStatus === DeviceStatus.CompleteSetup;
+            const unreachable = deviceStatus === DeviceStatus.Unreachable;
+
             return {
                 ...device,
                 needsDnsRegistration,
                 isPaired: !!group,
-                groupId: group?.id
+                groupId: group?.id,
+                isConnected,
+                isConnectedHere,
+                isConnectedElsewhere,
+                notReachable,
+                unreachable,
+                deviceStatus,
+                deviceStatusLabel,
+                reachabilityChecking: reachabilityState?.checking ?? false,
+                reachabilityCheckedAt: reachabilityState?.checkedAt ?? '',
+                reachabilityExplicit: deviceReachabilityStore.isExplicitCheck(device.id)
             };
         });
 
-        // Separate devices into paired groups and unpaired devices
-        const groupMap = new Map<string, typeof devicesWithStatus>();
-        const unpairedDevices: typeof devicesWithStatus = [];
+        const connectedDevices = devicesWithStatus.filter(device => device.isConnectedHere);
+        const visibleDevices = connectedDevices.length > 0 ? connectedDevices : devicesWithStatus;
 
-        for (const device of devicesWithStatus) {
+        // Separate devices into paired groups and unpaired devices
+        const groupMap = new Map<string, typeof visibleDevices>();
+        const unpairedDevices: typeof visibleDevices = [];
+
+        for (const device of visibleDevices) {
             if (device.isPaired && device.groupId) {
                 if (!groupMap.has(device.groupId)) {
                     groupMap.set(device.groupId, []);
@@ -130,12 +184,14 @@ export class DeviceListViewController extends BaseViewController {
         
         // Prepare data for template
         const templateData = {
-            devices: devicesWithStatus,
+            devices: visibleDevices,
+            connectedDevices,
+            connectedInThisWindow: connectedDevices.length > 0,
             pairedGroups: pairedGroups.length > 0 ? pairedGroups : null,
             unpairedDevices: unpairedDevices.length > 0 ? unpairedDevices : null,
             pairedDeviceCount: pairedGroups.reduce((sum, g) => sum + g.devices.length, 0),
             unpairedDeviceCount: unpairedDevices.length,
-            noDevices: devices.length === 0,
+            noDevices: visibleDevices.length === 0,
             zrtQuickLinkSeen: extensionStateService.hasSeenQuickLinkBadge('zrt-info')
         };
 
@@ -158,8 +214,63 @@ export class DeviceListViewController extends BaseViewController {
         return this.wrapHtml(html, nonce);
     }
 
+    /**
+     * Re-read the shared active session registry and reconcile the connection state store
+     * against it, so button state reflects the true current state rather than only what the
+     * last file-watcher event or periodic timer picked up.
+     */
+    private async reconcileConnectionState(): Promise<void> {
+        try {
+            const entries = await remoteSessionRegistryService.readAll();
+            connectionStateStore.reconcile(entries);
+        } catch (error) {
+            this.logger.error('Failed to reconcile connection state before rendering device list', { error });
+        }
+    }
+
+    private hasCurrentWindowConnection(): boolean {
+        return Array.from(connectionStateStore.getAll().values()).some(connection =>
+            connection.connected && connection.windowId === vscode.env.sessionId
+        );
+    }
+
+    private async updateReachabilityIndicators(): Promise<void> {
+        const devices = await this.deviceService.getAllDevices();
+        this.sendMessageToWebview({
+            type: 'reachability-status-updated',
+            statuses: devices.map(device => {
+                const connectionState = connectionStateStore.get(device.id);
+                const reachabilityState = deviceReachabilityStore.get(device.id);
+                const isConnectedHere = connectionState?.windowId === vscode.env.sessionId;
+                const isConnectedElsewhere = !!connectionState && !isConnectedHere;
+                const status = getDeviceStatus(
+                    device,
+                    connectionState,
+                    reachabilityState,
+                    isConnectedHere,
+                    isConnectedElsewhere
+                );
+
+                return {
+                    deviceId: device.id,
+                    status,
+                    notReachable: status === DeviceStatus.CheckStatus || status === DeviceStatus.CompleteSetup,
+                    unreachable: status === DeviceStatus.Unreachable,
+                    checking: reachabilityState?.checking ?? false,
+                    checkedAt: reachabilityState?.checkedAt,
+                    explicit: deviceReachabilityStore.isExplicitCheck(device.id)
+                };
+            })
+        });
+    }
+
     async handleMessage(message: Message): Promise<void> {
         await super.handleMessage(message);
+
+        if (this.hasCurrentWindowConnection() && message.type !== 'disconnect-device' && message.type !== 'refresh') {
+            this.logger.warn('Ignoring device list action while connected to a device', { type: message.type });
+            return;
+        }
 
         switch (message.type) {
             case 'refresh':
@@ -176,6 +287,10 @@ export class DeviceListViewController extends BaseViewController {
             
             case 'connect-device':
                 await this.connectDevice(message.id, message.newWindow);
+                break;
+            
+            case 'disconnect-device':
+                await this.disconnectDevice(message.id);
                 break;
             
             case 'setup-device':
@@ -200,6 +315,13 @@ export class DeviceListViewController extends BaseViewController {
 
             case 'unpair-devices':
                 await this.navigateToUnpairDevices(message.groupId);
+                break;
+
+            case 'check-device-reachability':
+                await this.checkDeviceReachability(message.deviceId);
+                break;
+            case 'refresh-all-reachability':
+                await this.refreshAllReachability();
                 break;
 
             // Other message types are handled by the provider or services
@@ -285,6 +407,15 @@ export class DeviceListViewController extends BaseViewController {
     private async connectDevice(id: string, newWindow?: boolean): Promise<void> {
         this.logger.info('Connecting to device', { id, newWindow });
 
+        const device = await this.deviceService.getDevice(id);
+        if (device && !(await this.confirmIfAlreadyConnected(device))) {
+            return;
+        }
+
+        if (!newWindow) {
+            this.closeEditorIfShowing(AppSelectionViewController.viewId(), id);
+        }
+
         try {
             await this.deviceService.connectToDevice(id, newWindow);
             this.logger.debug('Connection initiated', { id });
@@ -306,6 +437,80 @@ export class DeviceListViewController extends BaseViewController {
             
             this.logger.error('Failed to connect to device', { error, id });
             throw error;
+        }
+    }
+
+    /**
+     * If the device already has an active session (in this or another window), confirm with
+     * the user before opening another one instead of silently proceeding.
+     *
+     * @returns true if it's fine to proceed (not connected, or user confirmed anyway)
+     */
+    private async confirmIfAlreadyConnected(device: { id: string; name: string }): Promise<boolean> {
+        if (!connectionStateStore.get(device.id)) {
+            return true;
+        }
+
+        const confirmation = await vscode.window.showWarningMessage(
+            `Already connected to ${device.name}. Open another session anyway?`,
+            { modal: true },
+            'Open Anyway'
+        );
+
+        return confirmation === 'Open Anyway';
+    }
+
+    /**
+     * Disconnect the current window from a device it is actively connected to.
+     * Only ever invoked from the window that owns the session, since there is no supported
+     * API for one window to close another window's remote connection.
+     */
+    private async disconnectDevice(id: string): Promise<void> {
+        this.logger.info('Disconnecting from device', { id });
+
+        const device = await this.deviceService.getDevice(id);
+        if (!device) {
+            this.logger.error('device not found for disconnect', { id });
+            throw new Error(`device not found: ${id}`);
+        }
+
+        const confirmation = await vscode.window.showWarningMessage(
+            `Disconnect from ${device.name}?`,
+            { modal: true },
+            'Disconnect'
+        );
+
+        if (confirmation !== 'Disconnect') {
+            this.logger.debug('device disconnect cancelled by user', { id });
+            return;
+        }
+
+        const connectionState = connectionStateStore.get(id);
+        if (connectionState?.windowId && connectionState.windowId !== vscode.env.sessionId) {
+            const requested = await remoteSessionRegistryService.requestDisconnect(id, connectionState.windowId);
+            if (!requested) {
+                this.logger.debug('Remote session was no longer active when disconnect was requested', {
+                    id,
+                    targetWindowId: connectionState.windowId
+                });
+            }
+            return;
+        }
+
+        await remoteSessionRegistryService.unregister(id, vscode.env.sessionId).catch(error =>
+            this.logger.error('Failed to unregister active remote session on manual disconnect', { error, id })
+        );
+
+        // Re-check reachability now that the session is gone, so the status reflects reality.
+        await deviceReachabilityCheckService.checkDevicesReachability([device]).catch(error =>
+            this.logger.error('Failed to refresh device reachability after disconnect', { error, id })
+        );
+
+        try {
+            await vscode.commands.executeCommand('workbench.action.remote.close');
+        } catch (error) {
+            this.logger.error('Failed to close remote connection', { error, id });
+            vscode.window.showErrorMessage('Could not close the remote connection automatically. Please close this window manually.');
         }
     }
 
@@ -378,6 +583,7 @@ export class DeviceListViewController extends BaseViewController {
             // User confirmed, proceed with deletion
             await this.deviceService.deleteDevice(id);
             this.logger.debug('device deleted', { id, deviceName });
+            await this.navigateTo(DeviceManagerViewController.viewId(), {}, 'editor');
         } catch (error) {
             this.logger.error('Failed to delete device', { error, id });
             throw error;
@@ -425,6 +631,26 @@ export class DeviceListViewController extends BaseViewController {
             throw new Error(`device not found: ${id}`);
         }
         await this.navigateTo(DnsRegistrationViewController.viewId(), { device, setupType: 'migration' }, 'editor');
+    }
+
+    /**
+     * Check if a specific device is reachable over the network.
+     * @param id The identifier of the device to check reachability for.
+     */
+
+    private async checkDeviceReachability(id: string): Promise<void> {
+        const device = await this.deviceService.getDevice(id);
+        if (!device) { return; }
+        await deviceReachabilityCheckService.checkDevicesReachability([device], true);
+    }
+
+    /**
+     * Refresh the reachability status for all devices.
+     */ 
+
+    private async refreshAllReachability(): Promise<void> {
+        const devices = await this.deviceService.getAllDevices();
+        await deviceReachabilityCheckService.checkDevicesReachability(devices, true);
     }
 
     dispose(): void {

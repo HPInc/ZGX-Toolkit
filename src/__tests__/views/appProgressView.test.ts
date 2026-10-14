@@ -10,6 +10,7 @@ import { Logger } from '../../utils/logger';
 import { ITelemetryService, TelemetryEventType } from '../../types/telemetry';
 import { AppInstallationService, PasswordService, DeviceService } from '../../services';
 import { Device } from '../../types/devices';
+import { SSHHostVerificationError, SSH_HOST_VERIFICATION_GUIDANCE } from '../../utils/sshHostVerifier';
 
 describe('AppProgressViewController', () => {
     let view: AppProgressViewController;
@@ -526,6 +527,23 @@ describe('AppProgressViewController', () => {
                 valid: false,
                 error: 'network down'
             });
+        });
+
+        it('reports a host trust failure and blocks further password submissions', async () => {
+            const error = new SSHHostVerificationError('Unknown host key (SHA256:test-fingerprint)');
+            mockAppInstallationService.validatePassword.mockRejectedValue(error);
+            await view.render({ device: mockDevice, operation: 'install', selectedApps: ['podman'] });
+            await jest.advanceTimersByTimeAsync(100);
+
+            await view.handleMessage({ type: 'validatePassword', password: 'secret' } as any);
+            await view.handleMessage({ type: 'validatePassword', password: 'another-password' } as any);
+
+            expect(mockMessageCallback).toHaveBeenCalledWith({
+                type: 'passwordValidationResult', valid: false, hostVerificationFailed: true,
+                error: `${SSH_HOST_VERIFICATION_GUIDANCE}\n\n${error.message}`
+            });
+            expect(mockAppInstallationService.validatePassword).toHaveBeenCalledTimes(1);
+            expect(mockAppInstallationService.installApplications).not.toHaveBeenCalled();
         });
 
         it('should fall back to a generic validation error message for a non-Error rejection', async () => {

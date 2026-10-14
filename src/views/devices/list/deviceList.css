@@ -77,12 +77,18 @@ html, body {
     font-size: 10px;
 }
 
-.device-item-icon:hover {
+.device-item-icon:disabled {
+    color: var(--vscode-disabledForeground);
+    cursor: not-allowed;
+    opacity: 0.45;
+}
+
+.device-item-icon:hover:not(:disabled) {
     background-color: var(--vscode-list-hoverBackground);
     color: var(--vscode-foreground);
 }
 
-.device-item-icon.edit-icon:hover {
+.device-item-icon.edit-icon:hover:not(:disabled) {
     color: var(--vscode-button-background);
 }
 
@@ -96,7 +102,7 @@ html, body {
     opacity: 0.8;
 }
 
-.device-item-icon.remove-icon:hover {
+.device-item-icon.remove-icon:hover:not(:disabled) {
     color: var(--vscode-errorForeground);
 }
 
@@ -110,6 +116,15 @@ html, body {
     display: flex;
     gap: var(--spacing-sm);
     align-items: center;
+}
+
+.device-actions-connected-elsewhere {
+    flex-wrap: wrap;
+    align-items: flex-start;
+}
+
+.device-actions-connected-elsewhere .status-connected {
+    flex: 0 0 100%;
 }
 
 .device-actions .btn, .device-actions .split-button-main, .device-actions .split-button-dropdown {
@@ -224,9 +239,28 @@ html, body {
     margin: 0;
 }
 
+.device-item-not-reachable {
+    border-left-color: #ffffff;
+}
+
 .sidebar-paired-group-container .device-item {
     margin: var(--spacing-xs) var(--spacing-sm);
     border-left-color: var(--hp-electric-blue);
+}
+
+.device-item.device-item-not-reachable,
+.sidebar-paired-group-container .device-item.device-item-not-reachable {
+    border-left-color: var(--vscode-foreground);
+}
+
+.device-item.device-item-unreachable,
+.sidebar-paired-group-container .device-item.device-item-unreachable {
+    border-left-color: var(--vscode-errorForeground);
+}
+
+.device-item.device-item-connected,
+.sidebar-paired-group-container .device-item.device-item-connected {
+    border-left-color: var(--vscode-testing-iconPassed);
 }
 
 .sidebar-paired-group-actions {

@@ -14,6 +14,7 @@ import { AppInstallationService } from '../../../services/appInstallationService
 import { AppProgressViewController } from '../progress/appProgressViewController';
 import { InferenceInstructionsViewController } from '../../instructions/inference/inferenceInstructionsViewController';
 import { DeviceManagerViewController } from '../../devices/manager/deviceManagerViewController';
+import { SSH_HOST_VERIFICATION_GUIDANCE } from '../../../utils/sshHostVerifier';
 
 /**
  * Application selection view - allows users to select apps to install on a device
@@ -21,7 +22,8 @@ import { DeviceManagerViewController } from '../../devices/manager/deviceManager
 export class AppSelectionViewController extends BaseViewController {
     private readonly deviceService: DeviceService;
     private readonly appInstallationService: AppInstallationService;
-    private cachedHealthCheckResult?: { isHealthy: boolean; error?: string; deviceId: string };
+    private cachedHealthCheckResult?: { isHealthy: boolean; error?: string; deviceId: string; hostVerificationFailed?: boolean };
+    private healthErrorDisplayed = false;
 
     public static viewId(): string {
         return 'apps/selection';
@@ -59,6 +61,7 @@ export class AppSelectionViewController extends BaseViewController {
 
         // Clear cached health check result on each render to ensure fresh status
         this.cachedHealthCheckResult = undefined;
+        this.healthErrorDisplayed = false;
 
         // Get all app definitions as a flat array
         const allApps = APP_CATEGORIES.flatMap(cat => cat.apps);
@@ -76,8 +79,10 @@ export class AppSelectionViewController extends BaseViewController {
         /**
         * Message shown in the "unsupported on current device" banner for device-type-targeted
         * categories (e.g. Model Serving) when the current device isn't a supported type.
+        * Note: We currently allow the "Other" device type for ZRT as they may be able to install it,
+        * but this restriction can be changed in the future if needed for other applications.
         */
-        const unsupportedCategoryMessage = '{productName} is currently only supported on HP ZGX Fury and Nano devices.';
+        const unsupportedCategoryMessage = '{productName} is currently only supported on HP Z-series devices and HP ZGX devices.';
 
         // Transform categories for rendering, tagging device-type-targeted categories
         // with whether they are enabled for this device.
@@ -278,6 +283,10 @@ export class AppSelectionViewController extends BaseViewController {
                 deviceId: message.deviceId,
                 isInstalled: false
             });
+
+            if (healthCheckResult.hostVerificationFailed) {
+                await this.performDeviceHealthCheck(device, healthCheckResult);
+            }
             
             return;
         }
@@ -487,7 +496,7 @@ export class AppSelectionViewController extends BaseViewController {
      * @param device The device that failed the health check
      * @param healthCheckResult Optional pre-existing health check result to avoid duplicate checks
      */
-    private async performDeviceHealthCheck(device: Device, healthCheckResult?: { isHealthy: boolean; error?: string }): Promise<void> {
+    private async performDeviceHealthCheck(device: Device, healthCheckResult?: { isHealthy: boolean; error?: string; hostVerificationFailed?: boolean }): Promise<void> {
         try {
             if (!healthCheckResult) {
                 this.logger.debug('Performing device health check', { device: device.name });
@@ -497,16 +506,26 @@ export class AppSelectionViewController extends BaseViewController {
             if (healthCheckResult.isHealthy) {
                 return;
             }
-            
-            
+
+            if (this.healthErrorDisplayed) {
+                return;
+            }
+
             this.sendMessageToWebview({
                 type: 'show-error-overlay',
-                errorTitle: 'Application installation status cannot be verified at this time',
-                errorDetails: `Failed to establish an SSH connection to device **${device.name}**.\n*Please ensure the device is powered on, connected to the network, and that SSH key-based authentication is properly configured.*`,
+                errorTitle: healthCheckResult.hostVerificationFailed ? 'Device identity could not be verified' : 'Application installation status cannot be verified at this time',
+                errorDetails: healthCheckResult.hostVerificationFailed
+                    ? SSH_HOST_VERIFICATION_GUIDANCE
+                    : `Failed to establish an SSH connection to device **${device.name}**.\n*Please ensure the device is powered on, connected to the network, and that SSH key-based authentication is properly configured.*`,
                 error: healthCheckResult.error || 'Connection could not be established to the device.',
+                ...(healthCheckResult.hostVerificationFailed ? { helpLinks: [{
+                    text: 'SSH Host Key Troubleshooting',
+                    url: 'https://github.com/HPInc/ZGX-Toolkit/wiki/SSH-Host-Key-Troubleshooting'
+                }] } : {}),
                 buttonText: 'Return to Device Manager',
                 onClose: 'cancel'
             });
+            this.healthErrorDisplayed = true;
         } catch (error) {
             this.logger.error('Error during device health check', {
                 device: device.name,
@@ -514,6 +533,9 @@ export class AppSelectionViewController extends BaseViewController {
             });
 
             // Show error overlay for unexpected errors
+            if (this.healthErrorDisplayed) {
+                return;
+            }
             this.sendMessageToWebview({
                 type: 'show-error-overlay',
                 errorTitle: 'Device Health Check Failed',
@@ -522,6 +544,7 @@ export class AppSelectionViewController extends BaseViewController {
                 buttonText: 'Return to Device Manager',
                 onClose: 'cancel'
             });
+            this.healthErrorDisplayed = true;
         }
     }
 }

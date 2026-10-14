@@ -8,6 +8,7 @@ import { SSHCommandResult } from '../types/ssh';
 import { AppDefinition, AppPreInstallCheck, getAllApps } from '../constants/apps';
 import { logger } from '../utils/logger';
 import { executeSSHCommand } from '../utils/sshConnection';
+import { SSHHostVerificationError } from '../utils/sshHostVerifier';
 
 /**
  * Error types for installation/uninstallation operations.
@@ -686,6 +687,9 @@ export class AppInstallationService {
 
         if (!result.success) {
             logger.error('Sudo password validation failed', { device: device.name, error: result.error?.message, stderr: result.stderr, stdout: result.stdout });
+            if (result.error instanceof SSHHostVerificationError) {
+                throw result.error;
+            }
         }
         return result.success;
     }
