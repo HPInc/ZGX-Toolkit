@@ -106,7 +106,9 @@ node_modules/**/examples/**
 node_modules/**/demo/**
 node_modules/**/samples/**
 
-# Exclude native crypto bindings from ssh2
-node_modules/ssh2/lib/protocol/crypto/build/**
-node_modules/ssh2/lib/protocol/crypto/src/**
-node_modules/ssh2/lib/protocol/crypto/binding.gyp
+# Exclude native crypto bindings from ssh2 (copied into dist/node_modules by scripts/build.mjs).
+# Shipping a host-built sshcrypto.node causes a "Bad Image" error on other platforms.
+dist/node_modules/**/*.node
+dist/node_modules/ssh2/lib/protocol/crypto/build/**
+dist/node_modules/ssh2/lib/protocol/crypto/src/**
+dist/node_modules/ssh2/lib/protocol/crypto/binding.gyp

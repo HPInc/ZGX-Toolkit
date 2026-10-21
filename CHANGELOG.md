@@ -1,3 +1,10 @@
+# Version v1.38.4 → v1.38.8 (October 2026)
+
+## What's New
+
+### Bug Fixes
+Fix for crash on some machines with sshcrypto.node
+
 # Version v1.35.10 → v1.38.4 (October 2026)
 
 ## What's New

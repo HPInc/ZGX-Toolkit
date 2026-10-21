@@ -114,12 +114,21 @@ function copyRecursiveSync(src, dest) {
             fs.mkdirSync(dest, { recursive: true });
         }
         const files = fs.readdirSync(src);
+        const isNativeAddonDir = files.includes('binding.gyp');
         for (const file of files) {
             // Skip test/doc cruft; nested node_modules are skipped since transitive
             // deps are already resolved and copied individually at the top level
             if (file === 'test' || file === 'tests' || file === 'docs' ||
                 file === 'node_modules' ||
                 file.endsWith('.test.js') || file.endsWith('.md')) {
+                continue;
+            }
+            // Never ship compiled native addons: they are built for the packaging host's
+            // OS/arch (e.g. Linux ELF from CI), and loading them on another platform
+            // triggers a Windows "Bad Image" (0xc000012f) dialog. ssh2 falls back to
+            // pure-JS crypto when its optional sshcrypto.node binding is absent.
+            if (file.endsWith('.node') ||
+                (isNativeAddonDir && (file === 'binding.gyp' || file === 'build'))) {
                 continue;
             }
             copyRecursiveSync(path.join(src, file), path.join(dest, file));
