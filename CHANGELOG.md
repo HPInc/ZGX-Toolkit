@@ -1,3 +1,10 @@
+# Version v1.38.8 → v1.38.12 (November 2026)
+
+## What's New
+
+### Bug Fixes
+Enable fitering of runtimes for Ciphers, KexAlgorithms, and HostKeyAlgorithms for ssh2. Also add in support for the algorithm configuration modifiers ^, +, -. This allows the macOS to successfully connect with its default ssh configuration.
+
 # Version v1.38.4 → v1.38.8 (October 2026)
 
 ## What's New

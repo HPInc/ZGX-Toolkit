@@ -176,6 +176,77 @@ describeWithOpenSSH('real SSH host verification before authentication and sudo',
         expect(receivedStdin).toBe(password + '\n');
     });
 
+    it('accepts an enrolled bare-host key when no nondefault-port entry exists', async () => {
+        realFs.writeFileSync(knownHostsFile, `${device.host} ${hostKeys.public.trim()}\n`);
+        expect((await executeSudo()).success).toBe(true);
+        expect(connectionCount).toBe(1);
+        expect(receivedStdin).toBe(password + '\n');
+    });
+
+    it.each([false, true])('falls back to an enrolled bare-host key with only wildcard CA matches (separate file: %s)', async separateFile => {
+        const authorityFile = separateFile ? `${knownHostsFile}2` : knownHostsFile;
+        realFs.writeFileSync(knownHostsFile, `${device.host} ${hostKeys.public.trim()}\n`);
+        realFs.appendFileSync(authorityFile, `@cert-authority * ${changedHostKeys.public.trim()}\n`);
+        expect((await executeSudo()).success).toBe(true);
+        expect(connectionCount).toBe(1);
+        expect(receivedStdin).toBe(password + '\n');
+    });
+
+    it.each([
+        { separateFile: false, withAuthority: false },
+        { separateFile: true, withAuthority: false },
+        { separateFile: false, withAuthority: true },
+        { separateFile: true, withAuthority: true }
+    ])('does not fall back when a port-specific key conflicts (separate file: $separateFile, CA: $withAuthority)', async ({ separateFile, withAuthority }) => {
+        const conflictFile = separateFile ? `${knownHostsFile}2` : knownHostsFile;
+        realFs.writeFileSync(knownHostsFile, `${device.host} ${hostKeys.public.trim()}\n`);
+        if (withAuthority) realFs.appendFileSync(knownHostsFile, `@cert-authority * ${changedHostKeys.public.trim()}\n`);
+        realFs.appendFileSync(conflictFile, `${knownHostEntry(changedHostKeys.public)}\n`);
+        const result = await executeSudo(2);
+        expect(result.success).toBe(false);
+        expect(result.error).toBeInstanceOf(SSHHostVerificationError);
+        expect(connectionCount).toBe(1);
+        expectNoCredentials();
+    });
+
+    it.each(['presented', 'other'])('does not fall back past a revoked port-specific key with wildcard CA matches: %s', async key => {
+        const revokedKey = key === 'presented' ? hostKeys.public : changedHostKeys.public;
+        realFs.writeFileSync(knownHostsFile, `@cert-authority * ${changedHostKeys.public.trim()}\n@revoked ${knownHostEntry(revokedKey)}\n${device.host} ${hostKeys.public.trim()}\n`);
+        const result = await executeSudo(2);
+        expect(result.success).toBe(false);
+        expect(result.error).toBeInstanceOf(SSHHostVerificationError);
+        expect(connectionCount).toBe(1);
+        expectNoCredentials();
+    });
+
+    it('does not trust a wildcard CA entry as a server key even when its key bytes match', async () => {
+        realFs.writeFileSync(knownHostsFile, `@cert-authority * ${hostKeys.public.trim()}\n`);
+        const result = await executeSudo(2);
+        expect(result.success).toBe(false);
+        expect(result.error).toBeInstanceOf(SSHHostVerificationError);
+        expect(connectionCount).toBe(1);
+        expectNoCredentials();
+    });
+
+    it('does not fall back to a bare-host key when HostKeyAlias is configured', async () => {
+        realFs.writeFileSync(knownHostsFile, `${device.host} ${hostKeys.public.trim()}\n`);
+        realFs.writeFileSync(path.join(tempDirectory, '.ssh', 'config'), 'Host *\n  HostKeyAlias explicit-trust-alias\n  GlobalKnownHostsFile none\n');
+        const result = await executeSudo(2);
+        expect(result.success).toBe(false);
+        expect(result.error).toBeInstanceOf(SSHHostVerificationError);
+        expect(connectionCount).toBe(1);
+        expectNoCredentials();
+    });
+
+    it.each(['@revoked', '@cert-authority'])('does not accept a %s bare-host key through fallback', async marker => {
+        realFs.writeFileSync(knownHostsFile, `${marker} ${device.host} ${hostKeys.public.trim()}\n`);
+        const result = await executeSudo(2);
+        expect(result.success).toBe(false);
+        expect(result.error).toBeInstanceOf(SSHHostVerificationError);
+        expect(connectionCount).toBe(1);
+        expectNoCredentials();
+    });
+
     it.each(['CheckHostIP yes', 'VerifyHostKeyDNS yes', 'UpdateHostKeys ask'])('rejects unimplemented system host policy before connecting: %s', policy => {
         realFs.writeFileSync(knownHostsFile, knownHostEntry());
         systemConfig(`Match originalhost 127.0.0.1\n  ${policy}\n`);
@@ -192,7 +263,7 @@ describeWithOpenSSH('real SSH host verification before authentication and sudo',
         'ProxyCommand ssh bastion', 'ProxyJump bastion', 'KnownHostsCommand /untrusted/command',
         'UserKnownHostsFile %Q', 'UserKnownHostsFile ~other/known_hosts',
         'UserKnownHostsFile ${ZTK_UNSET_LOOPBACK_TRUST_VARIABLE}',
-        'Ciphers +aes128-ctr', 'KexAlgorithms unknown', 'MACs hmac-*', 'RekeyLimit 1G'
+        'Ciphers +aes128-cbc', 'KexAlgorithms unknown', 'MACs hmac-*', 'RekeyLimit 1G'
     ])('rejects applicable system policy before any connection or retry: %s', async policy => {
         realFs.writeFileSync(knownHostsFile, knownHostEntry());
         systemConfig(`Match originalhost 127.0.0.1\n  ${policy}\n`);
@@ -203,10 +274,11 @@ describeWithOpenSSH('real SSH host verification before authentication and sudo',
         expectNoCredentials();
     });
 
-    it('allows enrolled connections with explicitly permitted transport algorithms', async () => {
+    it.each(['', '+', '^'])('allows enrolled connections with permitted transport algorithms (modifier: "%s")', async modifier => {
         realFs.writeFileSync(knownHostsFile, knownHostEntry());
-        systemConfig('Host *\n  Ciphers aes128-ctr\n  KexAlgorithms ecdh-sha2-nistp256\n  MACs hmac-sha2-256\n');
+        systemConfig(`Match originalhost 127.0.0.1\n  Ciphers ${modifier}aes128-ctr\n  KexAlgorithms ${modifier}ecdh-sha2-nistp256\n  MACs ${modifier}hmac-sha2-256\n`);
         expect((await executeSudo()).success).toBe(true);
+        expect(connectionCount).toBe(1);
         expect(receivedStdin).toBe(password + '\n');
     });
 

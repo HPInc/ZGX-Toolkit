@@ -6,6 +6,7 @@
 import { execFile } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import * as fs from 'node:fs';
+import { createRequire } from 'node:module';
 import * as os from 'node:os';
 import * as path from 'node:path';
 import { TextDecoder } from 'node:util';
@@ -34,35 +35,75 @@ function firstValue(value: string | string[] | undefined): string | undefined {
     return Array.isArray(value) ? value[0] : value;
 }
 
-const SUPPORTED_HOST_KEY_ALGORITHMS: readonly ServerHostKeyAlgorithm[] = [
+const ssh2Require = createRequire(__filename);
+const runtimeAlgorithms = ssh2Require('ssh2/lib/protocol/constants.js') as Readonly<Record<'SUPPORTED_SERVER_HOST_KEY' | 'SUPPORTED_CIPHER' | 'SUPPORTED_KEX' | 'SUPPORTED_MAC' | 'DEFAULT_SERVER_HOST_KEY' | 'DEFAULT_CIPHER' | 'DEFAULT_KEX' | 'DEFAULT_MAC', readonly string[]>>;
+const ALLOWED_HOST_KEY_ALGORITHMS: readonly ServerHostKeyAlgorithm[] = [
     'ssh-ed25519', 'ecdsa-sha2-nistp256', 'ecdsa-sha2-nistp384', 'ecdsa-sha2-nistp521',
     'rsa-sha2-512', 'rsa-sha2-256'
 ];
+const SUPPORTED_HOST_KEY_ALGORITHMS: readonly ServerHostKeyAlgorithm[] = ALLOWED_HOST_KEY_ALGORITHMS.filter(hostKey => runtimeAlgorithms.SUPPORTED_SERVER_HOST_KEY.includes(hostKey));
 
-const SUPPORTED_CIPHERS: readonly CipherAlgorithm[] = [
+const ALLOWED_CIPHERS: readonly CipherAlgorithm[] = [
     'chacha20-poly1305@openssh.com', 'aes128-gcm@openssh.com', 'aes256-gcm@openssh.com',
     'aes128-ctr', 'aes192-ctr', 'aes256-ctr'
 ];
-const SUPPORTED_KEX: readonly KexAlgorithm[] = [
+const SUPPORTED_CIPHERS: readonly CipherAlgorithm[] = ALLOWED_CIPHERS.filter(cipher => runtimeAlgorithms.SUPPORTED_CIPHER.includes(cipher));
+const ALLOWED_KEX: readonly KexAlgorithm[] = [
     'curve25519-sha256', 'curve25519-sha256@libssh.org',
     'ecdh-sha2-nistp256', 'ecdh-sha2-nistp384', 'ecdh-sha2-nistp521',
-    'diffie-hellman-group-exchange-sha256', 'diffie-hellman-group16-sha512',
+    'diffie-hellman-group-exchange-sha256', 'diffie-hellman-group14-sha256', 'diffie-hellman-group16-sha512',
     'diffie-hellman-group17-sha512', 'diffie-hellman-group18-sha512'
 ];
-const SUPPORTED_MACS: readonly MacAlgorithm[] = [
+const SUPPORTED_KEX: readonly KexAlgorithm[] = ALLOWED_KEX.filter(kex => runtimeAlgorithms.SUPPORTED_KEX.includes(kex));
+const ALLOWED_MACS: readonly MacAlgorithm[] = [
     'hmac-sha2-256-etm@openssh.com', 'hmac-sha2-512-etm@openssh.com',
     'hmac-sha2-256', 'hmac-sha2-512'
 ];
+const SUPPORTED_MACS: readonly MacAlgorithm[] = ALLOWED_MACS.filter(mac => runtimeAlgorithms.SUPPORTED_MAC.includes(mac));
 
-function algorithmPolicy<Algorithm extends string>(hostConfig: HostConfig | null, setting: string, supported: readonly Algorithm[]): Algorithm[] | undefined {
+function algorithmPolicy<Algorithm extends string>(hostConfig: HostConfig | null, setting: string, allowed: readonly Algorithm[], supported: readonly Algorithm[], defaults: readonly string[]): Algorithm[] | undefined {
     const configured = hostOption(hostConfig, setting);
     if (configured === undefined) return undefined;
-    if (typeof configured !== 'string') throw new SSHHostVerificationError(`Invalid ${setting} policy`);
-    const algorithms = configured.split(',');
-    if (algorithms.some(algorithm => !supported.includes(algorithm as Algorithm))) {
-        throw new SSHHostVerificationError(`Unsupported ${setting} policy; toolkit connections require an explicit comma-separated list of supported algorithms (no modifiers, patterns, or certificates)`);
+    if (typeof configured !== 'string') {
+        throw new SSHHostVerificationError(`Invalid ${setting} policy`);
     }
-    return algorithms as Algorithm[];
+    const prefix = configured.slice(0, 1);
+    const hasModifier = ['^', '+', '-'].includes(prefix);
+    let algorithmList = configured;
+    if (hasModifier) {
+        algorithmList = configured.slice(1);
+    }
+    const algorithms = algorithmList.split(',');
+    const disallowedAlgorithms = algorithms.filter(algorithm => {
+        if (prefix === '-') {
+            return !/^[A-Za-z0-9][A-Za-z0-9@._+-]*$/.test(algorithm);
+        }
+        return !allowed.includes(algorithm as Algorithm);
+    });
+    const defaultAlgorithms = defaults.filter(algorithm => supported.includes(algorithm as Algorithm)) as Algorithm[];
+    const requestedAlgorithms = (algorithms as Algorithm[]).filter(algorithm => supported.includes(algorithm));
+    let candidates: Algorithm[];
+    switch (prefix) {
+        case '^':
+            candidates = [...requestedAlgorithms, ...defaultAlgorithms];
+            break;
+        case '+':
+            candidates = [...defaultAlgorithms, ...requestedAlgorithms];
+            break;
+        case '-':
+            candidates = defaultAlgorithms.filter(algorithm => !algorithms.includes(algorithm));
+            break;
+        default:
+            candidates = requestedAlgorithms;
+    }
+    const selectedAlgorithms = [...new Set(candidates)];
+    if (disallowedAlgorithms.length) {
+        throw new SSHHostVerificationError(`Unsupported ${setting} policy; toolkit connections require explicit algorithm names with an optional leading +, -, or ^ (no patterns or certificates)`);
+    }
+    if (!selectedAlgorithms.length) {
+        throw new SSHHostVerificationError(`Unsupported ${setting} policy; the policy selects no permitted algorithms supported by this SSH client at runtime`);
+    }
+    return selectedAlgorithms;
 }
 
 function rejectConnectionPolicies(hostConfig: HostConfig | null): void {
@@ -93,10 +134,10 @@ function applyHostKeyPolicies(config: ConnectConfig, hostConfig: HostConfig | nu
             throw new SSHHostVerificationError(`OpenSSH ${setting} is not supported for toolkit connections; refusing to ignore its policy`);
         }
     }
-    const serverHostKey = algorithmPolicy(hostConfig, 'HostKeyAlgorithms', SUPPORTED_HOST_KEY_ALGORITHMS);
-    const cipher = algorithmPolicy(hostConfig, 'Ciphers', SUPPORTED_CIPHERS);
-    const kex = algorithmPolicy(hostConfig, 'KexAlgorithms', SUPPORTED_KEX);
-    const hmac = algorithmPolicy(hostConfig, 'MACs', SUPPORTED_MACS);
+    const serverHostKey = algorithmPolicy(hostConfig, 'HostKeyAlgorithms', ALLOWED_HOST_KEY_ALGORITHMS, SUPPORTED_HOST_KEY_ALGORITHMS, runtimeAlgorithms.DEFAULT_SERVER_HOST_KEY);
+    const cipher = algorithmPolicy(hostConfig, 'Ciphers', ALLOWED_CIPHERS, SUPPORTED_CIPHERS, runtimeAlgorithms.DEFAULT_CIPHER);
+    const kex = algorithmPolicy(hostConfig, 'KexAlgorithms', ALLOWED_KEX, SUPPORTED_KEX, runtimeAlgorithms.DEFAULT_KEX);
+    const hmac = algorithmPolicy(hostConfig, 'MACs', ALLOWED_MACS, SUPPORTED_MACS, runtimeAlgorithms.DEFAULT_MAC);
     if (serverHostKey || cipher || kex || hmac) {
         config.algorithms = {
             ...config.algorithms,
@@ -376,32 +417,36 @@ function revokedHostFiles(hostConfig: HostConfig | null, tokens: ReadonlyMap<str
 }
 
 /** Accepts only an unmarked matching leaf key; revocation always throws. */
-function matchesKnownHostEntry(line: string, filename: string, presentedKey: string, type: string): boolean {
+function checkKnownHostEntry(line: string, filename: string, presentedKey: string, type: string): { trusted: boolean; found: boolean } {
     const entry = line.trim();
-    if (!entry || entry.startsWith('#')) return false;
+    if (!entry || entry.startsWith('#')) return { trusted: false, found: false };
     const fields = entry.split(/\s+/);
     const marker = fields[0].startsWith('@') ? fields.shift() : undefined;
     if (fields.length < 3) throw new Error(`Malformed known-hosts entry in ${filename}`);
-    if (fields[2] !== presentedKey) return false;
+    if (marker === '@cert-authority') return { trusted: false, found: false };
+    if (fields[2] !== presentedKey) return { trusted: false, found: true };
     if (marker === '@revoked') throw new Error('The presented SSH host key is revoked');
-    return marker === undefined && fields[1] === type;
+    return { trusted: marker === undefined && fields[1] === type, found: true };
 }
 
 /** Delegates hashed-hostname and pattern matching to OpenSSH, then compares exact key bytes. */
-async function trustedKeyInFile(filename: string, lookupHost: string, key: Buffer, type: string, executable: string, budget: VerificationBudget): Promise<boolean> {
-    if (!await readableTrustFile(filename, budget)) return false;
+async function trustedKeyInFile(filename: string, lookupHost: string, key: Buffer, type: string, executable: string, budget: VerificationBudget): Promise<{ trusted: boolean; found: boolean }> {
+    if (!await readableTrustFile(filename, budget)) return { trusted: false, found: false };
     const lookup = await queryKeygen(executable, ['-F', lookupHost, '-f', filename], budget);
     if (lookup.stderr.trim() || (lookup.status !== 0 && lookup.status !== 1) || (lookup.status === 1 && lookup.stdout.trim())) {
         throw new Error(`Unable to read SSH host trust from ${filename}`);
     }
     const presentedKey = key.toString('base64');
     let trusted = false;
+    let found = false;
     for (const [index, line] of lookup.stdout.split(/\r?\n/).entries()) {
         if (index % 64 === 0) await budget.yield();
         // Keep scanning: a later entry may revoke this same key.
-        trusted = matchesKnownHostEntry(line, filename, presentedKey, type) || trusted;
+        const entry = checkKnownHostEntry(line, filename, presentedKey, type);
+        trusted = entry.trusted || trusted;
+        found = entry.found || found;
     }
-    return trusted;
+    return { trusted, found };
 }
 
 async function readableTrustFile(filename: string, budget: VerificationBudget): Promise<boolean> {
@@ -424,7 +469,7 @@ async function readableTrustFile(filename: string, budget: VerificationBudget): 
 }
 
 /** Applies configured revocation and checks every trust file before accepting enrollment. */
-async function verifyPresentedKey(key: Buffer | string, lookupHost: string, files: readonly string[], revocations: readonly string[], budget: VerificationBudget): Promise<void> {
+async function verifyPresentedKey(key: Buffer | string, lookupHosts: readonly string[], files: readonly string[], revocations: readonly string[], budget: VerificationBudget): Promise<void> {
     if (!Buffer.isBuffer(key) || key.length === 0) {
         throw new Error('SSH host verification requires the raw server public key');
     }
@@ -434,8 +479,14 @@ async function verifyPresentedKey(key: Buffer | string, lookupHost: string, file
     // Revocation takes precedence over enrollment, including entries already trusted locally.
     for (const filename of revocations) await checkRevocationFile(filename, key, parsedKey.type, executable, budget);
     let trusted = false;
-    for (const filename of files) {
-        trusted = await trustedKeyInFile(filename, lookupHost, key, parsedKey.type, executable, budget) || trusted;
+    for (const lookupHost of lookupHosts) {
+        let found = false;
+        for (const filename of files) {
+            const result = await trustedKeyInFile(filename, lookupHost, key, parsedKey.type, executable, budget);
+            trusted = result.trusted || trusted;
+            found = result.found || found;
+        }
+        if (found) break;
     }
     if (!trusted) {
         throw new Error('SSH host key is unknown or has changed. Verify the device fingerprint independently and enroll it using OpenSSH before retrying');
@@ -456,6 +507,8 @@ export function createSSHHostVerifier(
     // HostKeyAlias is used verbatim; ordinary hosts use OpenSSH's nondefault-port notation.
     const hostWithPort = port === 22 ? host.toLowerCase() : `[${host.toLowerCase()}]:${port}`;
     const lookupHost = alias || hostWithPort;
+    const lookupHosts = [lookupHost];
+    if (!alias && port !== 22) lookupHosts.push(host.toLowerCase());
     const tokens = new Map([
         ['%%', '%'], ['%d', os.homedir()], ['%h', host], ['%n', originalHost],
         ['%p', String(port)], ['%r', config.username || ''], ['%k', alias || originalHost]
@@ -494,7 +547,7 @@ export function createSSHHostVerifier(
                 verify(false);
             }
         };
-        void budget.run(() => verifyPresentedKey(key, lookupHost, files, revocations, budget)).then(() => {
+        void budget.run(() => verifyPresentedKey(key, lookupHosts, files, revocations, budget)).then(() => {
             try {
                 budget.check();
             } catch (error) {

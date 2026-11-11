@@ -544,8 +544,8 @@ export class ConnectionService {
             const updated = (prependNewLine ? existing + '\n' : existing) + block;
             fs.writeFileSync(cfgPath, updated, { encoding: 'utf8', mode: 0o600 });
             logger.info(`Appended SSH config alias ${alias}`);
-        } catch (e: unknown) {
-            logger.error(`Failed to append ssh config alias ${alias}: ${e instanceof Error ? e.message : String(e)}`);
+        } catch (error: unknown) {
+            logger.error(`Failed to append ssh config alias ${alias}`, { error });
         }
     }
 

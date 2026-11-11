@@ -29,9 +29,6 @@ export function registerCommands(context: vscode.ExtensionContext, zgxProvider: 
 
     logger.debug('Registering extension commands');
 
-    // Set the extension context for commands that need it
-    setCommandContext(context);
-
     // Set the provider for commands that need view navigation
     setCommandProvider(zgxProvider);
 
@@ -173,21 +170,12 @@ async function showTelemetryStatusCommand(): Promise<void> {
         const action = enabled ? 'Disable' : 'Enable';
         const selection = await vscode.window.showInformationMessage(
             message,
-            action,
-            'View Documentation'
+            action
         );
 
         if (selection === action) {
             // Toggle telemetry
             await toggleTelemetryCommand();
-        } else if (selection === 'View Documentation') {
-            // Open telemetry documentation
-            const docPath = vscode.Uri.joinPath(
-                context.extensionUri,
-                'docs',
-                'telemetry.md'
-            );
-            await vscode.commands.executeCommand('markdown.showPreview', docPath);
         }
 
         logger.debug('Telemetry status shown to user');
@@ -320,19 +308,6 @@ async function unpairDevicesCommand(): Promise<void> {
             error
         );
     }
-}
-
-// Store extension context for use in commands that need it
-let context: vscode.ExtensionContext;
-
-/**
- * Set the extension context for commands that need access to it.
- * This should be called during extension activation.
- * 
- * @param extensionContext The extension context
- */
-export function setCommandContext(extensionContext: vscode.ExtensionContext): void {
-    context = extensionContext;
 }
 
 // Store provider reference for commands that need view navigation

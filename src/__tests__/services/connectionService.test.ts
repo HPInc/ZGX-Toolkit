@@ -565,8 +565,6 @@ describe('testSSHKeyConnectivity', () => {
         mockProcess.exitCode = null;
         mockProcess.signalCode = null;
         mockProcess.kill = jest.fn();
-        mockProcess.stdout = new EventEmitter();
-        mockProcess.stderr = new EventEmitter();
 
         spawnMock.mockReturnValue(mockProcess);
 

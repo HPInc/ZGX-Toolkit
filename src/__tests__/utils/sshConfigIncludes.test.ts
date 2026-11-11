@@ -24,6 +24,7 @@ const systemDirectory = realOs.platform() === 'win32'
     ? path.join(process.env.ProgramData || String.raw`C:\ProgramData`, 'ssh') : '/etc/ssh';
 const systemConfigFile = path.join(systemDirectory, 'ssh_config');
 const readFile = realFs.readFileSync;
+const fileExists = realFs.existsSync;
 
 function expectedLocalUsername(): string {
     if (realOs.platform() !== 'win32') return realOs.userInfo().username;
@@ -79,18 +80,25 @@ describe('SSH config Include resolution', () => {
             const userConfigFile = path.join(sshDirectory, 'config');
             const failedFile = source === 'user' ? userConfigFile : systemConfigFile;
             const failure = Object.assign(new Error('Configuration read failed'), { code });
-            jest.spyOn(realFs, 'existsSync').mockReturnValue(false);
-            const read = jest.spyOn(realFs, 'readFileSync').mockImplementation(((filename: fs.PathOrFileDescriptor) => {
+            jest.spyOn(realFs, 'existsSync').mockImplementation(filename => {
+                if (String(filename) === userConfigFile || String(filename) === systemConfigFile) return false;
+                return fileExists(filename);
+            });
+            const read = jest.spyOn(realFs, 'readFileSync').mockImplementation(((filename: fs.PathOrFileDescriptor, options?: unknown) => {
                 if (String(filename) === failedFile) throw failure;
-                return 'Host qa-device\n  Port 2200\n';
+                if (String(filename) === userConfigFile || String(filename) === systemConfigFile) return 'Host qa-device\n  Port 2200\n';
+                return readFile(filename, options as BufferEncoding);
             }) as typeof fs.readFileSync);
 
+            expect(realFs.existsSync(__filename)).toBe(true);
+            expect(realFs.readFileSync(__filename, 'utf8')).toBe(readFile(__filename, 'utf8'));
             await expect(getSSHConfig(device)).rejects.toThrow(SSHHostVerificationError);
             await expect(getSSHConfig(device)).rejects.toThrow(expect.objectContaining({
                 message: expect.stringContaining('Unable to load SSH configuration safely'), cause: failure
             }));
             expect(read).toHaveBeenCalledWith(failedFile, 'utf-8');
-            expect(realFs.existsSync).not.toHaveBeenCalled();
+            expect(realFs.existsSync).not.toHaveBeenCalledWith(userConfigFile);
+            expect(realFs.existsSync).not.toHaveBeenCalledWith(systemConfigFile);
         });
     });
 

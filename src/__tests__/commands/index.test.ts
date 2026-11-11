@@ -8,7 +8,7 @@
  */
 
 import * as vscode from 'vscode';
-import { registerCommands, setCommandContext } from '../../commands/index';
+import { registerCommands } from '../../commands/index';
 import { logger, Logger } from '../../utils/logger';
 import { telemetryService } from '../../services/telemetryService';
 import { configService } from '../../services/configService';
@@ -443,7 +443,7 @@ describe('Command Handlers', () => {
             expect(logger.debug).toHaveBeenCalledWith('showTelemetryStatus command invoked');
         });
 
-        it('should show status message when telemetry is enabled', async () => {
+        it('should show enabled status with only a Disable action', async () => {
             (configService.getTelemetryEnabled as jest.Mock).mockReturnValue(true);
       
             const handler = commandHandlers.get(COMMANDS.SHOW_TELEMETRY_STATUS);
@@ -451,12 +451,11 @@ describe('Command Handlers', () => {
 
             expect(vscode.window.showInformationMessage).toHaveBeenCalledWith(
                 expect.stringContaining('Z Toolkit Telemetry Status: ENABLED'),
-                'Disable',
-                'View Documentation'
+                'Disable'
             );
         });
 
-        it('should show status message when telemetry is disabled', async () => {
+        it('should show disabled status with only an Enable action', async () => {
             (configService.getTelemetryEnabled as jest.Mock).mockReturnValue(false);
       
             const handler = commandHandlers.get(COMMANDS.SHOW_TELEMETRY_STATUS);
@@ -464,8 +463,7 @@ describe('Command Handlers', () => {
 
             expect(vscode.window.showInformationMessage).toHaveBeenCalledWith(
                 expect.stringContaining('Z Toolkit Telemetry Status: DISABLED'),
-                'Enable',
-                'View Documentation'
+                'Enable'
             );
         });
 
@@ -477,7 +475,6 @@ describe('Command Handlers', () => {
 
             expect(vscode.window.showInformationMessage).toHaveBeenCalledWith(
                 'Z Toolkit Telemetry Status: DISABLED',
-                expect.any(String),
                 expect.any(String)
             );
         });
@@ -532,21 +529,6 @@ describe('Command Handlers', () => {
             });
         });
 
-        it('should open documentation when View Documentation button is clicked', async () => {
-            (configService.getTelemetryEnabled as jest.Mock).mockReturnValue(false);
-            (vscode.window.showInformationMessage as jest.Mock).mockResolvedValue('View Documentation');
-      
-            const handler = commandHandlers.get(COMMANDS.SHOW_TELEMETRY_STATUS);
-            await handler?.();
-
-            expect(vscode.commands.executeCommand).toHaveBeenCalledWith(
-                'markdown.showPreview',
-                expect.objectContaining({
-                    fsPath: expect.stringContaining('docs/telemetry.md')
-                })
-            );
-        });
-
         it('should log when status is shown', async () => {
             const handler = commandHandlers.get(COMMANDS.SHOW_TELEMETRY_STATUS);
             await handler?.();
@@ -593,10 +575,7 @@ describe('Command Handlers', () => {
             const handler = commandHandlers.get(COMMANDS.SHOW_TELEMETRY_STATUS);
             await handler?.();
 
-            expect(vscode.commands.executeCommand).not.toHaveBeenCalledWith(
-                'markdown.showPreview',
-                expect.anything()
-            );
+            expect(vscode.commands.executeCommand).not.toHaveBeenCalled();
             // Should only be called once for the status command itself
             expect(telemetryService.trackEvent).toHaveBeenCalledTimes(1);
         });
@@ -733,23 +712,6 @@ describe('Command Handlers', () => {
                 'Open Log',
                 'Copy Path'
             );
-        });
-    });
-
-    describe('setCommandContext', () => {
-        it('should set the context for commands', () => {
-            const testContext = {
-                subscriptions: [],
-                extensionUri: vscode.Uri.file('/test/path')
-            } as any;
-
-            setCommandContext(testContext);
-      
-            // Register commands after setting context
-            registerCommands(testContext, mockProvider);
-
-            // Verify context was set by checking that commands were registered
-            expect(vscode.commands.registerCommand).toHaveBeenCalled();
         });
     });
 

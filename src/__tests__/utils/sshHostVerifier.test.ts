@@ -9,7 +9,7 @@ import { generateKeyPairSync } from 'node:crypto';
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
-import { utils } from 'ssh2';
+import { CipherAlgorithm, utils } from 'ssh2';
 import { createSSHHostVerifier as createVerifier, preflightSSHHostVerifier, SSHHostVerificationError } from '../../utils/sshHostVerifier';
 import { logger } from '../../utils/logger';
 
@@ -17,7 +17,7 @@ jest.mock('node:child_process', () => ({ execFile: jest.fn() }));
 jest.mock('node:fs', () => ({ constants: jest.requireActual<typeof import('node:fs')>('node:fs').constants, promises: { open: jest.fn(), access: jest.fn(), mkdtemp: jest.fn(), writeFile: jest.fn(), rm: jest.fn() } }));
 jest.mock('node:os', () => ({ homedir: jest.fn(), platform: jest.fn(), tmpdir: jest.fn() }));
 jest.mock('ssh2', () => jest.requireActual('ssh2'));
-jest.mock('../../utils/logger', () => ({ logger: { error: jest.fn() } }));
+jest.mock('../../utils/logger', () => ({ logger: { error: jest.fn(), warn: jest.fn(), debug: jest.fn() } }));
 
 const host = 'device.example';
 function ed25519PublicKey(keyBytes: Buffer): string {
@@ -127,7 +127,7 @@ describe('SSH host verification', () => {
         expect(config.algorithms).toEqual({ cipher: ['aes128-ctr'], serverHostKey: ['rsa-sha2-512', 'ssh-ed25519'] });
     });
 
-    it.each(['', '-ssh-ed25519', '+ssh-rsa', '^ssh-ed25519', 'ssh-*', 'unknown', 'ssh-ed25519,', 'ssh-ed25519-cert-v01@openssh.com'])('rejects unsupported host-key algorithm policy before connecting: %s', policy => {
+    it.each(['', '+ssh-rsa', 'ssh-*', 'unknown', 'ssh-ed25519,', 'ssh-ed25519-cert-v01@openssh.com'])('rejects unsupported host-key algorithm policy before connecting: %s', policy => {
         expect(() => createSSHHostVerifier({ host }, { HostKeyAlgorithms: policy }, host)).toThrow('Unsupported HostKeyAlgorithms');
         expect(queryResult).not.toHaveBeenCalled();
     });
@@ -160,8 +160,173 @@ describe('SSH host verification', () => {
         expect(config.algorithms).toEqual({ compress: ['none'], cipher: ['aes256-ctr', 'aes128-ctr'], kex: ['curve25519-sha256'], hmac: ['hmac-sha2-256'] });
     });
 
+    it('accepts the bundled ssh2 group14 SHA256 key exchange', () => {
+        const config = { host, algorithms: { compress: ['none' as const] } };
+        createSSHHostVerifier(config, { KexAlgorithms: 'diffie-hellman-group14-sha256' }, host);
+        expect(config.algorithms).toEqual({ compress: ['none'], kex: ['diffie-hellman-group14-sha256'] });
+    });
+
+    describe.each([
+        { setting: 'HostKeyAlgorithms', runtimeSetting: 'SUPPORTED_SERVER_HOST_KEY', defaultSetting: 'DEFAULT_SERVER_HOST_KEY', negotiationSetting: 'serverHostKey', baseline: 'rsa-sha2-512', preferred: 'ssh-ed25519', extra: 'rsa-sha2-256', excluded: 'ssh-rsa' },
+        { setting: 'Ciphers', runtimeSetting: 'SUPPORTED_CIPHER', defaultSetting: 'DEFAULT_CIPHER', negotiationSetting: 'cipher', baseline: 'aes256-ctr', preferred: 'aes128-ctr', extra: 'aes192-ctr', excluded: 'aes128-cbc' },
+        { setting: 'KexAlgorithms', runtimeSetting: 'SUPPORTED_KEX', defaultSetting: 'DEFAULT_KEX', negotiationSetting: 'kex', baseline: 'curve25519-sha256', preferred: 'ecdh-sha2-nistp256', extra: 'diffie-hellman-group14-sha256', excluded: 'diffie-hellman-group1-sha1' },
+        { setting: 'MACs', runtimeSetting: 'SUPPORTED_MAC', defaultSetting: 'DEFAULT_MAC', negotiationSetting: 'hmac', baseline: 'hmac-sha2-512', preferred: 'hmac-sha2-256', extra: 'hmac-sha2-256-etm@openssh.com', excluded: 'hmac-sha1' }
+    ])('$setting list modifiers', ({ setting, runtimeSetting, defaultSetting, negotiationSetting, baseline, preferred, extra, excluded }) => {
+        it.each([true, false])('applies modifiers to permitted runtime defaults (preferred available: %s)', available => {
+            jest.doMock('ssh2/lib/protocol/constants.js', () => ({
+                ...jest.requireActual<Record<string, unknown>>('ssh2/lib/protocol/constants.js'),
+                [defaultSetting]: [baseline, ...(available ? [preferred] : []), excluded],
+                [runtimeSetting]: [baseline, ...(available ? [preferred] : []), extra, excluded]
+            }));
+            try {
+                jest.isolateModules(() => {
+                    const { createSSHHostVerifier: createRuntimeVerifier, SSHHostVerificationError: RuntimeVerificationError } = jest.requireActual<typeof import('../../utils/sshHostVerifier')>('../../utils/sshHostVerifier');
+                    const check = (policy: string, expected: string[]) => {
+                        const config = { host, algorithms: { compress: ['none' as const] } };
+                        createRuntimeVerifier(config, { [setting]: policy }, host);
+                        expect(config.algorithms).toEqual({ compress: ['none'], [negotiationSetting]: expected });
+                    };
+                    const defaults = available ? [baseline, preferred] : [baseline];
+                    check(`^${preferred},${extra}`, available ? [preferred, extra, baseline] : [extra, baseline]);
+                    check(`+${extra},${preferred}`, [...defaults, extra]);
+                    check(`^${preferred},${preferred}`, available ? [preferred, baseline] : [baseline]);
+                    check(`-${preferred}`, [baseline]);
+                    check(`-${excluded}`, defaults);
+                    check('-unknown-algorithm', defaults);
+                    check(extra, [extra]);
+                    for (const policy of [`-${baseline},${preferred}`, `+${excluded}`, `^${excluded}`, '+', '^', '-', `^${preferred},`, `+${preferred},+${extra}`, '-*sha1*']) {
+                        expect(() => createRuntimeVerifier({ host }, { [setting]: policy }, host)).toThrow(RuntimeVerificationError);
+                    }
+                });
+            } finally {
+                jest.dontMock('ssh2/lib/protocol/constants.js');
+            }
+        });
+    });
+
+    it('accepts the Mac system prepend policies without discarding other permitted defaults', () => {
+        const runtime = jest.requireActual<Record<string, readonly string[]>>('ssh2/lib/protocol/constants.js');
+        const config = { host, algorithms: { compress: ['none' as const] } };
+        createSSHHostVerifier(config, {
+            Ciphers: '^aes128-gcm@openssh.com,aes256-gcm@openssh.com',
+            KexAlgorithms: '^ecdh-sha2-nistp256',
+            MACs: '^hmac-sha2-256-etm@openssh.com,hmac-sha2-256'
+        }, host);
+        expect(config.algorithms).toEqual(expect.objectContaining({
+            compress: ['none'],
+            cipher: expect.arrayContaining(['aes128-gcm@openssh.com', 'aes256-gcm@openssh.com', 'aes128-ctr']),
+            kex: expect.arrayContaining(['ecdh-sha2-nistp256', 'curve25519-sha256']),
+            hmac: expect.arrayContaining(['hmac-sha2-256-etm@openssh.com', 'hmac-sha2-256'])
+        }));
+        const negotiated = config.algorithms as Record<string, string[]>;
+        expect(negotiated.cipher.slice(0, 2)).toEqual(['aes128-gcm@openssh.com', 'aes256-gcm@openssh.com']);
+        expect(negotiated.kex[0]).toBe('ecdh-sha2-nistp256');
+        expect(negotiated.hmac.slice(0, 2)).toEqual(['hmac-sha2-256-etm@openssh.com', 'hmac-sha2-256']);
+        expect(negotiated.cipher.every(algorithm => runtime.SUPPORTED_CIPHER.includes(algorithm))).toBe(true);
+    });
+
+    it.each([
+        { policy: 'aes128-ctr,+aes256-ctr' },
+        { policy: 'aes128-ctr,' },
+        { policy: ['aes128-ctr'] }
+    ])('rejects malformed cipher policies: $policy', ({ policy }) => {
+        expect(() => createSSHHostVerifier({ host }, { Ciphers: policy }, host)).toThrow(SSHHostVerificationError);
+    });
+
+    it.each([true, false])('filters unavailable ciphers while preserving policy order (ChaCha20 supported: %s)', supported => {
+        const ciphers: CipherAlgorithm[] = ['aes128-ctr', 'aes192-ctr', 'aes128-cbc'];
+        if (supported) ciphers.push('chacha20-poly1305@openssh.com');
+        jest.doMock('ssh2/lib/protocol/constants.js', () => ({
+            ...jest.requireActual<Record<string, unknown>>('ssh2/lib/protocol/constants.js'),
+            SUPPORTED_CIPHER: ciphers
+        }));
+        try {
+            jest.isolateModules(() => {
+                const { createSSHHostVerifier: createRuntimeVerifier, SSHHostVerificationError: RuntimeVerificationError } = jest.requireActual<typeof import('../../utils/sshHostVerifier')>('../../utils/sshHostVerifier');
+                const config = { host, algorithms: { compress: ['none' as const] } };
+                const policy = { Ciphers: 'aes192-ctr,chacha20-poly1305@openssh.com,aes128-ctr' };
+                createRuntimeVerifier(config, policy, host);
+                if (supported) {
+                    expect(config.algorithms).toEqual({ compress: ['none'], cipher: ['aes192-ctr', 'chacha20-poly1305@openssh.com', 'aes128-ctr'] });
+                } else {
+                    expect(config.algorithms).toEqual({ compress: ['none'], cipher: ['aes192-ctr', 'aes128-ctr'] });
+                    expect(() => createRuntimeVerifier({ host }, { Ciphers: 'chacha20-poly1305@openssh.com,aes256-ctr' }, host)).toThrow(RuntimeVerificationError);
+                    expect(() => createRuntimeVerifier({ host }, { Ciphers: 'chacha20-poly1305@openssh.com' }, host)).toThrow('Unsupported Ciphers');
+                }
+                for (const cipher of ['aes128-cbc', 'aes256-gcm@openssh.com', 'aes256-ctr']) {
+                    expect(() => createRuntimeVerifier({ host }, { Ciphers: cipher }, host)).toThrow('Unsupported Ciphers');
+                }
+                for (const invalid of ['aes128-cbc', 'unknown', '+aes128-ctr', '-aes128-ctr', 'aes*-ctr', '']) {
+                    expect(() => createRuntimeVerifier({ host }, { Ciphers: `aes128-ctr,${invalid}` }, host)).toThrow('Unsupported Ciphers');
+                }
+                expect(queryResult).not.toHaveBeenCalled();
+            });
+        } finally {
+            jest.dontMock('ssh2/lib/protocol/constants.js');
+        }
+    });
+
+    describe.each([
+        {
+            setting: 'HostKeyAlgorithms', runtimeSetting: 'SUPPORTED_SERVER_HOST_KEY', negotiationSetting: 'serverHostKey',
+            baseline: 'rsa-sha2-512', preferred: ['ssh-ed25519', 'rsa-sha2-256'],
+            excluded: ['ssh-rsa', 'ssh-dss', 'ssh-ed25519-cert-v01@openssh.com', 'rsa-sha2-512-cert-v01@openssh.com']
+        },
+        {
+            setting: 'KexAlgorithms', runtimeSetting: 'SUPPORTED_KEX', negotiationSetting: 'kex',
+            baseline: 'ecdh-sha2-nistp256', preferred: ['curve25519-sha256', 'curve25519-sha256@libssh.org', 'diffie-hellman-group14-sha256'],
+            excluded: ['diffie-hellman-group1-sha1', 'diffie-hellman-group14-sha1']
+        },
+        {
+            setting: 'MACs', runtimeSetting: 'SUPPORTED_MAC', negotiationSetting: 'hmac',
+            baseline: 'hmac-sha2-256', preferred: ['hmac-sha2-512', 'hmac-sha2-256-etm@openssh.com', 'hmac-sha2-512-etm@openssh.com'],
+            excluded: ['hmac-sha1', 'hmac-md5']
+        }
+    ])('$setting runtime capabilities', ({ setting, runtimeSetting, negotiationSetting, baseline, preferred, excluded }) => {
+        it.each(['all', 'partial', 'none'])('filters unavailable algorithms while preserving policy order (preferred support: %s)', supported => {
+            const availablePreferred = supported === 'all' ? preferred : supported === 'partial' ? preferred.slice(0, 1) : [];
+            jest.doMock('ssh2/lib/protocol/constants.js', () => ({
+                ...jest.requireActual<Record<string, unknown>>('ssh2/lib/protocol/constants.js'),
+                [runtimeSetting]: [baseline, ...excluded, ...availablePreferred]
+            }));
+            try {
+                jest.isolateModules(() => {
+                    const { createSSHHostVerifier: createRuntimeVerifier, SSHHostVerificationError: RuntimeVerificationError } = jest.requireActual<typeof import('../../utils/sshHostVerifier')>('../../utils/sshHostVerifier');
+                    const config = { host, algorithms: { compress: ['none' as const] } };
+                    createRuntimeVerifier(config, { [setting]: baseline }, host);
+                    expect(config.algorithms).toEqual({ compress: ['none'], [negotiationSetting]: [baseline] });
+
+                    const configuredAlgorithms = [...preferred, baseline];
+                    const policy = { [setting]: configuredAlgorithms.join(',') };
+                    createRuntimeVerifier(config, policy, host);
+                    const selectedAlgorithms = [...availablePreferred, baseline];
+                    expect(config.algorithms).toEqual({ compress: ['none'], [negotiationSetting]: selectedAlgorithms });
+
+                    const unavailable = preferred.filter(algorithm => !availablePreferred.includes(algorithm));
+                    if (unavailable.length) {
+                        expect(() => createRuntimeVerifier(config, { [setting]: unavailable.join(',') }, host)).toThrow(RuntimeVerificationError);
+                        expect(config.algorithms).toEqual({ compress: ['none'], [negotiationSetting]: selectedAlgorithms });
+                    }
+                    for (const algorithm of unavailable) {
+                        expect(() => createRuntimeVerifier({ host }, { [setting]: algorithm }, host)).toThrow(`Unsupported ${setting}`);
+                    }
+                    for (const algorithm of [...excluded, 'unknown', '*', '']) {
+                        expect(() => createRuntimeVerifier({ host }, { [setting]: algorithm }, host)).toThrow(`Unsupported ${setting}`);
+                        expect(() => createRuntimeVerifier({ host }, { [setting]: `${baseline},${algorithm}` }, host)).toThrow(`Unsupported ${setting}`);
+                    }
+                    for (const modifier of ['+', '-', '^']) {
+                        expect(() => createRuntimeVerifier({ host }, { [setting]: `${baseline},${modifier}${baseline}` }, host)).toThrow(`Unsupported ${setting}`);
+                    }
+                    expect(queryResult).not.toHaveBeenCalled();
+                });
+            } finally {
+                jest.dontMock('ssh2/lib/protocol/constants.js');
+            }
+        });
+    });
+
     it.each(['Ciphers', 'KexAlgorithms', 'MACs'])('fails closed on unsupported %s syntax', setting => {
-        for (const policy of ['', 'unknown', '+aes128-ctr', '-*sha1*', '^aes128-ctr', ['aes128-ctr']]) {
+        for (const policy of ['', 'unknown', '+unknown', '-*sha1*', '^unknown', ['aes128-ctr']]) {
             expect(() => createSSHHostVerifier({ host }, { [setting]: policy }, host)).toThrow(setting);
         }
     });
